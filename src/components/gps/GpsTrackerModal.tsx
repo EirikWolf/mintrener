@@ -148,7 +148,7 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
   // WCAG: Lukk ved trykk på Escape-tast
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && status !== 'running') onClose();
+      if (e.key === 'Escape' && status !== 'tracking') onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -157,7 +157,7 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
   const modal = (
     <div
       onClick={(e) => {
-        if (e.target === e.currentTarget && status !== 'running') onClose();
+        if (e.target === e.currentTarget && status !== 'tracking') onClose();
       }}
       className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200"
     >
