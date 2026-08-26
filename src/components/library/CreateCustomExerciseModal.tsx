@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { saveCustomExercise, CustomExerciseItem } from '../../services/customExercisesService';
+import { z } from 'zod';
 import { ExerciseEquipmentSchema } from '../../schemas/exerciseSchema';
 import { X, Plus, Clock, Sparkles } from 'lucide-react';
 
@@ -42,7 +43,7 @@ export const CreateCustomExerciseModal: React.FC<CreateCustomExerciseModalProps>
     setErrorMsg(null);
 
     try {
-      const validUtstyr = (utstyr.trim() || 'ingen') as typeof ExerciseEquipmentSchema._type;
+      const validUtstyr = (utstyr.trim() || 'ingen') as z.infer<typeof ExerciseEquipmentSchema>;
 
       const saved = await saveCustomExercise(user?.uid, {
         navn: { nb: navn.trim() },
