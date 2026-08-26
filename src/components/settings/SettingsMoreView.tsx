@@ -129,7 +129,7 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
               Logg inn for å synkronisere treningshistorikk, favoritter og egne programmer på tvers av enheter.
             </p>
             <button
-              onClick={() => loginWithGoogle()}
+              onClick={() => signInWithGoogle()}
               className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black text-xs rounded-xl flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20 transition-all active:scale-95"
             >
               <LogIn className="w-4 h-4" />

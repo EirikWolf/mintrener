@@ -37,7 +37,7 @@ export function exportAllDataAsJson(
 /**
  * Henter alle data fra lokal lagring og eksporterer som JSON
  */
-export async function exportFullUserDataset(userId?: string | null): Promise<void> {
+export async function exportFullUserDataset(_userId?: string | null): Promise<void> {
   let history: CompletedWorkoutLog[] = [];
   let customExercises: CustomExerciseItem[] = [];
   let customWorkouts: WorkoutTemplate[] = [];
