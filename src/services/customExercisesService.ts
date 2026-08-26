@@ -89,7 +89,7 @@ export async function fetchCustomExercises(userId?: string | null): Promise<Cust
  */
 export async function saveCustomExercise(
   userId: string | undefined | null,
-  exerciseData: Omit<CustomExerciseItem, 'isCustom' | 'bildeStatus'> & { id?: string }
+  exerciseData: Omit<CustomExerciseItem, 'isCustom' | 'bildeStatus' | 'id'> & { id?: string }
 ): Promise<CustomExerciseItem> {
   const id = exerciseData.id || `custom-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
   const item: CustomExerciseItem = {
