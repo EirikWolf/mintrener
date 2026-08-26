@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { exportAllDataAsJson } from '../../services/exportDataService';
-import { deleteUserData } from '../../services/firestoreService';
+import { exportFullUserDataset } from '../../services/exportDataService';
 import { SensorStatusModal } from '../sensors/SensorStatusModal';
 import { AboutGuideModal } from '../help/AboutGuideModal';
 import { PrivacyPolicyModal } from '../legal/PrivacyPolicyModal';
@@ -49,7 +48,7 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
   onToggleSpeech,
   onOpenCurator,
 }) => {
-  const { user, loginWithGoogle, logout } = useAuth();
+  const { user, signInWithGoogle, logout, deleteAccount } = useAuth();
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
@@ -60,7 +59,7 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
   const handleExportData = async () => {
     setIsExporting(true);
     try {
-      await exportAllDataAsJson(user?.uid);
+      await exportFullUserDataset(user?.uid);
       setExportSuccess(true);
       setTimeout(() => setExportSuccess(false), 3000);
     } catch (err) {
@@ -78,8 +77,7 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
 
     setIsDeleting(true);
     try {
-      await deleteUserData(user?.uid);
-      await logout();
+      await deleteAccount();
       alert('Kontoen og alle dine treningsdata har blitt slettet.');
     } catch (err: any) {
       alert('Kunne ikke slette konto: ' + (err.message || 'Ukjent feil'));

@@ -35,6 +35,34 @@ export function exportAllDataAsJson(
 }
 
 /**
+ * Henter alle data fra lokal lagring og eksporterer som JSON
+ */
+export async function exportFullUserDataset(userId?: string | null): Promise<void> {
+  let history: CompletedWorkoutLog[] = [];
+  let customExercises: CustomExerciseItem[] = [];
+  let customWorkouts: WorkoutTemplate[] = [];
+  let strengthLogs: any[] = [];
+
+  try {
+    const rawHist = localStorage.getItem('mintrener_local_workout_history');
+    if (rawHist) history = JSON.parse(rawHist);
+
+    const rawEx = localStorage.getItem('mintrener_custom_exercises');
+    if (rawEx) customExercises = JSON.parse(rawEx);
+
+    const rawWo = localStorage.getItem('mintrener_custom_workouts');
+    if (rawWo) customWorkouts = JSON.parse(rawWo);
+
+    const rawStr = localStorage.getItem('mintrener_strength_logs');
+    if (rawStr) strengthLogs = JSON.parse(rawStr);
+  } catch (e) {
+    console.warn('Feil ved lesing av lokaldata for eksport:', e);
+  }
+
+  exportAllDataAsJson(history, customExercises, customWorkouts, strengthLogs);
+}
+
+/**
  * Eksporterer fullført treningshistorikk til en komma-separert CSV-fil
  */
 export function exportHistoryAsCsv(history: CompletedWorkoutLog[]): void {
