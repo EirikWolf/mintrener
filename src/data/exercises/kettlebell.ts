@@ -22,8 +22,8 @@ export const KETTLEBELL_EXERCISES: ExerciseItem[] = [
     },
     sensorProfil: 'swing',
     bildePrompt: {
-      '0': 'captured in side profile in a deep athletic hip-hinge position, bending at the hips with flat spine and proud chest, knees soft, both hands gripping a heavy black iron kettlebell positioned high between the thighs, focused forward gaze',
-      '1': 'captured in side profile at the explosive top of a kettlebell swing, standing tall in full hip extension with squeezed glutes and braced core, black cast iron kettlebell weightlessly floating horizontally at chest height held with both straight arms extended',
+      '0': 'full body captured strictly from side profile in a kettlebell swing backswing hinge, hips pushed back, torso hinged forward at 45 degrees with flat spine, knees slightly soft, kettlebell hiked back between thighs with both hands gripping horns',
+      '1': 'full body captured strictly from side profile at the top lockout of a Russian kettlebell swing, standing tall with glutes clenched, arms extended straight horizontally holding kettlebell floating at chest height, neutral spine',
     },
     bildeVinkel: 'side',
     bildeStatus: 'mangler',
@@ -49,8 +49,8 @@ export const KETTLEBELL_EXERCISES: ExerciseItem[] = [
     },
     sensorProfil: 'knebøy',
     bildePrompt: {
-      '0': 'standing tall in profile, holding a heavy black kettlebell tightly against the chest by its side horns with both hands, elbows tucked tight, feet shoulder-width apart',
-      '1': 'captured in side profile in a deep goblet squat, thighs parallel to the floor, chest high and upright holding kettlebell against sternum, elbows positioned inside the knees, heels flat, intense quad engagement',
+      '0': 'full body standing tall in side profile, holding a heavy black kettlebell tightly against chest by side horns with both hands, elbows tucked tight to ribs, feet shoulder-width apart',
+      '1': 'full body captured in side profile in a deep goblet squat, thighs parallel to floor, chest high holding kettlebell against sternum, elbows positioned inside knees, heels flat on floor',
     },
     bildeVinkel: 'side',
     bildeStatus: 'mangler',
@@ -76,8 +76,8 @@ export const KETTLEBELL_EXERCISES: ExerciseItem[] = [
     },
     sensorProfil: 'ingen',
     bildePrompt: {
-      '0': 'standing tall in front view, holding a black kettlebell tucked in a tight front rack position against the right shoulder, elbow tight to ribs, left fist clenched at side, tight core',
-      '1': 'captured in front view at full vertical lockout of an overhead kettlebell press, right arm locked straight above the shoulder holding the kettlebell, head aligned, glutes braced, powerful shoulder exertion',
+      '0': 'full body standing tall in front view, right hand holding black kettlebell in tight front rack position at right shoulder with thumb against collarbone, left arm by side, braced core',
+      '1': 'full body in front view at vertical lockout of single-arm kettlebell press, right arm locked straight overhead holding black kettlebell, left arm at side, standing tall',
     },
     bildeVinkel: 'front',
     bildeStatus: 'mangler',

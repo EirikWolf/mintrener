@@ -8,6 +8,7 @@ import { MicroWorkoutModal } from '../micro/MicroWorkoutModal';
 import { GpsTrackerModal } from '../gps/GpsTrackerModal';
 import { GroupRoomModal } from '../group/GroupRoomModal';
 import { AboutGuideModal } from '../help/AboutGuideModal';
+import { AiCoachModal } from '../coach/AiCoachModal';
 import { PwaInstallPromptModal } from '../pwa/PwaInstallPromptModal';
 import { getFavoriteProgramIds } from '../../services/favoritesService';
 import { TRAINING_PROGRAMS } from '../../data/programs';
@@ -89,6 +90,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   const [isGpsModalOpen, setIsGpsModalOpen] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
+  const [isAiCoachOpen, setIsAiCoachOpen] = useState(false);
   const [interruptedSession, setInterruptedSession] = useState<InterruptedSession | null>(() => getInterruptedSession());
   const [adaptiveSuggestion, setAdaptiveSuggestion] = useState<ProgressionSuggestion | null>(null);
   const [shareCopied, setShareCopied] = useState<boolean>(false);
@@ -241,6 +243,16 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                 }`}
               >
                 <Smartphone className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Astrid AI-Trener */}
+              <button
+                onClick={() => setIsAiCoachOpen(true)}
+                title="Astrid • AI-Trener"
+                aria-label="Åpne AI-Trener"
+                className="p-1.5 rounded-full text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-all active:scale-95 flex items-center gap-1"
+              >
+                <Sparkles className="w-3.5 h-3.5 animate-pulse" />
               </button>
 
               {/* Sensorstatus */}
@@ -681,6 +693,24 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
       {/* Om Min Trener & Veiledning Modal */}
       {isAboutModalOpen && (
         <AboutGuideModal onClose={() => setIsAboutModalOpen(false)} />
+      )}
+
+      {/* Astrid AI-Trener Modal */}
+      {isAiCoachOpen && (
+        <AiCoachModal
+          onClose={() => setIsAiCoachOpen(false)}
+          context={{
+            currentWorkout: workout,
+            weeklyGoal: weeklyProgress,
+          }}
+          onSelectWorkoutById={(id) => {
+            const found = presets.find((p) => p.id === id);
+            if (found) {
+              if (onStartWorkoutDirectly) onStartWorkoutDirectly(found);
+              else onSelectWorkout(found);
+            }
+          }}
+        />
       )}
     </div>
   );

@@ -158,6 +158,31 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
         </div>
       </div>
 
+      {/* Astrid AI Trener Feedback */}
+      <div className="w-full bg-gradient-to-r from-emerald-950/40 via-zinc-900 to-teal-950/40 border border-emerald-500/30 rounded-2xl p-3 text-left flex items-start gap-2.5">
+        <div className="w-8 h-8 rounded-full bg-emerald-500/20 p-0.5 shrink-0 border border-emerald-500/40">
+          <img
+            src="/images/exercises/kneboy-0.png"
+            alt="Astrid AI"
+            className="w-full h-full object-cover rounded-full"
+            onError={(e) => {
+              (e.currentTarget as HTMLElement).style.display = 'none';
+            }}
+          />
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className="text-xs font-bold text-emerald-400">Astrid • AI-Trener</span>
+            <span className="text-[10px] px-1 bg-emerald-500/20 text-emerald-300 rounded font-semibold">Smart Coach</span>
+          </div>
+          <p className="text-xs text-zinc-300 leading-snug">
+            {totalElapsedSeconds > 600
+              ? 'Fantastisk innsats og solid utholdenhet! Husk å drikke litt vann og ta 2 minutter med rolig tøying nå.'
+              : 'Kjapt, effektivt og godt levert! Kontinuitet er nøkkelen til langsiktig styrke og form.'}
+          </p>
+        </div>
+      </div>
+
       {/* Start på nytt knapp */}
       <button
         onClick={onRestart}
