@@ -24,15 +24,18 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
   const [currentSpeed, setCurrentSpeed] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [autoPauseEnabled, setAutoPauseEnabled] = useState<boolean>(true);
+  const [isAutoPaused, setIsAutoPaused] = useState<boolean>(false);
 
   const watchIdRef = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);
   const lastPointRef = useRef<GpsPoint | null>(null);
   const startTimeRef = useRef<number>(Date.now());
+  const stationaryTickRef = useRef<number>(0);
 
-  // Sekundteller
+  // Sekundteller med støtte for auto-pause ved stillstand
   useEffect(() => {
-    if (status === 'tracking') {
+    if (status === 'tracking' && !isAutoPaused) {
       timerRef.current = window.setInterval(() => {
         setElapsedSeconds((prev) => prev + 1);
       }, 1000);
@@ -42,7 +45,7 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [status]);
+  }, [status, isAutoPaused]);
 
   const startTracking = () => {
     if (!('geolocation' in navigator)) {
@@ -52,10 +55,27 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
 
     setErrorMsg(null);
     setStatus('tracking');
+    setIsAutoPaused(false);
+    stationaryTickRef.current = 0;
     startTimeRef.current = Date.now();
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
+        const speed = pos.coords.speed;
+
+        // Auto-pause ved stillstand (fart under 0.4 m/s over 3 målinger)
+        if (autoPauseEnabled) {
+          if (speed !== null && speed < 0.4) {
+            stationaryTickRef.current += 1;
+            if (stationaryTickRef.current >= 3) {
+              setIsAutoPaused(true);
+            }
+          } else if (speed !== null && speed >= 0.6) {
+            stationaryTickRef.current = 0;
+            setIsAutoPaused(false);
+          }
+        }
+
         const newPoint: GpsPoint = {
           latitude: pos.coords.latitude,
           longitude: pos.coords.longitude,
@@ -71,8 +91,8 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
             newPoint.latitude,
             newPoint.longitude
           );
-          // Filtrer bort GPS jitter (kun legg til hvis bevegelse > 1 meter)
-          if (deltaMeters > 1.2) {
+          // Filtrer bort GPS jitter (kun legg til hvis bevegelse > 1.2 meter)
+          if (deltaMeters > 1.2 && (!autoPauseEnabled || !isAutoPaused)) {
             setDistanceMeters((prev) => prev + deltaMeters);
           }
         }
@@ -232,6 +252,17 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
                   <span className="text-xs">Sykkel</span>
                 </button>
               </div>
+
+              {/* Auto-pause bryter */}
+              <div className="flex items-center justify-between px-1 py-1">
+                <span className="text-xs text-zinc-300 font-medium">Auto-pause ved stillstand (rødt lys)</span>
+                <button
+                  onClick={() => setAutoPauseEnabled((p) => !p)}
+                  className={`w-9 h-5 rounded-full transition-colors relative p-0.5 shrink-0 ${autoPauseEnabled ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${autoPauseEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                </button>
+              </div>
             </div>
 
             <button
@@ -246,6 +277,13 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
 
         {(status === 'tracking' || status === 'paused') && (
           <div className="space-y-4 text-center">
+            {/* Auto-pause statusindikator */}
+            {isAutoPaused && status === 'tracking' && (
+              <div className="py-1 px-3 bg-amber-500/20 border border-amber-500/60 rounded-xl text-amber-300 font-bold text-xs animate-pulse flex items-center justify-center gap-1.5 shadow-sm">
+                <span>⏸️ Auto-pause aktiv (stillstand registrert)</span>
+              </div>
+            )}
+
             {/* Distanse Stort */}
             <div className="bg-zinc-950 border border-zinc-800/80 rounded-3xl p-5 space-y-1">
               <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">

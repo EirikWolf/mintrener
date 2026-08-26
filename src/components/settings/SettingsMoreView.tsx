@@ -32,7 +32,9 @@ import {
   BarChart3,
   Flame,
   Globe2,
+  Target,
 } from 'lucide-react';
+import { getWeeklyGoal, setWeeklyGoal } from '../../services/weeklyGoalService';
 
 interface SettingsMoreViewProps {
   soundEnabled: boolean;
@@ -66,10 +68,17 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [telemetryEnabled, setTelemetryEnabledState] = useState<boolean>(() => getTelemetryConsent());
   const [globalStats, setGlobalStats] = useState<GlobalTelemetryStats | null>(null);
+  const [weeklyGoal, setWeeklyGoalState] = useState<number>(() => getWeeklyGoal());
 
   React.useEffect(() => {
     fetchGlobalStats().then(setGlobalStats);
   }, []);
+
+  const handleUpdateWeeklyGoal = (val: number) => {
+    const clamped = Math.max(1, Math.min(14, val));
+    setWeeklyGoalState(clamped);
+    setWeeklyGoal(clamped);
+  };
 
   const handleToggleTelemetry = () => {
     const next = !telemetryEnabled;
@@ -230,6 +239,32 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
             >
               <div className={`w-5 h-5 rounded-full bg-white transition-transform ${wakeLockEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
+          </div>
+
+          {/* Ukesmål for trening */}
+          <div className="flex items-center justify-between py-2 border-t border-zinc-800/80">
+            <div className="flex items-center gap-2.5">
+              <Target className="w-4 h-4 text-emerald-400" />
+              <div>
+                <p className="text-xs font-bold text-white">Ukesmål for trening</p>
+                <p className="text-[10px] text-zinc-400">Hvor mange økter du planlegger per uke</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 bg-zinc-950 px-2 py-1 rounded-xl border border-zinc-800">
+              <button
+                onClick={() => handleUpdateWeeklyGoal(weeklyGoal - 1)}
+                className="w-6 h-6 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-black text-sm flex items-center justify-center transition-all active:scale-95"
+              >
+                -
+              </button>
+              <span className="text-xs font-black text-white w-8 text-center">{weeklyGoal} økt</span>
+              <button
+                onClick={() => handleUpdateWeeklyGoal(weeklyGoal + 1)}
+                className="w-6 h-6 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm flex items-center justify-center transition-all active:scale-95"
+              >
+                +
+              </button>
+            </div>
           </div>
         </div>
       </section>

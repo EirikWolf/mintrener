@@ -36,7 +36,12 @@ import {
   Navigation,
   Users,
   Sparkles,
+  Share2,
+  Check,
+  Target,
 } from 'lucide-react';
+import { shareWorkout } from '../../services/shareWorkoutService';
+import { calculateWeeklyProgress, WeeklyGoalProgress } from '../../services/weeklyGoalService';
 
 interface TimerDisplayProps {
   workout: WorkoutTemplate;
@@ -86,6 +91,17 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [interruptedSession, setInterruptedSession] = useState<InterruptedSession | null>(() => getInterruptedSession());
   const [adaptiveSuggestion, setAdaptiveSuggestion] = useState<ProgressionSuggestion | null>(null);
+  const [shareCopied, setShareCopied] = useState<boolean>(false);
+
+  const handleShareCurrentWorkout = async () => {
+    const res = await shareWorkout(workout);
+    if (res.copied) {
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    }
+  };
+
+  const [weeklyProgress, setWeeklyProgress] = useState<WeeklyGoalProgress | null>(null);
 
   React.useEffect(() => {
     try {
@@ -93,10 +109,12 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
       const hist = raw ? JSON.parse(raw) : [];
       const sug = checkAdaptiveProgression(workout, hist);
       setAdaptiveSuggestion(sug);
+      setWeeklyProgress(calculateWeeklyProgress(hist));
     } catch {
       setAdaptiveSuggestion(null);
+      setWeeklyProgress(null);
     }
-  }, [workout]);
+  }, [workout, state.status]);
 
   const formatTime = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
@@ -327,6 +345,33 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                 </div>
               )}
 
+              {/* 3. Ukesmål Fremdrift (Spec kap. 4) */}
+              {weeklyProgress && (
+                <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900/70 border border-zinc-800/80 rounded-2xl text-xs shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <div className={`p-1 rounded-lg ${weeklyProgress.isGoalMet ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                      <Target className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="text-[11px] font-bold text-zinc-300">
+                      Ukesmål: <strong className="text-white">{weeklyProgress.completedThisWeek}</strong> av <strong>{weeklyProgress.goal}</strong> økter
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-16 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          weeklyProgress.isGoalMet ? 'bg-amber-400' : 'bg-emerald-500'
+                        }`}
+                        style={{ width: `${weeklyProgress.percentage}%` }}
+                      />
+                    </div>
+                    <span className={`text-[10px] font-mono font-black ${weeklyProgress.isGoalMet ? 'text-amber-400' : 'text-emerald-400'}`}>
+                      {weeklyProgress.percentage}%
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between px-1 gap-2">
                 <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
                   <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider flex items-center gap-1 shrink-0">
@@ -411,11 +456,27 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           );
         })()}
 
-        {/* Info-linje med totaltid og rundeinfo */}
+        {/* Info-linje med totaltid, deleknapp og tittel */}
         <div className="flex items-center justify-between px-1 text-[11px] text-zinc-400 font-medium">
-          <span className="truncate max-w-[200px] font-semibold text-zinc-300">
-            {workout.name}
-          </span>
+          <div className="flex items-center gap-1.5 truncate max-w-[210px]">
+            <span className="truncate font-semibold text-zinc-300">
+              {workout.name}
+            </span>
+            <button
+              onClick={handleShareCurrentWorkout}
+              title="Del denne økten som lenke"
+              className="p-1 rounded-md text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 transition-all shrink-0 active:scale-95 flex items-center gap-0.5"
+            >
+              {shareCopied ? (
+                <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-0.5 animate-in fade-in">
+                  <Check className="w-3 h-3" />
+                  Kopiert!
+                </span>
+              ) : (
+                <Share2 className="w-3 h-3" />
+              )}
+            </button>
+          </div>
           <span className="font-mono bg-zinc-900/80 border border-zinc-800/60 rounded-md px-2 py-0.5 text-zinc-200">
             Totalt: <strong>{formatTime(state.totalRemainingSeconds)}</strong>
           </span>

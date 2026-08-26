@@ -5,19 +5,23 @@ import { useIntervalTimer } from './hooks/useIntervalTimer';
 import { TimerDisplay } from './components/timer/TimerDisplay';
 import { WorkoutSummary } from './components/timer/WorkoutSummary';
 import { ExerciseLibraryView } from './components/library/ExerciseLibraryView';
-import { WorkoutBuilderView } from './components/builder/WorkoutBuilderView';
 import { WorkoutHistoryView } from './components/history/WorkoutHistoryView';
 import { ProgramCatalogView } from './components/programs/ProgramCatalogView';
+import { WorkoutBuilderView } from './components/builder/WorkoutBuilderView';
 import { ExerciseImageCuratorView } from './components/curator/ExerciseImageCuratorView';
 import { SettingsMoreView } from './components/settings/SettingsMoreView';
 import { BottomNav, AppTab } from './components/navigation/BottomNav';
+import { getSharedWorkoutFromUrl } from './services/shareWorkoutService';
 import { useAuth } from './contexts/AuthContext';
 import { saveCompletedWorkout } from './services/firestoreService';
 import { fetchCustomWorkouts } from './services/customWorkoutsService';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('timer');
-  const [selectedWorkout, setSelectedWorkout] = useState<WorkoutTemplate>(TABATA_WORKOUT);
+  const [selectedWorkout, setSelectedWorkout] = useState<WorkoutTemplate>(() => {
+    const shared = getSharedWorkoutFromUrl();
+    return shared || TABATA_WORKOUT;
+  });
   const [allPresets, setAllPresets] = useState<WorkoutTemplate[]>(PRESET_WORKOUTS);
   const { user } = useAuth();
   const hasSavedRef = useRef<boolean>(false);

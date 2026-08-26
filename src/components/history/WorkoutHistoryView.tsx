@@ -28,6 +28,7 @@ export const WorkoutHistoryView: React.FC<WorkoutHistoryViewProps> = ({
   const { user } = useAuth();
   const [history, setHistory] = useState<CompletedWorkoutLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [displayCount, setDisplayCount] = useState<number>(20);
 
   useEffect(() => {
     getUserWorkoutHistory(user?.uid).then((logs) => {
@@ -190,48 +191,59 @@ export const WorkoutHistoryView: React.FC<WorkoutHistoryViewProps> = ({
             <p className="text-[10px] text-zinc-400">Fullfør en økt i timeren for å starte loggen!</p>
           </div>
         ) : (
-          history.map((log) => (
-            <div
-              key={log.id}
-              className="p-2.5 bg-zinc-900/70 border border-zinc-800/80 rounded-2xl flex items-center justify-between shadow-sm"
-            >
-              <div className="space-y-0.5 overflow-hidden pr-2">
-                <div className="flex items-center gap-1.5 text-[9px] text-zinc-400">
-                  <Calendar className="w-2.5 h-2.5 text-zinc-500" />
-                  <span>{formatDate(log.completedAt)}</span>
-                  <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-[8px] uppercase font-bold text-zinc-300">
-                    {log.workoutType}
-                  </span>
-                  {log.difficultyRating && (
-                    <span
-                      className={`px-1.5 py-0.2 rounded text-[8px] uppercase font-bold flex items-center gap-0.5 ${
-                        log.difficultyRating === 'for_lett'
-                          ? 'bg-blue-950 text-blue-300 border border-blue-800/60'
-                          : log.difficultyRating === 'passe'
-                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60'
-                          : 'bg-amber-950 text-amber-300 border border-amber-800/60'
-                      }`}
-                    >
-                      {log.difficultyRating === 'for_lett' && <Smile className="w-2.5 h-2.5" />}
-                      {log.difficultyRating === 'passe' && <ThumbsUp className="w-2.5 h-2.5" />}
-                      {log.difficultyRating === 'for_tungt' && <FireIcon className="w-2.5 h-2.5" />}
-                      {log.difficultyRating.replace('_', ' ')}
+          <>
+            {history.slice(0, displayCount).map((log) => (
+              <div
+                key={log.id}
+                className="p-2.5 bg-zinc-900/70 border border-zinc-800/80 rounded-2xl flex items-center justify-between shadow-sm"
+              >
+                <div className="space-y-0.5 overflow-hidden pr-2">
+                  <div className="flex items-center gap-1.5 text-[9px] text-zinc-400">
+                    <Calendar className="w-2.5 h-2.5 text-zinc-500" />
+                    <span>{formatDate(log.completedAt)}</span>
+                    <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-[8px] uppercase font-bold text-zinc-300">
+                      {log.workoutType}
                     </span>
-                  )}
+                    {log.difficultyRating && (
+                      <span
+                        className={`px-1.5 py-0.2 rounded text-[8px] uppercase font-bold flex items-center gap-0.5 ${
+                          log.difficultyRating === 'for_lett'
+                            ? 'bg-blue-950 text-blue-300 border border-blue-800/60'
+                            : log.difficultyRating === 'passe'
+                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60'
+                            : 'bg-amber-950 text-amber-300 border border-amber-800/60'
+                        }`}
+                      >
+                        {log.difficultyRating === 'for_lett' && <Smile className="w-2.5 h-2.5" />}
+                        {log.difficultyRating === 'passe' && <ThumbsUp className="w-2.5 h-2.5" />}
+                        {log.difficultyRating === 'for_tungt' && <FireIcon className="w-2.5 h-2.5" />}
+                        {log.difficultyRating.replace('_', ' ')}
+                      </span>
+                    )}
+                  </div>
+                  <h4 className="text-xs font-bold text-white truncate">{log.workoutName}</h4>
                 </div>
-                <h4 className="text-xs font-bold text-white truncate">{log.workoutName}</h4>
-              </div>
 
-              <div className="text-right shrink-0">
-                <span className="text-xs font-mono font-black text-emerald-400">
-                  {formatDuration(log.durationSeconds)}
-                </span>
-                <p className="text-[9px] text-zinc-500 font-medium">
-                  {log.roundsCompleted} {log.roundsCompleted === 1 ? 'runde' : 'runder'}
-                </p>
+                <div className="text-right shrink-0">
+                  <span className="text-xs font-mono font-black text-emerald-400">
+                    {formatDuration(log.durationSeconds)}
+                  </span>
+                  <p className="text-[9px] text-zinc-500 font-medium">
+                    {log.roundsCompleted} {log.roundsCompleted === 1 ? 'runde' : 'runder'}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))
+            ))}
+
+            {history.length > displayCount && (
+              <button
+                onClick={() => setDisplayCount((prev) => prev + 20)}
+                className="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 font-bold text-xs rounded-2xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5"
+              >
+                <span>Vis flere økter ({history.length - displayCount} gjenstår)</span>
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

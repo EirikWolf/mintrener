@@ -1,0 +1,63 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import {
+  generateShareUrl,
+  getSharedWorkoutFromUrl,
+} from '../shareWorkoutService';
+import { WorkoutTemplate } from '../../types/workout';
+
+const sampleWorkout: WorkoutTemplate = {
+  id: 'test-w1',
+  name: 'Morgen Tabata',
+  description: 'Rask morgenøkt',
+  type: 'tabata',
+  prepareDurationSeconds: 5,
+  rounds: 2,
+  roundRestDurationSeconds: 15,
+  items: [
+    {
+      id: 'i1',
+      exercise: { id: 'kneboy', name: 'Knebøy', category: 'bodyweight' },
+      workDurationSeconds: 20,
+      restDurationSeconds: 10,
+    },
+  ],
+};
+
+describe('Share Workout Service (Deep-linking)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('location', {
+      origin: 'https://mintrener.web.app',
+      pathname: '/',
+      href: 'https://mintrener.web.app/',
+      search: '',
+    });
+    vi.stubGlobal('history', {
+      replaceState: vi.fn(),
+    });
+  });
+
+  it('genererer en gyldig dele-URL med base64 parameter', () => {
+    const urlStr = generateShareUrl(sampleWorkout);
+    expect(urlStr).toContain('https://mintrener.web.app/?w=');
+  });
+
+  it('dekoder økt fra URL korrekt', () => {
+    const urlStr = generateShareUrl(sampleWorkout);
+    const url = new URL(urlStr);
+    const encoded = url.searchParams.get('w');
+
+    vi.stubGlobal('location', {
+      origin: 'https://mintrener.web.app',
+      pathname: '/',
+      href: urlStr,
+      search: `?w=${encoded}`,
+    });
+
+    const parsed = getSharedWorkoutFromUrl();
+    expect(parsed).not.toBeNull();
+    expect(parsed?.name).toBe('Morgen Tabata');
+    expect(parsed?.rounds).toBe(2);
+    expect(parsed?.items.length).toBe(1);
+    expect(parsed?.items[0].exercise.name).toBe('Knebøy');
+  });
+});
