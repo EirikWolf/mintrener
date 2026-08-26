@@ -13,7 +13,7 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Brukerprofiler og underkolleksjoner (historikk, egne maler)
+    // Brukerprofiler og underkolleksjoner (historikk, egne maler, egne øvelser, styrkelogg)
     match /users/{userId} {
       allow read, write: if isOwner(userId);
 
@@ -24,12 +24,25 @@ service cloud.firestore {
       match /workouts/{workoutId} {
         allow read, write: if isOwner(userId);
       }
+
+      match /custom_exercises/{exerciseId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /strength_logs/{logId} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
     // Felles øvelsesbibliotek: Alle kan lese, kun backend/admin kan endre
     match /exercises/{exerciseId} {
       allow read: if true;
       allow write: if false;
+    }
+
+    // Grupperom: Åpent for lesing og opprettelse/oppdatering for synkroniserte deltakere (med eller uten innlogging)
+    match /rooms/{roomId} {
+      allow read, write: if true;
     }
   }
 }

@@ -13,7 +13,6 @@ import {
   Volume2,
   Lock,
   Sparkles,
-  ChevronRight,
   BookOpen,
 } from 'lucide-react';
 
