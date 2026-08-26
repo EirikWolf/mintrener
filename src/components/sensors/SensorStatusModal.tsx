@@ -44,15 +44,34 @@ export const SensorStatusModal: React.FC<SensorStatusModalProps> = ({ onClose })
     setTimeout(() => setTestedAudio(false), 1500);
   };
 
+  // WCAG: Lukk ved trykk på Escape-tast
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const modal = (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-md max-h-[85vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-3 relative z-[101]">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sensor-modal-title"
+        className="w-full max-w-md max-h-[85vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-3 relative z-[101]"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
           <div className="flex items-center gap-2">
             <Activity className="w-5 h-5 text-emerald-400" />
             <div>
-              <h2 className="text-base font-black text-white">Sensorstatus</h2>
+              <h2 id="sensor-modal-title" className="text-base font-black text-white">Sensorstatus</h2>
               <p className="text-[10px] text-zinc-400">Hva som støttes på denne enheten</p>
             </div>
           </div>

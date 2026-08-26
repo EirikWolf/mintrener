@@ -73,15 +73,34 @@ export const CreateCustomExerciseModal: React.FC<CreateCustomExerciseModalProps>
     }
   };
 
+  // WCAG: Lukk ved trykk på Escape-tast
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const modal = (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-md max-h-[90vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4 relative z-[101]">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-exercise-title"
+        className="w-full max-w-md max-h-[90vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4 relative z-[101]"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-emerald-400" />
             <div>
-              <h2 className="text-base font-black text-white">Ny egendefinert øvelse</h2>
+              <h2 id="create-exercise-title" className="text-base font-black text-white">Ny egendefinert øvelse</h2>
               <p className="text-[10px] text-zinc-400">Bestem navn, kategori og ønsket varighet</p>
             </div>
           </div>

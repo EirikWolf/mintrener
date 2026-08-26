@@ -15,9 +15,28 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 }) => {
   const [activePhase, setActivePhase] = useState<number>(0);
 
+  // WCAG: Lukk ved trykk på Escape-tast
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const modal = (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-md max-h-[90vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col overflow-hidden space-y-3.5 relative z-[101]">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="exercise-detail-title"
+        className="w-full max-w-md max-h-[90vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col overflow-hidden space-y-3.5 relative z-[101]"
+      >
         {/* Header */}
         <div className="flex items-start justify-between border-b border-zinc-800 pb-2.5 shrink-0">
           <div>
@@ -29,7 +48,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                 Nivå: <strong className="text-zinc-200">{exercise.nivå}</strong>
               </span>
             </div>
-            <h2 className="text-lg sm:text-xl font-black text-white">{exercise.navn.nb}</h2>
+            <h2 id="exercise-detail-title" className="text-lg sm:text-xl font-black text-white">{exercise.navn.nb}</h2>
             {exercise.navn.en && (
               <p className="text-xs text-zinc-400 font-medium">({exercise.navn.en})</p>
             )}

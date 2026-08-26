@@ -65,12 +65,38 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
     }
   };
 
+  // WCAG: Lukk ved trykk på Escape-tast
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+        setIsConfirmingDelete(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
   const modal = isOpen ? (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-6 relative z-[101]">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          setIsOpen(false);
+          setIsConfirmingDelete(false);
+        }
+      }}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="user-profile-title"
+        className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-6 relative z-[101]"
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-          <div className="flex items-center gap-2 text-zinc-400 text-xs font-bold uppercase tracking-wider">
+          <div id="user-profile-title" className="flex items-center gap-2 text-zinc-400 text-xs font-bold uppercase tracking-wider">
             <Shield className="w-4 h-4 text-emerald-400" />
             Min Profil
           </div>
