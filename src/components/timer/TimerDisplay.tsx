@@ -252,7 +252,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                 <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
                   <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider flex items-center gap-1 shrink-0">
                     <Star className="w-3 h-3 text-amber-400 fill-current" />
-                    Favoritter {displayList.length > 0 ? `(${displayList.length})` : ''}
+                    {matchedFavs.length > 0 ? `Favoritter (${matchedFavs.length})` : 'Hurtigstart'}
                   </span>
                   <button
                     onClick={() => setIsMicroModalOpen(true)}

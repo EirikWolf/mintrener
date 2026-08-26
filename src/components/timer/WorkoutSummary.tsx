@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { WorkoutTemplate } from '../../types/workout';
 import { useAuth } from '../../contexts/AuthContext';
 import { updateWorkoutRating } from '../../services/firestoreService';
-import { Trophy, RotateCcw, Flame, CheckCircle2, ThumbsUp, Smile, Flame as FireIcon } from 'lucide-react';
+import { savePersonalRecord } from '../../services/personalRecordService';
+import { Trophy, RotateCcw, Flame, CheckCircle2, ThumbsUp, Smile, Flame as FireIcon, Medal } from 'lucide-react';
 
 interface WorkoutSummaryProps {
   workout: WorkoutTemplate;
@@ -19,6 +20,19 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
 }) => {
   const { user } = useAuth();
   const [selectedRating, setSelectedRating] = useState<'for_lett' | 'passe' | 'for_tungt' | null>(null);
+  const [prStatus, setPrStatus] = useState<{ isNewPr: boolean; previousBest: number } | null>(null);
+
+  // Sjekk om dette er en enkeltøvelse / microøkt med ny personlig rekord
+  useEffect(() => {
+    if (workout.items.length === 1 && totalElapsedSeconds > 5) {
+      const ex = workout.items[0].exercise;
+      savePersonalRecord(user?.uid, ex.id, ex.name, totalElapsedSeconds).then((res) => {
+        if (res.isNewPr) {
+          setPrStatus(res);
+        }
+      });
+    }
+  }, [workout, totalElapsedSeconds, user]);
 
   const handleRate = async (rating: 'for_lett' | 'passe' | 'for_tungt') => {
     setSelectedRating(rating);
@@ -43,6 +57,13 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
           <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
         </div>
       </div>
+
+      {prStatus?.isNewPr && (
+        <div className="w-full py-2.5 px-4 rounded-2xl bg-amber-500/20 border border-amber-500/60 text-amber-300 flex items-center justify-center gap-2 font-black text-sm animate-bounce shadow-md">
+          <Medal className="w-5 h-5 text-amber-400 fill-current" />
+          <span>🎉 NY PERSONLIG REKORD (PR)!</span>
+        </div>
+      )}
 
       <div className="space-y-1">
         <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">

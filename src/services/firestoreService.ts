@@ -76,15 +76,15 @@ export async function saveCompletedWorkout(
     console.warn('Kunne ikke lagre lokal historikk:', err);
   }
 
-  // 2. Lagre i Firestore hvis innlogget
+  // 2. Lagre i Firestore hvis innlogget (bruk samme ID som lokalt)
   if (userId) {
     try {
-      const logsRef = collection(db, 'users', userId, 'history');
-      const docRef = await addDoc(logsRef, {
+      const docRef = doc(db, 'users', userId, 'history', newLog.id);
+      await setDoc(docRef, {
         ...newLog,
         timestamp: serverTimestamp(),
       });
-      return docRef.id;
+      return newLog.id;
     } catch (err) {
       console.warn('Kunne ikke synke historikk til Firestore:', err);
     }
