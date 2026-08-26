@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { TRAINING_PROGRAMS, TrainingProgram } from '../../data/programs';
-import { CONTEXT_PROFILES, ContextProfile, TrainingMode } from '../../data/contextProfiles';
+import { TRAINING_PROGRAMS } from '../../data/programs';
+import { CONTEXT_PROFILES, TrainingMode } from '../../data/contextProfiles';
 import { WorkoutTemplate } from '../../types/workout';
 import {
   Play,
@@ -14,7 +14,6 @@ import {
   Heart,
   Music,
   Trophy,
-  Filter,
   Sparkles,
 } from 'lucide-react';
 

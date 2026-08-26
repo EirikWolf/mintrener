@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TimerState, WorkoutTemplate } from '../../types/workout';
+import { TimerState, WorkoutTemplate, IntervalPhase } from '../../types/workout';
 import { CircularProgress } from './CircularProgress';
 import { UserMenu } from '../auth/UserMenu';
 import { SensorStatusModal } from '../sensors/SensorStatusModal';

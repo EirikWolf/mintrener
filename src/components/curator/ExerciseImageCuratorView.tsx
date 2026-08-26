@@ -9,7 +9,6 @@ import {
   MessageSquare,
   Filter,
   Eye,
-  Send,
 } from 'lucide-react';
 
 interface FeedbackMap {
