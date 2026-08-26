@@ -59,8 +59,6 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
   stateRef.current.speechEnabled = speechEnabled;
   stateRef.current.workout = workout;
 
-  const animFrameRef = useRef<number | null>(null);
-
   // Beregn total estimert tid for hele økten (uten unødvendig pause etter aller siste øvelse)
   const calculateTotalWorkoutSeconds = useCallback(() => {
     if (workout.items.length === 0) return workout.prepareDurationSeconds;
