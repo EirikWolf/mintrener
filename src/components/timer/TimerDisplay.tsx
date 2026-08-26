@@ -7,6 +7,7 @@ import { HeartRateWidget } from '../sensors/HeartRateWidget';
 import { MicroWorkoutModal } from '../micro/MicroWorkoutModal';
 import { GpsTrackerModal } from '../gps/GpsTrackerModal';
 import { GroupRoomModal } from '../group/GroupRoomModal';
+import { AboutGuideModal } from '../help/AboutGuideModal';
 import { getFavoriteProgramIds } from '../../services/favoritesService';
 import { TRAINING_PROGRAMS } from '../../data/programs';
 import {
@@ -76,6 +77,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   const [isMicroModalOpen, setIsMicroModalOpen] = useState(false);
   const [isGpsModalOpen, setIsGpsModalOpen] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
 
   const formatTime = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
@@ -131,9 +133,17 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           {/* Venstre: Bruker & Tittel */}
           <div className="flex items-center gap-2">
             <UserMenu onOpenCurator={onOpenCurator} />
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               <Dumbbell className="w-4 h-4 text-emerald-400" />
               <span className="font-black text-xs sm:text-sm tracking-tight text-white">Min Trener</span>
+              <button
+                onClick={() => setIsAboutModalOpen(true)}
+                title="Om Min Trener & Veiledning (?)"
+                aria-label="Om Min Trener og hjelpeguide"
+                className="w-5 h-5 rounded-full bg-zinc-900/90 border border-zinc-700/80 hover:border-emerald-400 text-zinc-400 hover:text-emerald-300 font-black text-[10px] flex items-center justify-center transition-all active:scale-95 shadow-sm ml-0.5"
+              >
+                ?
+              </button>
             </div>
           </div>
 
@@ -514,6 +524,11 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             onStart();
           }}
         />
+      )}
+
+      {/* Om Min Trener & Veiledning Modal */}
+      {isAboutModalOpen && (
+        <AboutGuideModal onClose={() => setIsAboutModalOpen(false)} />
       )}
     </div>
   );

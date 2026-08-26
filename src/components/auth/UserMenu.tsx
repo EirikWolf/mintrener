@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { PrivacyPolicyModal } from '../legal/PrivacyPolicyModal';
-import { User as UserIcon, LogOut, Trash2, X, Shield } from 'lucide-react';
+import { AboutGuideModal } from '../help/AboutGuideModal';
+import { User as UserIcon, LogOut, Trash2, X, Shield, HelpCircle } from 'lucide-react';
 
 interface UserMenuProps {
   onOpenCurator?: () => void;
@@ -12,6 +13,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
   const { user, loading, signInWithGoogle, logout, deleteAccount } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -131,6 +133,15 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
             Logg ut
           </button>
 
+          {/* Om Min Trener & Veiledning */}
+          <button
+            onClick={() => setIsAboutOpen(true)}
+            className="w-full py-2.5 px-4 rounded-2xl bg-zinc-950/80 hover:bg-zinc-800 text-emerald-400 hover:text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all border border-emerald-900/40"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+            Om Min Trener & Veiledning (?)
+          </button>
+
           {/* Personvernerklæring & Vilkår */}
           <button
             onClick={() => setIsPrivacyOpen(true)}
@@ -203,6 +214,11 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
       {/* Personvern Modal */}
       {isPrivacyOpen && (
         <PrivacyPolicyModal onClose={() => setIsPrivacyOpen(false)} />
+      )}
+
+      {/* Om Min Trener Modal */}
+      {isAboutOpen && (
+        <AboutGuideModal onClose={() => setIsAboutOpen(false)} />
       )}
     </>
   );
