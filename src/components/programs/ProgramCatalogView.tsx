@@ -21,9 +21,13 @@ import {
 
 interface ProgramCatalogViewProps {
   onStartProgram: (workout: WorkoutTemplate) => void;
+  onNavigateToTimer?: () => void;
 }
 
-export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({ onStartProgram }) => {
+export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({
+  onStartProgram,
+  onNavigateToTimer,
+}) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('alle');
   const [trainingMode, setTrainingMode] = useState<TrainingMode>('alene');
   const [selectedProfileId, setSelectedProfileId] = useState<string>('alle');
@@ -56,6 +60,23 @@ export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({ onStartP
 
   return (
     <div className="flex flex-col h-full max-w-md mx-auto px-4 pt-2 pb-2 select-none overflow-hidden">
+      {/* Topplinje med Tilbake-knapp */}
+      <div className="flex items-center justify-between pb-2 shrink-0">
+        <div className="flex items-center gap-2">
+          {onNavigateToTimer && (
+            <button
+              onClick={onNavigateToTimer}
+              title="Tilbake til Timer / Forside"
+              className="p-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all flex items-center gap-1"
+            >
+              <User className="hidden" />
+              <span className="text-xs font-bold text-emerald-400">← Timer</span>
+            </button>
+          )}
+          <h1 className="text-lg font-black tracking-tight text-white">Programmer</h1>
+        </div>
+      </div>
+
       {/* 1. Modusvelger (Alene, Sammen, Led en gruppe) */}
       <div className="flex p-1 bg-zinc-900/90 border border-zinc-800 rounded-2xl shrink-0 mb-2.5 shadow-sm">
         <button

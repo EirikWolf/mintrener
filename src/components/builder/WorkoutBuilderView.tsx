@@ -20,14 +20,18 @@ import {
   Clock,
   Dumbbell,
   Zap,
+  ArrowLeft,
+  Timer,
 } from 'lucide-react';
 
 interface WorkoutBuilderViewProps {
   onStartCustomWorkout: (workout: WorkoutTemplate) => void;
+  onNavigateToTimer?: () => void;
 }
 
 export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
   onStartCustomWorkout,
+  onNavigateToTimer,
 }) => {
   const { user } = useAuth();
   const [name, setName] = useState('Min egendefinerte økt');
@@ -75,8 +79,8 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
     return `${mins} min ${secs.toString().padStart(2, '0')} sek`;
   };
 
-  // Legg til ny øvelse
-  const handleAddExercise = (exercise: ExerciseItem) => {
+  // Legg til ny øvelse (arver defaultDurationSeconds hvis egendefinert øvelse)
+  const handleAddExercise = (exercise: ExerciseItem & { defaultDurationSeconds?: number }) => {
     const newItem: IntervalItem = {
       id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       exercise: {
@@ -85,7 +89,9 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
         nameEn: exercise.navn.en,
         category: exercise.kategori as any,
       },
-      workDurationSeconds: items.length > 0 ? items[items.length - 1].workDurationSeconds : 30,
+      workDurationSeconds:
+        exercise.defaultDurationSeconds ||
+        (items.length > 0 ? items[items.length - 1].workDurationSeconds : 30),
       restDurationSeconds: items.length > 0 ? items[items.length - 1].restDurationSeconds : 15,
     };
     setItems((prev) => [...prev, newItem]);
@@ -98,21 +104,22 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
 
   // Flytt øvelse opp / ned
   const handleMove = (index: number, direction: 'up' | 'down') => {
+    if (
+      (direction === 'up' && index === 0) ||
+      (direction === 'down' && index === items.length - 1)
+    )
+      return;
+
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
     const newItems = [...items];
-    const targetIdx = direction === 'up' ? index - 1 : index + 1;
-    if (targetIdx < 0 || targetIdx >= newItems.length) return;
     const temp = newItems[index];
-    newItems[index] = newItems[targetIdx];
-    newItems[targetIdx] = temp;
+    newItems[index] = newItems[targetIndex];
+    newItems[targetIndex] = temp;
     setItems(newItems);
   };
 
-  // Oppdater tider for én øvelse
-  const handleUpdateDuration = (
-    id: string,
-    field: 'work' | 'rest',
-    seconds: number
-  ) => {
+  // Oppdater varighet for en spesifikk øvelse
+  const handleUpdateDuration = (id: string, field: 'work' | 'rest', seconds: number) => {
     setItems((prev) =>
       prev.map((it) =>
         it.id === id
@@ -161,17 +168,28 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
 
   return (
     <div className="flex flex-col h-full max-w-md mx-auto px-4 pt-2 pb-2 select-none overflow-hidden">
-      {/* Header */}
+      {/* Header med Tilbake-knapp */}
       <div className="flex items-center justify-between pb-1 shrink-0">
-        <div>
-          <h1 className="text-lg font-black tracking-tight text-white flex items-center gap-1.5">
-            <Dumbbell className="w-5 h-5 text-emerald-400" />
-            Bygg treningsøkt
-          </h1>
-          <span className="text-[11px] text-zinc-400 font-mono flex items-center gap-1 mt-0.5">
-            <Clock className="w-3.5 h-3.5 text-emerald-400" />
-            Beregnet totaltid: <strong className="text-emerald-300 font-bold">{formatTime(totalDurationSeconds)}</strong>
-          </span>
+        <div className="flex items-center gap-2">
+          {onNavigateToTimer && (
+            <button
+              onClick={onNavigateToTimer}
+              title="Tilbake til Timer / Forside"
+              className="p-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all flex items-center gap-1"
+            >
+              <ArrowLeft className="w-4 h-4 text-emerald-400" />
+            </button>
+          )}
+          <div>
+            <h1 className="text-lg font-black tracking-tight text-white flex items-center gap-1.5">
+              <Dumbbell className="w-4.5 h-4.5 text-emerald-400" />
+              Bygg treningsøkt
+            </h1>
+            <span className="text-[11px] text-zinc-400 font-mono flex items-center gap-1 mt-0.5">
+              <Clock className="w-3.5 h-3.5 text-emerald-400" />
+              Totaltid: <strong className="text-emerald-300 font-bold">{formatTime(totalDurationSeconds)}</strong>
+            </span>
+          </div>
         </div>
 
         {/* Start Nå Knapp */}

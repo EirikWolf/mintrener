@@ -110,15 +110,27 @@ export function App() {
             onOpenPrograms={() => setActiveTab('programs')}
           />
         ) : activeTab === 'programs' ? (
-          <ProgramCatalogView onStartProgram={handleStartCustomWorkout} />
+          <ProgramCatalogView
+            onStartProgram={handleStartCustomWorkout}
+            onNavigateToTimer={() => setActiveTab('timer')}
+          />
         ) : activeTab === 'builder' ? (
-          <WorkoutBuilderView onStartCustomWorkout={handleStartCustomWorkout} />
+          <WorkoutBuilderView
+            onStartCustomWorkout={handleStartCustomWorkout}
+            onNavigateToTimer={() => setActiveTab('timer')}
+          />
         ) : activeTab === 'exercises' ? (
-          <ExerciseLibraryView />
+          <ExerciseLibraryView
+            onNavigateToTimer={() => setActiveTab('timer')}
+          />
         ) : activeTab === 'history' ? (
-          <WorkoutHistoryView />
+          <WorkoutHistoryView
+            onNavigateToTimer={() => setActiveTab('timer')}
+          />
         ) : (
-          <ExerciseImageCuratorView />
+          <ExerciseImageCuratorView
+            onNavigateToTimer={() => setActiveTab('timer')}
+          />
         )}
       </div>
 

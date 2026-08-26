@@ -11,7 +11,13 @@ import {
   Sparkles,
 } from 'lucide-react';
 
-export const WorkoutHistoryView: React.FC = () => {
+interface WorkoutHistoryViewProps {
+  onNavigateToTimer?: () => void;
+}
+
+export const WorkoutHistoryView: React.FC<WorkoutHistoryViewProps> = ({
+  onNavigateToTimer,
+}) => {
   const { user } = useAuth();
   const [history, setHistory] = useState<CompletedWorkoutLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +51,7 @@ export const WorkoutHistoryView: React.FC = () => {
       for (let i = 1; i < dates.length; i++) {
         const prev = new Date(dates[i]);
         const diffDays = Math.round(
-          (checkDate.getTime() - prev.getTime()) / (1000 * 3600 * 24)
+          (checkDate.getTime() - prev.getTime()) / 86400000
         );
         if (diffDays === 1) {
           streak++;
@@ -79,12 +85,23 @@ export const WorkoutHistoryView: React.FC = () => {
     <div className="flex flex-col h-full max-w-md mx-auto px-4 pt-2 pb-2 select-none overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between pb-2 shrink-0">
-        <div>
-          <h1 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
-            <History className="w-5 h-5 text-emerald-400" />
-            Treningshistorikk
-          </h1>
-          <p className="text-[11px] text-zinc-400">Dine fullførte økter og statistikk</p>
+        <div className="flex items-center gap-2">
+          {onNavigateToTimer && (
+            <button
+              onClick={onNavigateToTimer}
+              title="Tilbake til Timer / Forside"
+              className="p-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all flex items-center gap-1"
+            >
+              <span className="text-xs font-bold text-emerald-400">← Timer</span>
+            </button>
+          )}
+          <div>
+            <h1 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
+              <History className="w-5 h-5 text-emerald-400" />
+              Treningshistorikk
+            </h1>
+            <p className="text-[11px] text-zinc-400">Dine fullførte økter og statistikk</p>
+          </div>
         </div>
       </div>
 

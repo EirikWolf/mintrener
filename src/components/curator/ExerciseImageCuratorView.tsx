@@ -21,7 +21,13 @@ interface FeedbackMap {
 
 const STORAGE_KEY = 'mintrener_image_curator_feedback';
 
-export const ExerciseImageCuratorView: React.FC = () => {
+interface ExerciseImageCuratorViewProps {
+  onNavigateToTimer?: () => void;
+}
+
+export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> = ({
+  onNavigateToTimer,
+}) => {
   const [exercises] = useState<ExerciseItem[]>(EXERCISE_LIBRARY);
   const [selectedCategory, setSelectedCategory] = useState<string>('alle');
   const [feedbackMap, setFeedbackMap] = useState<FeedbackMap>({});
@@ -84,14 +90,25 @@ export const ExerciseImageCuratorView: React.FC = () => {
     <div className="flex flex-col h-full max-w-4xl mx-auto px-4 pt-2 pb-6 select-none overflow-hidden">
       {/* Topplinje */}
       <div className="flex items-center justify-between pb-3 border-b border-zinc-800 shrink-0">
-        <div>
-          <h1 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-            <Eye className="w-5 h-5 text-emerald-400" />
-            Bildekurator & QA-Dashboard
-          </h1>
-          <p className="text-xs text-zinc-400">
-            Kuratér, gi tilbakemelding og bestill regenerering fra Kitor
-          </p>
+        <div className="flex items-center gap-2">
+          {onNavigateToTimer && (
+            <button
+              onClick={onNavigateToTimer}
+              title="Tilbake til Timer / Forside"
+              className="p-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all flex items-center gap-1"
+            >
+              <span className="text-xs font-bold text-emerald-400">← Timer</span>
+            </button>
+          )}
+          <div>
+            <h1 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+              <Eye className="w-5 h-5 text-emerald-400" />
+              Bildekurator & QA-Dashboard
+            </h1>
+            <p className="text-xs text-zinc-400">
+              Kuratér, gi tilbakemelding og bestill regenerering fra Kitor
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-2xl text-xs">

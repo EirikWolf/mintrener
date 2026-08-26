@@ -1,8 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { EXERCISE_LIBRARY, filterExercises } from '../../data/exercises';
 import { ExerciseItem } from '../../schemas/exerciseSchema';
 import { ExerciseDetailModal } from './ExerciseDetailModal';
-import { Search, ChevronRight, Dumbbell, Sparkles } from 'lucide-react';
+import { CreateCustomExerciseModal } from './CreateCustomExerciseModal';
+import { useAuth } from '../../contexts/AuthContext';
+import {
+  fetchCustomExercises,
+  deleteCustomExercise,
+  CustomExerciseItem,
+} from '../../services/customExercisesService';
+import { Search, Dumbbell, Sparkles, Plus, Trash2, Clock } from 'lucide-react';
 
 const CATEGORIES = [
   { id: 'alle', label: 'Alle' },
@@ -11,60 +18,116 @@ const CATEGORIES = [
   { id: 'frivekt', label: 'Frivekt' },
   { id: 'kondisjon', label: 'Kondisjon' },
   { id: 'mobilitet', label: 'Mobilitet' },
+  { id: 'egendefinert', label: 'Mine øvelser' },
 ];
 
-export const ExerciseLibraryView: React.FC = () => {
+interface ExerciseLibraryViewProps {
+  onNavigateToTimer?: () => void;
+}
+
+export const ExerciseLibraryView: React.FC<ExerciseLibraryViewProps> = ({
+  onNavigateToTimer,
+}) => {
+  const { user } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string>('alle');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedExercise, setSelectedExercise] = useState<ExerciseItem | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [customExercises, setCustomExercises] = useState<CustomExerciseItem[]>([]);
+
+  const loadCustoms = () => {
+    fetchCustomExercises(user?.uid).then((list) => {
+      setCustomExercises(list);
+    });
+  };
+
+  useEffect(() => {
+    loadCustoms();
+  }, [user]);
+
+  const allExercises = useMemo(() => {
+    return [...customExercises, ...EXERCISE_LIBRARY];
+  }, [customExercises]);
 
   const filteredExercises = useMemo(() => {
-    return filterExercises(EXERCISE_LIBRARY, {
+    if (selectedCategory === 'egendefinert') {
+      return customExercises.filter((e) =>
+        e.navn.nb.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    return filterExercises(allExercises, {
       kategori: selectedCategory,
       query: searchQuery,
     });
-  }, [selectedCategory, searchQuery]);
+  }, [allExercises, customExercises, selectedCategory, searchQuery]);
+
+  const handleDeleteCustom = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (window.confirm('Vil du slette denne egendefinerte øvelsen?')) {
+      await deleteCustomExercise(user?.uid, id);
+      loadCustoms();
+    }
+  };
 
   return (
     <div className="flex flex-col h-full max-w-md mx-auto px-4 pt-2 pb-2 select-none overflow-hidden">
-      {/* 1. Header & Tittel */}
-      <div className="flex items-center justify-between pb-2">
-        <div>
-          <h1 className="text-xl font-black tracking-tight text-white flex items-center gap-2">
-            <Dumbbell className="w-5 h-5 text-emerald-400" />
-            Øvelsesbibliotek
-          </h1>
-          <p className="text-[11px] text-zinc-400">
-            {filteredExercises.length} av {EXERCISE_LIBRARY.length} øvelser
-          </p>
+      {/* 1. Header & Tittel + Ny øvelse knapp */}
+      <div className="flex items-center justify-between pb-1 shrink-0">
+        <div className="flex items-center gap-2">
+          {onNavigateToTimer && (
+            <button
+              onClick={onNavigateToTimer}
+              title="Tilbake til Timer / Forside"
+              className="p-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all flex items-center gap-1"
+            >
+              <span className="text-xs font-bold text-emerald-400">← Timer</span>
+            </button>
+          )}
+          <div>
+            <h1 className="text-base sm:text-lg font-black tracking-tight text-white flex items-center gap-1.5">
+              <Dumbbell className="w-4.5 h-4.5 text-emerald-400" />
+              Øvelser
+            </h1>
+            <p className="text-[10px] text-zinc-400">
+              {allExercises.length} øvelser {customExercises.length > 0 ? `(${customExercises.length} egne)` : ''}
+            </p>
+          </div>
         </div>
+
+        <button
+          onClick={() => setIsCreateModalOpen(true)}
+          className="py-1.5 px-3 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-zinc-950 font-bold text-xs rounded-xl flex items-center gap-1 transition-all shadow-sm"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Ny øvelse</span>
+        </button>
       </div>
 
       {/* 2. Søkefelt */}
-      <div className="relative my-2">
+      <div className="relative my-2 shrink-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Søk på øvelse, muskel..."
-          className="w-full pl-9 pr-4 py-2.5 bg-zinc-900/90 border border-zinc-800 rounded-2xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition-colors shadow-inner"
+          className="w-full pl-9 pr-4 py-2 bg-zinc-900/90 border border-zinc-800 rounded-2xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition-colors shadow-inner"
         />
       </div>
 
       {/* 3. Kategori Chips */}
-      <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-none">
+      <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-none shrink-0">
         {CATEGORIES.map((cat) => (
           <button
             key={cat.id}
             onClick={() => setSelectedCategory(cat.id)}
-            className={`py-1.5 px-3 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${
+            className={`py-1 px-3 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${
               selectedCategory === cat.id
                 ? 'bg-emerald-500 text-zinc-950 shadow-sm'
                 : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800/80'
             }`}
           >
-            {cat.label}
+            {cat.label} {cat.id === 'egendefinert' && customExercises.length > 0 ? `(${customExercises.length})` : ''}
           </button>
         ))}
       </div>
@@ -77,43 +140,74 @@ export const ExerciseLibraryView: React.FC = () => {
             <p className="text-xs">Ingen øvelser matcher søket ditt.</p>
           </div>
         ) : (
-          filteredExercises.map((ex) => (
-            <div
-              key={ex.id}
-              onClick={() => setSelectedExercise(ex)}
-              className="p-3 bg-zinc-900/70 hover:bg-zinc-800/90 active:scale-[0.99] border border-zinc-800/80 rounded-2xl flex items-center justify-between cursor-pointer transition-all shadow-sm"
-            >
-              <div className="space-y-1 overflow-hidden pr-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider bg-emerald-950/80 text-emerald-400 border border-emerald-800/40">
-                    {ex.kategori}
-                  </span>
-                  <span className="text-[10px] text-zinc-500 font-mono capitalize">
-                    {ex.utstyr.join(', ')}
-                  </span>
-                </div>
-                <h3 className="text-sm font-bold text-white truncate">{ex.navn.nb}</h3>
-                <p className="text-[10px] text-zinc-400 truncate">
-                  {ex.muskler.primær.join(', ')}
-                </p>
-              </div>
+          filteredExercises.map((ex) => {
+            const customItem = ex as CustomExerciseItem;
+            const isCustom = Boolean(customItem.isCustom || customItem.id.startsWith('custom-'));
 
-              <div className="flex items-center gap-1 shrink-0 text-zinc-500">
-                <span className="text-[10px] text-zinc-400 capitalize font-medium hidden xs:inline">
-                  {ex.nivå}
-                </span>
-                <ChevronRight className="w-4 h-4" />
+            return (
+              <div
+                key={ex.id}
+                onClick={() => setSelectedExercise(ex)}
+                className={`p-3 border rounded-2xl flex items-center justify-between cursor-pointer transition-all shadow-sm ${
+                  isCustom
+                    ? 'bg-zinc-900/90 border-emerald-900/50 hover:border-emerald-500/70'
+                    : 'bg-zinc-900/70 hover:bg-zinc-800/90 border-zinc-800/80'
+                }`}
+              >
+                <div className="space-y-1 overflow-hidden pr-2 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    {isCustom ? (
+                      <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-emerald-500 text-zinc-950">
+                        Egendefinert
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider bg-emerald-950/80 text-emerald-400 border border-emerald-800/40">
+                        {ex.kategori}
+                      </span>
+                    )}
+
+                    {customItem.defaultDurationSeconds && (
+                      <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-amber-400 bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-900/40">
+                        <Clock className="w-3 h-3" />
+                        {Math.floor(customItem.defaultDurationSeconds / 60) > 0 ? `${Math.floor(customItem.defaultDurationSeconds / 60)}m ` : ''}
+                        {customItem.defaultDurationSeconds % 60 > 0 || Math.floor(customItem.defaultDurationSeconds / 60) === 0 ? `${customItem.defaultDurationSeconds % 60}s` : ''}
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className="font-bold text-sm text-white truncate">{ex.navn.nb}</h3>
+                  <p className="text-[11px] text-zinc-400 truncate">
+                    {ex.muskler.primær.join(', ')} • {ex.utstyr.join(', ')}
+                  </p>
+                </div>
+
+                {isCustom && (
+                  <button
+                    onClick={(e) => handleDeleteCustom(e, ex.id)}
+                    title="Slett egendefinert øvelse"
+                    className="p-2 text-zinc-500 hover:text-rose-400 hover:bg-rose-950/30 rounded-xl transition-all mr-1"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
-      {/* Detaljmodal */}
+      {/* Modaler */}
       {selectedExercise && (
         <ExerciseDetailModal
           exercise={selectedExercise}
           onClose={() => setSelectedExercise(null)}
+        />
+      )}
+
+      {isCreateModalOpen && (
+        <CreateCustomExerciseModal
+          onClose={() => setIsCreateModalOpen(false)}
+          onSaved={() => loadCustoms()}
         />
       )}
     </div>
