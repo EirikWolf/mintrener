@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { exportFullUserDataset } from '../../services/exportDataService';
+import {
+  getTelemetryConsent,
+  setTelemetryConsent,
+  fetchGlobalStats,
+  GlobalTelemetryStats,
+} from '../../services/telemetryService';
 import { SensorStatusModal } from '../sensors/SensorStatusModal';
 import { AboutGuideModal } from '../help/AboutGuideModal';
 import { PrivacyPolicyModal } from '../legal/PrivacyPolicyModal';
@@ -22,7 +28,10 @@ import {
   User,
   Check,
   ChevronRight,
-  Dumbbell
+  Dumbbell,
+  BarChart3,
+  Flame,
+  Globe2,
 } from 'lucide-react';
 
 interface SettingsMoreViewProps {
@@ -55,6 +64,18 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [telemetryEnabled, setTelemetryEnabledState] = useState<boolean>(() => getTelemetryConsent());
+  const [globalStats, setGlobalStats] = useState<GlobalTelemetryStats | null>(null);
+
+  React.useEffect(() => {
+    fetchGlobalStats().then(setGlobalStats);
+  }, []);
+
+  const handleToggleTelemetry = () => {
+    const next = !telemetryEnabled;
+    setTelemetryEnabledState(next);
+    setTelemetryConsent(next);
+  };
 
   const handleExportData = async () => {
     setIsExporting(true);
@@ -231,9 +252,87 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
         </button>
       </section>
 
-      {/* 4. DATA & PERSONVERN (GDPR) */}
+      {/* 4. FELLESSKAPSSTATISTIKK (ANONYM TELEMETRI) */}
+      <section className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-3.5 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+            <Globe2 className="w-3.5 h-3.5 text-emerald-400" />
+            Fellesskapsstatistikk
+          </h2>
+          <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
+            100 % Anonymt
+          </span>
+        </div>
+
+        {globalStats ? (
+          <div className="space-y-3">
+            {/* Nøkkeltall */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-2.5 bg-zinc-950/80 border border-zinc-800 rounded-xl">
+                <p className="text-[10px] text-zinc-400 font-semibold">Økter gjennomført</p>
+                <p className="text-lg font-black text-white">{globalStats.totalWorkouts.toLocaleString('nb-NO')}</p>
+              </div>
+              <div className="p-2.5 bg-zinc-950/80 border border-zinc-800 rounded-xl">
+                <p className="text-[10px] text-zinc-400 font-semibold">Timer trent sammen</p>
+                <p className="text-lg font-black text-emerald-400">
+                  {Math.round(globalStats.totalSecondsTrained / 3600).toLocaleString('nb-NO')} t
+                </p>
+              </div>
+            </div>
+
+            {/* Topp 3 øvelser */}
+            {globalStats.topExercises.length > 0 && (
+              <div className="p-2.5 bg-zinc-950/60 border border-zinc-800 rounded-xl space-y-2">
+                <p className="text-[10px] uppercase font-bold text-zinc-400 flex items-center gap-1">
+                  <Flame className="w-3 h-3 text-amber-400" />
+                  Mest populære øvelser
+                </p>
+                <div className="space-y-1.5">
+                  {globalStats.topExercises.slice(0, 3).map((ex, idx) => (
+                    <div key={ex.exerciseId} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="w-4 h-4 rounded-full bg-zinc-800 text-[10px] font-black text-zinc-300 flex items-center justify-center shrink-0">
+                          {idx + 1}
+                        </span>
+                        <span className="font-semibold text-zinc-200 truncate">{ex.name}</span>
+                      </div>
+                      <span className="text-[10px] text-zinc-400 shrink-0 font-mono">
+                        {ex.completedCount} økter
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-4 bg-zinc-950/40 rounded-xl text-center text-xs text-zinc-500">
+            Laster fellesskapets statistikk...
+          </div>
+        )}
+      </section>
+
+      {/* 5. DATA & PERSONVERN (GDPR) */}
       <section className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-3.5 space-y-2">
         <h2 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Data & Personvern</h2>
+
+        {/* Anonym telemetri samtykke-bryter */}
+        <div className="flex items-center justify-between py-2 border-b border-zinc-800/80">
+          <div className="flex items-center gap-2.5 pr-2">
+            <BarChart3 className={`w-4 h-4 ${telemetryEnabled ? 'text-emerald-400' : 'text-zinc-500'}`} />
+            <div>
+              <p className="text-xs font-bold text-white">Del anonym bruksstatistikk</p>
+              <p className="text-[10px] text-zinc-400">Hjelper oss å se hvilke øvelser som er mest populære (ingen personopplysninger)</p>
+            </div>
+          </div>
+          <button
+            onClick={handleToggleTelemetry}
+            className={`w-11 h-6 rounded-full transition-colors relative p-0.5 shrink-0 ${telemetryEnabled ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+          >
+            <div className={`w-5 h-5 rounded-full bg-white transition-transform ${telemetryEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+          </button>
+        </div>
+
         <button
           onClick={handleExportData}
           disabled={isExporting}

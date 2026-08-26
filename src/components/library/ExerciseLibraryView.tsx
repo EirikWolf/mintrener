@@ -10,10 +10,12 @@ import {
   deleteCustomExercise,
   CustomExerciseItem,
 } from '../../services/customExercisesService';
-import { Search, Dumbbell, Sparkles, Plus, Trash2, Clock, Weight } from 'lucide-react';
+import { fetchGlobalStats, GlobalTelemetryStats } from '../../services/telemetryService';
+import { Search, Dumbbell, Sparkles, Plus, Trash2, Clock, Weight, Flame } from 'lucide-react';
 
 const CATEGORIES = [
   { id: 'alle', label: 'Alle' },
+  { id: 'populaere', label: '🔥 Populære' },
   { id: 'kroppsvekt', label: 'Kroppsvekt' },
   { id: 'kettlebell', label: 'Kettlebell' },
   { id: 'frivekt', label: 'Frivekt' },
@@ -37,6 +39,7 @@ export const ExerciseLibraryView: React.FC<ExerciseLibraryViewProps> = ({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isStrengthModalOpen, setIsStrengthModalOpen] = useState(false);
   const [customExercises, setCustomExercises] = useState<CustomExerciseItem[]>([]);
+  const [globalStats, setGlobalStats] = useState<GlobalTelemetryStats | null>(null);
 
   const loadCustoms = () => {
     fetchCustomExercises(user?.uid).then((list) => {
@@ -46,11 +49,20 @@ export const ExerciseLibraryView: React.FC<ExerciseLibraryViewProps> = ({
 
   useEffect(() => {
     loadCustoms();
+    fetchGlobalStats().then(setGlobalStats);
   }, [user]);
 
   const allExercises = useMemo(() => {
     return [...customExercises, ...EXERCISE_LIBRARY];
   }, [customExercises]);
+
+  const popularityMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (globalStats?.topExercises) {
+      globalStats.topExercises.forEach((ex) => map.set(ex.exerciseId, ex.completedCount));
+    }
+    return map;
+  }, [globalStats]);
 
   const filteredExercises = useMemo(() => {
     if (selectedCategory === 'egendefinert') {
@@ -58,11 +70,16 @@ export const ExerciseLibraryView: React.FC<ExerciseLibraryViewProps> = ({
         e.navn.nb.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
+    if (selectedCategory === 'populaere') {
+      return [...allExercises]
+        .filter((e) => e.navn.nb.toLowerCase().includes(searchQuery.toLowerCase()))
+        .sort((a, b) => (popularityMap.get(b.id) || 0) - (popularityMap.get(a.id) || 0));
+    }
     return filterExercises(allExercises, {
       kategori: selectedCategory,
       query: searchQuery,
     });
-  }, [allExercises, customExercises, selectedCategory, searchQuery]);
+  }, [allExercises, customExercises, selectedCategory, searchQuery, popularityMap]);
 
   const handleDeleteCustom = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();

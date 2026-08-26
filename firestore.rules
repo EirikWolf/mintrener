@@ -57,5 +57,11 @@ service cloud.firestore {
       // Kun verten kan slette rommet
       allow delete: if isAuthenticated() && resource.data.hostUid == request.auth.uid;
     }
+
+    // Anonym, aggregert telemetri / statistikk (uten personopplysninger)
+    match /global_stats/{statId} {
+      allow read: if true;
+      allow write: if true;
+    }
   }
 }
