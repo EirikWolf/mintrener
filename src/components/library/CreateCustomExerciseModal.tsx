@@ -17,7 +17,7 @@ export const CreateCustomExerciseModal: React.FC<CreateCustomExerciseModalProps>
 }) => {
   const { user } = useAuth();
   const [navn, setNavn] = useState('');
-  const [kategori, setKategori] = useState<'kroppsvekt' | 'kettlebell' | 'frivekt' | 'mobilitet' | 'kondisjon'>('kroppsvekt');
+  const [kategori, setKategori] = useState<'kroppsvekt' | 'kettlebell' | 'frivekt' | 'mobilitet' | 'kondisjon' | 'annet'>('kroppsvekt');
   const [muskler, setMuskler] = useState('helkropp');
   const [utstyr, setUtstyr] = useState<string>('ingen');
   const [durationMinutes, setDurationMinutes] = useState<number>(0);
@@ -122,6 +122,7 @@ export const CreateCustomExerciseModal: React.FC<CreateCustomExerciseModalProps>
               <option value="frivekt">Frivekt / Manualer</option>
               <option value="kondisjon">Kondisjon / Kardio</option>
               <option value="mobilitet">Mobilitet & Tøying</option>
+              <option value="annet">Annet / Spesial</option>
             </select>
           </div>
 

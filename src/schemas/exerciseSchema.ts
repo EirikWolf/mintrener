@@ -6,6 +6,7 @@ export const ExerciseCategorySchema = z.enum([
   'frivekt',
   'mobilitet',
   'kondisjon',
+  'annet',
 ]);
 
 export const ExerciseEquipmentSchema = z.enum([

@@ -18,6 +18,7 @@ const CATEGORIES = [
   { id: 'frivekt', label: 'Frivekt' },
   { id: 'kondisjon', label: 'Kondisjon' },
   { id: 'mobilitet', label: 'Mobilitet' },
+  { id: 'annet', label: 'Annet' },
   { id: 'egendefinert', label: 'Mine øvelser' },
 ];
 
