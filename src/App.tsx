@@ -107,6 +107,7 @@ export function App() {
             onToggleWakeLock={toggleWakeLock}
             onToggleSpeech={toggleSpeech}
             onOpenCurator={() => setActiveTab('curator')}
+            onOpenPrograms={() => setActiveTab('programs')}
           />
         ) : activeTab === 'programs' ? (
           <ProgramCatalogView onStartProgram={handleStartCustomWorkout} />

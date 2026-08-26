@@ -5,7 +5,7 @@ import { EXERCISE_LIBRARY } from '../src/data/exercises/index.js';
 /**
  * Min Trener — Full Kitor Batch Runner (24 øvelser × 2 faser = 48 bilder)
  * Modell: Flux.1 Dev fp8 + Astrid LoRA (synthiq/astrid_k.safetensors)
- * Styrket helkroppsmal (head to feet visible, wide angle view, no cropping)
+ * Anatomisk presisjon, dynamisk bevegelse, svetteglans og motiverende smil
  */
 
 const KITOR_HOST = process.env.KITOR_HOST || 'https://kitor.tail49f298.ts.net';
@@ -18,8 +18,7 @@ function getToken(): string {
   }
   const envPath = path.resolve(process.cwd(), '.env');
   if (fs.existsSync(envPath)) {
-    const content = fs.readFileSync(envPath, 'utf-8');
-    const match = content.match(/^KITOR_TOKEN=(.+)$/m);
+    const match = fs.readFileSync(envPath, 'utf-8').match(/^KITOR_TOKEN=(.+)$/m);
     if (match && match[1]) {
       return match[1].trim();
     }
@@ -27,30 +26,37 @@ function getToken(): string {
   throw new Error('KITOR_TOKEN mangler i .env');
 }
 
-async function acquireGpuLease(token: string, durationH: number = 2): Promise<string> {
-  console.log('📡 Forespør 2-timers GPU-lease fra Arbiter v1...');
-  const res = await fetch(`${KITOR_HOST}${ARBITER_PATH}/acquire`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      kind: 'image',
-      requester: 'mintrener',
-      label: 'full-library-astrid-flux',
-      duration_h: durationH,
-    }),
-  });
+async function acquireGpuLeaseWithRetry(token: string, durationH: number = 2, maxRetries: number = 5): Promise<string> {
+  console.log('📡 Forespør GPU-lease fra Arbiter v1...');
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(`${KITOR_HOST}${ARBITER_PATH}/acquire`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          kind: 'image',
+          requester: 'mintrener',
+          label: 'full-library-dynamic-astrid',
+          duration_h: durationH,
+        }),
+      });
 
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`Klarte ikke å reservere GPU fra Arbiter (${res.status}): ${txt}`);
+      if (res.ok) {
+        const data = await res.json() as { token: string };
+        console.log('✅ GPU-lease innvilget for batch.');
+        return data.token;
+      }
+      const txt = await res.text();
+      console.warn(`Forsøk ${attempt}/${maxRetries} feilet (${res.status}): ${txt}`);
+    } catch (err: any) {
+      console.warn(`Nettverksforsøk ${attempt}/${maxRetries} feilet:`, err.message || err);
+    }
+    await new Promise((r) => setTimeout(r, 10000));
   }
-
-  const data = await res.json() as { token: string };
-  console.log('✅ GPU-lease innvilget for full batch.');
-  return data.token;
+  throw new Error('Klarte ikke å reservere GPU etter gjentatte forsøk.');
 }
 
 async function sendHeartbeat(token: string, leaseToken: string): Promise<void> {
@@ -191,7 +197,7 @@ async function submitPrompt(token: string, promptWorkflow: any): Promise<string>
   return data.prompt_id;
 }
 
-async function waitForCompletion(token: string, promptId: string, maxWaitSec: number = 180): Promise<boolean> {
+async function waitForCompletion(token: string, promptId: string, maxWaitSec: number = 180): Promise<any> {
   const startTime = Date.now();
   while ((Date.now() - startTime) / 1000 < maxWaitSec) {
     try {
@@ -200,19 +206,28 @@ async function waitForCompletion(token: string, promptId: string, maxWaitSec: nu
       });
       if (res.ok) {
         const historyData = await res.json() as Record<string, any>;
-        if (historyData[promptId] && historyData[promptId].outputs) {
-          return true;
+        if (historyData[promptId]?.outputs?.["10"]?.images?.[0]) {
+          return historyData[promptId].outputs["10"].images[0];
         }
       }
     } catch {}
     await new Promise((r) => setTimeout(r, 4000));
   }
-  return false;
+  throw new Error('Generering tok for lang tid');
+}
+
+async function downloadImage(token: string, imgInfo: any, targetPath: string) {
+  const url = `${KITOR_HOST}${COMFY_PATH}/view?filename=${encodeURIComponent(imgInfo.filename)}&subfolder=${encodeURIComponent(imgInfo.subfolder)}&type=${encodeURIComponent(imgInfo.type)}`;
+  const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+  if (res.ok) {
+    const buf = Buffer.from(await res.arrayBuffer());
+    fs.writeFileSync(targetPath, buf);
+  }
 }
 
 async function runFullBatch() {
   console.log('===========================================================');
-  console.log(`🚀 Starter Full Kitor Batch for alle ${EXERCISE_LIBRARY.length} øvelser`);
+  console.log(`🚀 Starter Full Kitor Batch for alle ${EXERCISE_LIBRARY.length} øvelser (med smil & bevegelse)`);
   console.log('===========================================================');
 
   const token = getToken();
@@ -220,16 +235,19 @@ async function runFullBatch() {
   let heartbeatTimer: NodeJS.Timeout | null = null;
 
   try {
-    leaseToken = await acquireGpuLease(token, 2);
+    leaseToken = await acquireGpuLeaseWithRetry(token, 2);
 
     heartbeatTimer = setInterval(() => {
       if (leaseToken) sendHeartbeat(token, leaseToken);
     }, 3 * 60 * 1000);
 
     const baseStyle =
-      'ASTRID, a woman, full body shot from head to feet completely visible within frame, wide angle view, no cropping, photorealistic photo of a fit, toned and visibly muscular athletic woman with sun-tanned skin, golden tan, defined shoulders and abs';
+      'ASTRID, a woman, full body shot from head to feet completely visible within frame, wide angle view, no cropping, dynamic athletic fitness photography of an athletic woman actively exercising with physical exertion, light sweat sheen on sun-tanned skin, golden tan, engaged core, tense flexed muscles, warm confident encouraging smile, radiant positive workout energy, joy of training';
     const outfitStyle =
-      'in a bright modern gym, wearing a charcoal modern seamless cropped racerback sports bra and matching high-waist ribbed leggings, black training shoes, natural lighting, sharp focus, full body, side view';
+      'in a bright modern gym, wearing a charcoal modern seamless cropped racerback sports bra and matching high-waist ribbed leggings, black training shoes, natural athletic lighting, sharp focus';
+
+    const outputDir = path.resolve(process.cwd(), 'public', 'images', 'exercises');
+    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
     let total = 0;
     for (const exercise of EXERCISE_LIBRARY) {
@@ -241,23 +259,26 @@ async function runFullBatch() {
             ? exercise.bildePrompt[phaseKey]
             : `${exercise.navn.en || exercise.navn.nb} step ${phaseIdx + 1}`;
 
-        const promptText = `${baseStyle}, ${specificAction}, ${outfitStyle}`;
-        const seed = 100 + total * 777;
+        const viewAngle = exercise.bildeVinkel || 'side';
+        const promptText = `${baseStyle}, ${specificAction}, ${outfitStyle}, ${viewAngle} view`;
+        const seed = 200 + total * 888;
         const filenamePrefix = `${exercise.id}_step${phaseIdx}`;
 
         console.log(`\n▶️ [${total}/${EXERCISE_LIBRARY.length * 2}] ${exercise.navn.nb} (Fase ${phaseIdx + 1})...`);
         const workflow = buildAstridFluxWorkflow(promptText, seed, filenamePrefix);
         const promptId = await submitPrompt(token, workflow);
-        console.log(`   Innsendt til ComfyUI ID: ${promptId}`);
+        console.log(`   ComfyUI ID: ${promptId}`);
 
-        await waitForCompletion(token, promptId, 120);
-        console.log(`   ✨ Fullført: ${filenamePrefix}`);
+        const imgInfo = await waitForCompletion(token, promptId, 120);
+        const targetPath = path.join(outputDir, `${exercise.id}-${phaseIdx}.png`);
+        await downloadImage(token, imgInfo, targetPath);
+        console.log(`   ✨ Lagret bilde til: public/images/exercises/${exercise.id}-${phaseIdx}.png`);
       }
     }
 
-    console.log('\n🎉 Full bibliotek-batch fullført!');
+    console.log('\n🎉 Full bibliotek-batch med smil og bevegelse fullført!');
   } catch (err: any) {
-    console.error('Feil i batch:', err);
+    console.error('Feil i batch:', err.message || err);
   } finally {
     if (heartbeatTimer) clearInterval(heartbeatTimer);
     if (leaseToken) {

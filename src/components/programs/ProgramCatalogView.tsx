@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { TRAINING_PROGRAMS } from '../../data/programs';
 import { CONTEXT_PROFILES, TrainingMode } from '../../data/contextProfiles';
 import { WorkoutTemplate } from '../../types/workout';
+import { getFavoriteProgramIds, toggleFavoriteProgramId } from '../../services/favoritesService';
 import {
   Play,
   Clock,
@@ -15,6 +16,7 @@ import {
   Music,
   Trophy,
   Sparkles,
+  Star,
 } from 'lucide-react';
 
 interface ProgramCatalogViewProps {
@@ -25,6 +27,12 @@ export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({ onStartP
   const [selectedCategory, setSelectedCategory] = useState<string>('alle');
   const [trainingMode, setTrainingMode] = useState<TrainingMode>('alene');
   const [selectedProfileId, setSelectedProfileId] = useState<string>('alle');
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => getFavoriteProgramIds());
+
+  const handleToggleFavorite = (workoutId: string) => {
+    const updated = toggleFavoriteProgramId(workoutId);
+    setFavoriteIds(updated);
+  };
 
   const getProfileIcon = (iconName: string) => {
     switch (iconName) {
@@ -166,9 +174,22 @@ export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({ onStartP
               </div>
 
               <div className="flex items-center justify-between pt-1 border-t border-zinc-800/60">
-                <span className="text-[10px] text-zinc-400 font-medium">
-                  {prog.workout.items.length} øvelser {prog.workout.rounds > 1 ? `(${prog.workout.rounds} runder)` : ''}
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleToggleFavorite(prog.workout.id)}
+                    title={favoriteIds.includes(prog.workout.id) ? 'Fjern fra favoritter på fremsiden' : 'Fest som favoritt på fremsiden'}
+                    className={`p-1.5 rounded-lg transition-all ${
+                      favoriteIds.includes(prog.workout.id)
+                        ? 'text-amber-400 bg-amber-950/60 border border-amber-800/80'
+                        : 'text-zinc-500 hover:text-amber-400 hover:bg-zinc-800'
+                    }`}
+                  >
+                    <Star className={`w-3.5 h-3.5 ${favoriteIds.includes(prog.workout.id) ? 'fill-current' : ''}`} />
+                  </button>
+                  <span className="text-[10px] text-zinc-400 font-medium">
+                    {prog.workout.items.length} øvelser {prog.workout.rounds > 1 ? `(${prog.workout.rounds} runder)` : ''}
+                  </span>
+                </div>
 
                 <button
                   onClick={() => onStartProgram(prog.workout)}

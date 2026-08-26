@@ -4,6 +4,8 @@ import { CircularProgress } from './CircularProgress';
 import { UserMenu } from '../auth/UserMenu';
 import { SensorStatusModal } from '../sensors/SensorStatusModal';
 import { HeartRateWidget } from '../sensors/HeartRateWidget';
+import { getFavoriteProgramIds } from '../../services/favoritesService';
+import { TRAINING_PROGRAMS } from '../../data/programs';
 import {
   Play,
   Pause,
@@ -12,6 +14,7 @@ import {
   RotateCcw,
   Volume2,
   VolumeX,
+  Vibrate,
   Lock,
   Unlock,
   Smartphone,
@@ -22,6 +25,13 @@ import {
   Dumbbell,
   Mic,
   MicOff,
+  Flame,
+  Layers,
+  ChevronLeft,
+  ChevronRight,
+  Sparkles,
+  Star,
+  Plus,
 } from 'lucide-react';
 
 interface TimerDisplayProps {
@@ -41,6 +51,7 @@ interface TimerDisplayProps {
   onToggleWakeLock: () => void;
   onToggleSpeech?: () => void;
   onOpenCurator?: () => void;
+  onOpenPrograms?: () => void;
 }
 
 export const TimerDisplay: React.FC<TimerDisplayProps> = ({
@@ -60,6 +71,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   onToggleWakeLock,
   onToggleSpeech,
   onOpenCurator,
+  onOpenPrograms,
 }) => {
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
 
@@ -204,25 +216,72 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           </div>
         </div>
 
-        {/* Treningsøkt-velger (kun synlig når timeren er i hvilemodus) */}
-        {state.status === 'idle' && (
-          <div className="flex gap-1 p-1 bg-zinc-900/90 border border-zinc-800/80 rounded-xl overflow-x-auto scrollbar-none">
-            {presets.map((tpl) => (
-              <button
-                key={tpl.id}
-                onClick={() => onSelectWorkout(tpl)}
-                className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
-                  workout.id === tpl.id
-                    ? 'bg-emerald-500 text-zinc-950 shadow-sm'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
-                }`}
-              >
-                {tpl.type === 'tabata' ? <Zap className="w-3 h-3" /> : <Activity className="w-3 h-3" />}
-                {tpl.name}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* 2. FAVORITT-PROGRAMMER (2 rader grid på fremsiden når timeren er i hvilemodus) */}
+        {state.status === 'idle' && (() => {
+          const favoriteIds = getFavoriteProgramIds();
+          const uniqueWorkoutsMap = new Map<string, WorkoutTemplate>();
+          presets.forEach((w) => uniqueWorkoutsMap.set(w.id, w));
+          TRAINING_PROGRAMS.forEach((p) => uniqueWorkoutsMap.set(p.workout.id, p.workout));
+
+          const matchedFavs = favoriteIds
+            .map((id) => uniqueWorkoutsMap.get(id))
+            .filter((w): w is WorkoutTemplate => Boolean(w));
+
+          const displayList = matchedFavs.length > 0 ? matchedFavs.slice(0, 4) : presets.slice(0, 4);
+
+          return (
+            <div className="space-y-1 pt-0.5">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider flex items-center gap-1">
+                  <Star className="w-3 h-3 text-amber-400 fill-current" />
+                  Favoritt-økter
+                </span>
+                {onOpenPrograms && (
+                  <button
+                    onClick={onOpenPrograms}
+                    className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 transition-colors"
+                  >
+                    <span>Alle programmer</span>
+                    <ChevronRight className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
+              {/* 2 Rader Grid */}
+              <div className="grid grid-cols-2 gap-1.5">
+                {displayList.map((tpl) => {
+                  const isSelected = workout.id === tpl.id;
+                  return (
+                    <button
+                      key={tpl.id}
+                      onClick={() => onSelectWorkout(tpl)}
+                      className={`p-2 rounded-xl text-left border transition-all flex items-center justify-between gap-1.5 shadow-sm ${
+                        isSelected
+                          ? 'bg-emerald-950/80 border-emerald-500 text-white shadow-emerald-950/40'
+                          : 'bg-zinc-900/80 border-zinc-800/80 text-zinc-300 hover:bg-zinc-800/80 hover:border-zinc-700'
+                      }`}
+                    >
+                      <div className="overflow-hidden">
+                        <p className={`text-xs font-bold truncate ${isSelected ? 'text-emerald-300' : 'text-zinc-200'}`}>
+                          {tpl.name}
+                        </p>
+                        <p className="text-[10px] text-zinc-400 capitalize">
+                          {tpl.items.length} øvelser {tpl.rounds > 1 ? `• ${tpl.rounds} rnd` : ''}
+                        </p>
+                      </div>
+
+                      <div className={`p-1 rounded-lg shrink-0 ${
+                        isSelected ? 'bg-emerald-500 text-zinc-950' : 'bg-zinc-800 text-zinc-400'
+                      }`}>
+                        <Play className="w-3 h-3 fill-current" />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Info-linje med totaltid og rundeinfo */}
         <div className="flex items-center justify-between px-1 text-[11px] text-zinc-400 font-medium">

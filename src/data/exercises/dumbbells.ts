@@ -21,6 +21,10 @@ export const DUMBBELL_EXERCISES: ExerciseItem[] = [
       nb: ['Kolliderer manualene hardt i toppen', 'Lar albuene falle for langt ut til sidene'],
     },
     sensorProfil: 'ingen',
+    bildePrompt: {
+      '0': 'captured in front-diagonal view lying supine on a flat gym bench holding heavy black dumbbells at chest level, elbows flared at 45 degrees, feet flat on floor, ready to press',
+      '1': 'captured in front-diagonal view at the top lockout of a dumbbell bench press, arms extended straight up over chest holding black dumbbells parallel, chest squeezed and flexed',
+    },
     bildeVinkel: 'front',
     bildeStatus: 'mangler',
   },
@@ -44,6 +48,10 @@ export const DUMBBELL_EXERCISES: ExerciseItem[] = [
       nb: ['Svaier i korsryggen for å dytte vekten opp', 'Presser for langt foran hodet'],
     },
     sensorProfil: 'ingen',
+    bildePrompt: {
+      '0': 'standing tall in front view holding a pair of black dumbbells at shoulder height, palms facing forward, forearms vertical, braced core and proud chest',
+      '1': 'captured in front view at full vertical lockout of an overhead dumbbell press, both arms locked straight overhead holding black dumbbells, intense deltoid muscle definition, focused expression',
+    },
     bildeVinkel: 'front',
     bildeStatus: 'mangler',
   },
@@ -67,6 +75,10 @@ export const DUMBBELL_EXERCISES: ExerciseItem[] = [
       nb: ['Krummer korsryggen', 'Bøyer knærne for mye slik at det blir en knebøy'],
     },
     sensorProfil: 'ingen',
+    bildePrompt: {
+      '0': 'standing tall in side profile holding a pair of heavy black dumbbells in front of thighs, shoulders pinned back, straight spine',
+      '1': 'captured in side profile in a deep Romanian deadlift hip-hinge, hips pushed far back with flat neutral spine at 45 degrees, slight bend in knees, dumbbells hanging just below knee level close to shins, intense hamstring stretch',
+    },
     bildeVinkel: 'side',
     bildeStatus: 'mangler',
   },

@@ -1,11 +1,11 @@
 import { ExerciseItem } from '../schemas/exerciseSchema';
 
 /**
- * Kanonisk dynamisk stilmal for Min Trener (Flux.1 Dev + Astrid LoRA)
- * Oppdatert med helkroppsfokus, aktiv bevegelse, muskelspenning og lett svetteglans
+ * Kanonisk stilmal for Min Trener (Flux.1 Dev + Astrid LoRA)
+ * Kombinerer atletisk form, bevegelse og svetteglans med et varmt, motiverende smil og treningsglede!
  */
 export const ASTRID_FLUX_BASE_STYLE =
-  'ASTRID, a woman, full body shot from head to feet completely visible within frame, wide angle view, no cropping, dynamic action fitness photography of an athletic woman actively exercising with physical exertion, light sweat sheen on sun-tanned skin, golden tan, engaged core, tense flexed muscles, focused determined expression';
+  'ASTRID, a woman, full body shot from head to feet completely visible within frame, wide angle view, no cropping, dynamic athletic fitness photography of an athletic woman actively exercising with physical exertion, light sweat sheen on sun-tanned skin, golden tan, engaged core, tense flexed muscles, warm confident encouraging smile, radiant positive workout energy, joy of training';
 
 export const ASTRID_FLUX_OUTFIT_STYLE =
   'in a bright modern gym, wearing a charcoal modern seamless cropped racerback sports bra and matching high-waist ribbed leggings, black training shoes, natural athletic lighting, sharp focus';

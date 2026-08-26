@@ -20,6 +20,10 @@ export const CARDIO_EXERCISES: ExerciseItem[] = [
       nb: ['Lander tungt på hælene (land mykt på tåballene)', 'Ufullstendig armbevegelse'],
     },
     sensorProfil: 'hopp',
+    bildePrompt: {
+      '0': 'standing tall in front view with feet together, arms resting relaxed by sides, athletic posture, poised to jump',
+      '1': 'captured in front view mid-air in an explosive star-like jumping jack, legs spread wide in an athletic V-shape landing on balls of feet, both straight arms raised overhead in a wide V, energetic athletic exertion',
+    },
     bildeVinkel: 'front',
     bildeStatus: 'mangler',
   },
@@ -42,6 +46,10 @@ export const CARDIO_EXERCISES: ExerciseItem[] = [
       nb: ['Lener overkroppen bakover', 'Løfter ikke knærne høyt nok'],
     },
     sensorProfil: 'kadens',
+    bildePrompt: {
+      '0': 'captured in side profile standing on left foot, right knee driven high up to 90 degrees hip level, left arm pumping forward at 90 degrees, athletic sprinting stance',
+      '1': 'captured in side profile mid-switch in high knees, explosive upward propulsion, left knee driven violently to chest height, right arm pumping forward, focused sprinting exertion, hair flying in ponytail',
+    },
     bildeVinkel: 'side',
     bildeStatus: 'mangler',
   },
@@ -64,6 +72,10 @@ export const CARDIO_EXERCISES: ExerciseItem[] = [
       nb: ['Ustabil landing på kneet', 'For korte hopp'],
     },
     sensorProfil: 'hopp',
+    bildePrompt: {
+      '0': 'captured in front-diagonal angle in a deep athletic speed skater crouch on right leg, right knee bent deep, left leg swept back diagonally behind, left arm reaching across knee, focused intense gaze',
+      '1': 'captured in front-diagonal angle leaping laterally through the air across the gym mat, arms driving for momentum, dynamic airborne athletic leap',
+    },
     bildeVinkel: 'front',
     bildeStatus: 'mangler',
   },

@@ -16,21 +16,20 @@ const mockExercise: ExerciseItem = {
   bildeVinkel: 'side',
   bildeStatus: 'mangler',
   bildePrompt: {
-    '0': 'actively locking in an athletic squat stance, feet planted wide, engaged quads and glutes, hands raised in ready position, focused breath',
-    '1': 'captured mid-rep in the lowest point of a deep powerful squat, thighs parallel to ground, intense muscular tension in legs and glutes, torso upright, powerful dynamic exertion',
+    '0': 'actively locking in an athletic squat stance, feet planted wide, engaged quads, warm encouraging smile',
+    '1': 'captured mid-rep in the lowest point of a deep powerful squat, thighs parallel to ground, proud chest',
   },
 };
 
 describe('ImagePromptService (Flux + Astrid LoRA)', () => {
-  it('genererer gyldig ComfyUI prompt med dynamisk bevegelse og svetteglans', () => {
+  it('genererer gyldig ComfyUI prompt med bevegelse, smil og treningsglede', () => {
     const job = buildComfyPromptJob(mockExercise, 0);
 
     expect(job.exerciseId).toBe('kneboy');
     expect(job.phaseIndex).toBe(0);
     expect(job.positivePrompt).toContain(ASTRID_FLUX_BASE_STYLE);
-    expect(job.positivePrompt).toContain('actively locking in');
-    expect(job.positivePrompt).toContain('light sweat sheen');
-    expect(job.positivePrompt).toContain('tense flexed muscles');
+    expect(job.positivePrompt).toContain('warm confident encouraging smile');
+    expect(job.positivePrompt).toContain('joy of training');
   });
 
   it('eksporterer alle faser for en liste med øvelser', () => {
