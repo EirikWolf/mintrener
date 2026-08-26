@@ -9,6 +9,7 @@ import { WorkoutBuilderView } from './components/builder/WorkoutBuilderView';
 import { WorkoutHistoryView } from './components/history/WorkoutHistoryView';
 import { ProgramCatalogView } from './components/programs/ProgramCatalogView';
 import { ExerciseImageCuratorView } from './components/curator/ExerciseImageCuratorView';
+import { SettingsMoreView } from './components/settings/SettingsMoreView';
 import { BottomNav, AppTab } from './components/navigation/BottomNav';
 import { useAuth } from './contexts/AuthContext';
 import { saveCompletedWorkout } from './services/firestoreService';
@@ -139,6 +140,18 @@ export function App() {
         ) : activeTab === 'history' ? (
           <WorkoutHistoryView
             onNavigateToTimer={() => setActiveTab('timer')}
+          />
+        ) : activeTab === 'settings' ? (
+          <SettingsMoreView
+            soundEnabled={state.soundEnabled}
+            onToggleSound={toggleSound}
+            vibrateEnabled={state.vibrateEnabled}
+            onToggleVibrate={toggleVibrate}
+            wakeLockEnabled={state.wakeLockEnabled}
+            onToggleWakeLock={toggleWakeLock}
+            speechEnabled={state.speechEnabled}
+            onToggleSpeech={toggleSpeech}
+            onOpenCurator={() => setActiveTab('curator')}
           />
         ) : (
           <ExerciseImageCuratorView

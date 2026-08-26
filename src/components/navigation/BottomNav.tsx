@@ -1,7 +1,7 @@
 import React from 'react';
-import { Timer, Dumbbell, Layers, History, Sparkles } from 'lucide-react';
+import { Timer, Dumbbell, Layers, History, Sparkles, Settings } from 'lucide-react';
 
-export type AppTab = 'timer' | 'programs' | 'builder' | 'exercises' | 'history' | 'curator';
+export type AppTab = 'timer' | 'programs' | 'builder' | 'exercises' | 'history' | 'settings' | 'curator';
 
 interface BottomNavProps {
   activeTab: AppTab;
@@ -15,13 +15,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   isTimerRunning,
 }) => {
   return (
-    <nav className="shrink-0 w-full z-40 bg-zinc-950/95 border-t border-zinc-800/80 backdrop-blur-lg px-1.5 pt-1.5 pb-[calc(env(safe-area-inset-bottom,0px)+6px)] select-none">
-      <div className="max-w-md mx-auto flex items-center justify-around">
+    <nav className="shrink-0 w-full z-40 bg-zinc-950/95 border-t border-zinc-800/80 backdrop-blur-lg px-1 pt-1.5 pb-[calc(env(safe-area-inset-bottom,0px)+6px)] select-none">
+      <div className="max-w-md mx-auto flex items-center justify-between">
         {/* 1. Timer Fane */}
         <button
           onClick={() => onTabChange('timer')}
           aria-label="Gå til Timer"
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-all ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-1.5 rounded-xl transition-all ${
             activeTab === 'timer'
               ? 'text-emerald-400 font-bold'
               : 'text-zinc-500 hover:text-zinc-300'
@@ -40,35 +40,35 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         <button
           onClick={() => onTabChange('programs')}
           aria-label="Gå til Programmer"
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-all ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-1.5 rounded-xl transition-all ${
             activeTab === 'programs'
               ? 'text-emerald-400 font-bold'
               : 'text-zinc-500 hover:text-zinc-300'
           }`}
         >
           <Sparkles className="w-4 h-4" />
-          <span className="text-[9px] tracking-wider uppercase font-semibold">Programmer</span>
+          <span className="text-[9px] tracking-wider uppercase font-semibold">Program</span>
         </button>
 
         {/* 3. Bygg økt Fane */}
         <button
           onClick={() => onTabChange('builder')}
           aria-label="Gå til Bygg økt"
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-all ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-1.5 rounded-xl transition-all ${
             activeTab === 'builder'
               ? 'text-emerald-400 font-bold'
               : 'text-zinc-500 hover:text-zinc-300'
           }`}
         >
           <Layers className="w-4 h-4" />
-          <span className="text-[9px] tracking-wider uppercase font-semibold">Bygg økt</span>
+          <span className="text-[9px] tracking-wider uppercase font-semibold">Bygg</span>
         </button>
 
         {/* 4. Øvelser Fane */}
         <button
           onClick={() => onTabChange('exercises')}
           aria-label="Gå til Øvelser"
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-all ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-1.5 rounded-xl transition-all ${
             activeTab === 'exercises'
               ? 'text-emerald-400 font-bold'
               : 'text-zinc-500 hover:text-zinc-300'
@@ -82,7 +82,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         <button
           onClick={() => onTabChange('history')}
           aria-label="Gå til Historikk"
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-all ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-1.5 rounded-xl transition-all ${
             activeTab === 'history'
               ? 'text-emerald-400 font-bold'
               : 'text-zinc-500 hover:text-zinc-300'
@@ -90,6 +90,20 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         >
           <History className="w-4 h-4" />
           <span className="text-[9px] tracking-wider uppercase font-semibold">Historikk</span>
+        </button>
+
+        {/* 6. Mer / Innstillinger Fane */}
+        <button
+          onClick={() => onTabChange('settings')}
+          aria-label="Gå til Innstillinger"
+          className={`flex flex-col items-center gap-0.5 py-1 px-1.5 rounded-xl transition-all ${
+            activeTab === 'settings'
+              ? 'text-emerald-400 font-bold'
+              : 'text-zinc-500 hover:text-zinc-300'
+          }`}
+        >
+          <Settings className="w-4 h-4" />
+          <span className="text-[9px] tracking-wider uppercase font-semibold">Mer</span>
         </button>
       </div>
     </nav>
