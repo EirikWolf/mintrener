@@ -128,6 +128,18 @@ async function runBatch() {
   const token = getToken();
   console.log('🚀 Starter Kitor Bildegenerering for alle øvelser med curl...');
 
+  try {
+    const acquireRes = curlPostJson(`${KITOR_HOST}/arbiter/acquire`, token, {
+      kind: 'image',
+      requester: 'mintrener',
+      label: 'full-batch-regen',
+      duration_h: 2,
+    });
+    console.log('Arbiter lease sikret:', acquireRes);
+  } catch (e) {
+    console.warn('Kunne ikke skaffe Arbiter lease, fortsetter likevel:', (e as any).message);
+  }
+
   const outputDir = path.resolve(process.cwd(), 'public/images/exercises');
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
