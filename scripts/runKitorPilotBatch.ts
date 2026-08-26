@@ -5,14 +5,13 @@ import path from 'path';
  * Min Trener — Kitor ComfyUI & Arbiter v1 Pilot Batch Runner
  *
  * Referanse: docs/kitor-bildepipeline-funn-2026-08-26.md
- * Modell: Flux.1 Dev fp8 + ControlNet Union Pro 2.0 (OpenPose) + Astrid LoRA
+ * Modell: Flux.1 Dev fp8 + Astrid LoRA (synthiq/astrid_k.safetensors)
  */
 
 const KITOR_HOST = process.env.KITOR_HOST || 'https://kitor.tail49f298.ts.net';
 const COMFY_PATH = '/comfy-mintrener';
 const ARBITER_PATH = '/arbiter';
 
-// Hent token trygt fra miljøvariabel (uten logging)
 function getToken(): string {
   if (process.env.KITOR_TOKEN) {
     return process.env.KITOR_TOKEN.trim();
@@ -29,7 +28,7 @@ function getToken(): string {
 }
 
 async function acquireGpuLease(token: string, durationH: number = 1): Promise<string> {
-  console.log('Forespør GPU-lease fra Arbiter v1...');
+  console.log('📡 1/4 Forespør GPU-lease fra Arbiter v1...');
   const res = await fetch(`${KITOR_HOST}${ARBITER_PATH}/acquire`, {
     method: 'POST',
     headers: {
@@ -39,7 +38,7 @@ async function acquireGpuLease(token: string, durationH: number = 1): Promise<st
     body: JSON.stringify({
       kind: 'image',
       requester: 'mintrener',
-      label: 'pilot-batch-flux-openpose',
+      label: 'pilot-batch-astrid-flux',
       duration_h: durationH,
     }),
   });
@@ -50,7 +49,7 @@ async function acquireGpuLease(token: string, durationH: number = 1): Promise<st
   }
 
   const data = await res.json() as { token: string };
-  console.log('GPU-lease innvilget.');
+  console.log('✅ GPU-lease innvilget.');
   return data.token;
 }
 
@@ -70,7 +69,7 @@ async function sendHeartbeat(token: string, leaseToken: string): Promise<void> {
 }
 
 async function releaseGpuLease(token: string, leaseToken: string): Promise<void> {
-  console.log('Frigir GPU-lease til Arbiter...');
+  console.log('📡 Frigir GPU-lease til Arbiter...');
   try {
     const res = await fetch(`${KITOR_HOST}${ARBITER_PATH}/release`, {
       method: 'POST',
@@ -81,15 +80,14 @@ async function releaseGpuLease(token: string, leaseToken: string): Promise<void>
       body: JSON.stringify({ token: leaseToken }),
     });
     if (res.ok) {
-      console.log('GPU-lease frigitt. vLLM restarter automatisk.');
+      console.log('✅ GPU-lease frigitt. vLLM restarter automatisk.');
     }
   } catch (err) {
     console.warn('Feil ved release av lease:', err);
   }
 }
 
-export function buildComfyUiWorkflow(promptText: string, seed: number, filenamePrefix: string) {
-  // ComfyUI Flux.1 Dev + ControlNet Union Pro 2.0 API Workflow
+export function buildAstridFluxWorkflow(promptText: string, seed: number, filenamePrefix: string) {
   return {
     "1": {
       "inputs": {
@@ -122,25 +120,12 @@ export function buildComfyUiWorkflow(promptText: string, seed: number, filenameP
     },
     "5": {
       "inputs": {
-        "control_net_name": "flux1-dev-controlnet-union-pro-2.0.safetensors"
-      },
-      "class_type": "ControlNetLoader"
-    },
-    "6": {
-      "inputs": {
-        "type": "openpose",
-        "control_net": ["5", 0]
-      },
-      "class_type": "SetUnionControlNetType"
-    },
-    "7": {
-      "inputs": {
-        "text": `ASTRID fitness instructor, ${promptText}, high quality athletic photography, clean gym background, sharp focus, natural studio lighting`,
+        "text": promptText,
         "clip": ["2", 0]
       },
       "class_type": "CLIPTextEncode"
     },
-    "8": {
+    "6": {
       "inputs": {
         "width": 896,
         "height": 1152,
@@ -148,26 +133,14 @@ export function buildComfyUiWorkflow(promptText: string, seed: number, filenameP
       },
       "class_type": "EmptyLatentImage"
     },
-    "9": {
+    "7": {
       "inputs": {
         "guidance": 3.5,
-        "conditioning": ["7", 0]
+        "conditioning": ["5", 0]
       },
       "class_type": "FluxGuidance"
     },
-    "10": {
-      "inputs": {
-        "strength": 0.9,
-        "start_percent": 0.0,
-        "end_percent": 0.65,
-        "positive": ["9", 0],
-        "negative": ["7", 0],
-        "control_net": ["6", 0],
-        "image": ["12", 0] // Bilde fra preprocessor eller skjelett
-      },
-      "class_type": "ControlNetApplyAdvanced"
-    },
-    "11": {
+    "8": {
       "inputs": {
         "seed": seed,
         "steps": 24,
@@ -176,68 +149,165 @@ export function buildComfyUiWorkflow(promptText: string, seed: number, filenameP
         "scheduler": "simple",
         "denoise": 1.0,
         "model": ["4", 0],
-        "positive": ["10", 0],
-        "negative": ["10", 1],
-        "latent_image": ["8", 0]
+        "positive": ["7", 0],
+        "negative": ["5", 0],
+        "latent_image": ["6", 0]
       },
       "class_type": "KSampler"
     },
-    "12": {
+    "9": {
       "inputs": {
-        "image": "openpose_skeleton.png",
-        "upload": "image"
-      },
-      "class_type": "LoadImage"
-    },
-    "13": {
-      "inputs": {
-        "samples": ["11", 0],
+        "samples": ["8", 0],
         "vae": ["3", 0]
       },
       "class_type": "VAEDecode"
     },
-    "14": {
+    "10": {
       "inputs": {
-        "filename_prefix": `mintrener/${filenamePrefix}`,
-        "images": ["13", 0]
+        "filename_prefix": `mintrener/pilot/${filenamePrefix}`,
+        "images": ["9", 0]
       },
       "class_type": "SaveImage"
     }
   };
 }
 
-async function runPilot() {
-  console.log('=== Min Trener Kitor Pilot Batch ===');
-  let token: string;
-  try {
-    token = getToken();
-  } catch (err: any) {
-    console.log('Status: .env mangler token. Opprett .env med KITOR_TOKEN=<fra_vaultwarden>');
-    return;
+interface PilotItem {
+  exerciseId: string;
+  step: number;
+  poseDesc: string;
+}
+
+const PILOT_ITEMS: PilotItem[] = [
+  // 1. Knebøy
+  {
+    exerciseId: 'kneboy',
+    step: 0,
+    poseDesc: 'standing upright, feet shoulder-width apart, holding athletic posture with hands clasped together in front of chest, looking forward',
+  },
+  {
+    exerciseId: 'kneboy',
+    step: 1,
+    poseDesc: 'in a deep squat position, thighs parallel to the ground, straight back, knees tracked over toes, hands clasped together in front of chest',
+  },
+  // 2. Kettlebell-swing
+  {
+    exerciseId: 'kettlebell-swing',
+    step: 0,
+    poseDesc: 'in a deep athletic hip-hinge position, bending at hips with flat back, both hands in a firm two-handed grip on a black kettlebell hanging between knees',
+  },
+  {
+    exerciseId: 'kettlebell-swing',
+    step: 1,
+    poseDesc: 'standing tall in full explosive hip extension, glutes contracted, black kettlebell floating at chest height with straight extended arms',
+  },
+  // 3. Push-ups
+  {
+    exerciseId: 'push-ups',
+    step: 0,
+    poseDesc: 'in a high plank top push-up position on gym floor, straight arms under shoulders, core tight and body in a straight line, hands flat on floor',
+  },
+  {
+    exerciseId: 'push-ups',
+    step: 1,
+    poseDesc: 'lowered down in bottom push-up position, chest hovering just above gym floor, elbows bent at 90 degrees close to body, palms flat on floor',
+  },
+];
+
+async function submitPrompt(token: string, promptWorkflow: any): Promise<string> {
+  const res = await fetch(`${KITOR_HOST}${COMFY_PATH}/prompt`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ prompt: promptWorkflow }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`ComfyUI prompt feilet (${res.status}): ${errText}`);
   }
 
+  const data = await res.json() as { prompt_id: string };
+  return data.prompt_id;
+}
+
+async function waitForCompletion(token: string, promptId: string, maxWaitSec: number = 180): Promise<boolean> {
+  const startTime = Date.now();
+  while ((Date.now() - startTime) / 1000 < maxWaitSec) {
+    try {
+      const res = await fetch(`${KITOR_HOST}${COMFY_PATH}/history/${promptId}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const historyData = await res.json() as Record<string, any>;
+        if (historyData[promptId] && historyData[promptId].outputs) {
+          return true;
+        }
+      }
+    } catch {}
+    await new Promise((r) => setTimeout(r, 4000));
+  }
+  return false;
+}
+
+async function run() {
+  console.log('====================================================');
+  console.log('🚀 Starter Min Trener Kitor Testbatch (Flux + Astrid)');
+  console.log('====================================================');
+
+  const token = getToken();
   let leaseToken: string | null = null;
   let heartbeatTimer: NodeJS.Timeout | null = null;
 
   try {
+    // 1. Reserver GPU via Arbiter
     leaseToken = await acquireGpuLease(token, 1);
 
-    // Heartbeat hvert 4. minutt
+    // 2. Start heartbeat-loop
     heartbeatTimer = setInterval(() => {
       if (leaseToken) sendHeartbeat(token, leaseToken);
-    }, 4 * 60 * 1000);
+    }, 3 * 60 * 1000);
 
-    console.log('Klar til å sende pilot-batch (3 øvelser: knebøy, kettlebell-swing, push-ups)...');
-    console.log(`Endepunkt: ${KITOR_HOST}${COMFY_PATH}/prompt`);
+    // 3. Generer og send hver prompt
+    console.log(`\n📦 Klargjør ${PILOT_ITEMS.length} test-prompter med revidert stilmal...`);
 
-    // Sjekk helse på ComfyUI ruten
-    const checkRes = await fetch(`${KITOR_HOST}${COMFY_PATH}/system_stats`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    console.log(`ComfyUI rute respons-status: ${checkRes.status}`);
+    const baseStyle =
+      'ASTRID, a woman, photorealistic photo of a fit, toned and visibly muscular athletic woman with sun-tanned skin, golden tan, defined shoulders and abs';
+    const outfitStyle =
+      'in a bright modern gym, wearing a charcoal modern seamless cropped racerback sports bra and matching high-waist ribbed leggings, black training shoes, natural studio lighting, sharp focus, full body, side view';
 
-  } catch (err) {
-    console.error('Pilot batch feilet:', err);
+    for (let i = 0; i < PILOT_ITEMS.length; i++) {
+      const item = PILOT_ITEMS[i];
+      const promptText = `${baseStyle}, ${item.poseDesc}, ${outfitStyle}`;
+      const seed = 42 + i * 1337;
+      const filenamePrefix = `${item.exerciseId}_step${item.step}`;
+
+      console.log(`\n▶️ [${i + 1}/${PILOT_ITEMS.length}] Sender prompt for: ${item.exerciseId} (fase ${item.step})...`);
+      console.log(`   Seed: ${seed}`);
+
+      const workflow = buildAstridFluxWorkflow(promptText, seed, filenamePrefix);
+      const promptId = await submitPrompt(token, workflow);
+      console.log(`   Innsendt til ComfyUI med ID: ${promptId}`);
+
+      console.log(`   Venter på generering (~30s på RTX 3090)...`);
+      const success = await waitForCompletion(token, promptId, 120);
+
+      if (success) {
+        console.log(`   ✨ Ferdig generert: mintrener/pilot/${filenamePrefix}`);
+      } else {
+        console.log(`   ⚠️ Tidsavbrudd eller lagt i kø.`);
+      }
+    }
+
+    console.log('\n====================================================');
+    console.log('🎉 Testbatch fullført på Kitor!');
+    console.log('Bilder lagret på kitor under: /mnt/truenas/ai/output/comfyui/mintrener/pilot/');
+    console.log('====================================================');
+
+  } catch (err: any) {
+    console.error('\n❌ Testbatch feilet:', err.message || err);
   } finally {
     if (heartbeatTimer) clearInterval(heartbeatTimer);
     if (leaseToken) {
@@ -246,6 +316,4 @@ async function runPilot() {
   }
 }
 
-if (process.argv[1] && process.argv[1].includes('runKitorPilotBatch')) {
-  runPilot();
-}
+run();

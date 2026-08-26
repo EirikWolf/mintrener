@@ -141,11 +141,39 @@ curl -s -X POST -H "Authorization: Bearer $KITOR_TOKEN_MINTRENER" \
 
 ## 6. Neste steg for Min Trener
 
-1. Vent på klarsignal (PR #78 merged + deployet).
-2. Hent token fra Vaultwarden (`homelab/mintrener` → `kitor-token`) inn i
-   deres `.env`.
+1. ~~Vent på klarsignal~~ — deployet og verifisert 2026-08-26.
+2. ~~Hent token~~ — ligger i `.env` (`KITOR_TOKEN`), og master-kopien i
+   Vaultwarden (`homelab/mintrener` → `kitor-token`).
 3. Oppdater `scripts/exportComfyUiBatch.ts`: rute `/comfy-mintrener`,
    workflow-parametrene fra seksjon 3, skjelett per øvelses-steg,
-   arbiter-flyt fra seksjon 5.
-4. Kjør pilot: 3 øvelser × 3 seeds, visuell QA (inkl. hender), deretter
-   full batch.
+   arbiter-flyt fra seksjon 5. Referanseimplementasjon:
+   `scripts/kitor-pilot-batch.py` (kjørt 2026-08-26).
+4. ~~Kjør pilot~~ — gjennomført, se seksjon 7. Neste: full batch.
+
+## 7. Pilotresultat (2026-08-26)
+
+3 øvelser × 3 seeds kjørt ende-til-ende gjennom produksjonsløypa fra
+lokal maskin: `.env`-token → `POST /arbiter/acquire` → heartbeat (verifisert
+i drift) → `/comfy-mintrener/prompt` → release. 9/9 bilder ok, ~34 s/bilde,
+lease-ventetid 0,7 s.
+
+**QA per bilde:**
+
+| Øvelse | seed0 | seed1 | seed2 | Beste |
+|---|---|---|---|---|
+| squat | ✅ bakfra, korrekt dybde | ✅ 3/4-front, hender i never | ✅ front, hender på hofter | **seed2** |
+| lunge | ✅ ren sidevisning | ⚠️ antrekks-drift (stroppeløs topp) | ✅ korrekt antrekk + pose | **seed2** |
+| kbswing | ✅ tydeligst hinge, flat rygg | ✅ god | ⚠️ antrekks-drift (lysere farge) | **seed0** |
+
+**Funn:**
+
+- **Hender: 0 finger-artefakter i 9 bilder.** Hånd-formuleringene fra
+  seksjon 4 (beskriv hva hånden GJØR) + grep-/hvile-poser virket.
+- **Pose: 9/9 anatomisk korrekte** — inkl. hip-hinge-svingen som feilet
+  konsekvent uten skjelett. OpenPose-styringen holder i produksjon.
+- **Antrekks-drift i 2/9** tross fargespesifikasjon — QA-gaten fanget dem.
+  3× overshoot per steg er riktig kalibrert; behold det i full batch.
+- Utvalgsregel som fungerte: velg per øvelse på (1) antrekk korrekt,
+  (2) positur, (3) ansikt/identitet synlig der ønskelig.
+
+Output: `/mnt/truenas/ai/output/comfyui/mintrener/pilot__*.png`.

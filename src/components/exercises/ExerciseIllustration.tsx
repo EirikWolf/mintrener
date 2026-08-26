@@ -16,8 +16,8 @@ export const ExerciseIllustration: React.FC<ExerciseIllustrationProps> = ({
   const [imageError, setImageError] = useState(false);
 
   // Forventet filsti til generert bilde
-  const imageUrl = exercise.bildeUrl || `/images/exercises/${exercise.id}-${phaseIndex}.webp`;
-  const isImageReady = exercise.bildeStatus === 'godkjent' && !imageError;
+  const imageUrl = exercise.bildeUrl || `/images/exercises/${exercise.id}-${phaseIndex}.png`;
+  const isImageReady = !imageError;
 
   if (isImageReady) {
     return (
@@ -26,7 +26,7 @@ export const ExerciseIllustration: React.FC<ExerciseIllustrationProps> = ({
           src={imageUrl}
           alt={`${exercise.navn.nb} fase ${phaseIndex + 1}`}
           onError={() => setImageError(true)}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover max-h-56"
           loading="lazy"
         />
         <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-zinc-950/80 backdrop-blur-sm border border-zinc-800 text-[10px] font-bold text-zinc-300">
