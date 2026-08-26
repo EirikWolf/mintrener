@@ -44,4 +44,6 @@ export interface TimerState {
   soundEnabled: boolean;
   vibrateEnabled: boolean;
   wakeLockEnabled: boolean;
+  speechEnabled: boolean;
+  motionReps?: number;
 }

@@ -6,6 +6,7 @@ import { TimerDisplay } from './components/timer/TimerDisplay';
 import { WorkoutSummary } from './components/timer/WorkoutSummary';
 import { ExerciseLibraryView } from './components/library/ExerciseLibraryView';
 import { WorkoutBuilderView } from './components/builder/WorkoutBuilderView';
+import { WorkoutHistoryView } from './components/history/WorkoutHistoryView';
 import { BottomNav, AppTab } from './components/navigation/BottomNav';
 import { useAuth } from './contexts/AuthContext';
 import { saveCompletedWorkout } from './services/firestoreService';
@@ -37,6 +38,7 @@ export function App() {
     toggleSound,
     toggleVibrate,
     toggleWakeLock,
+    toggleSpeech,
   } = useIntervalTimer({ workout: selectedWorkout });
 
   // Automatisk lagring til Firestore når økt fullføres
@@ -101,11 +103,14 @@ export function App() {
             onToggleSound={toggleSound}
             onToggleVibrate={toggleVibrate}
             onToggleWakeLock={toggleWakeLock}
+            onToggleSpeech={toggleSpeech}
           />
         ) : activeTab === 'builder' ? (
           <WorkoutBuilderView onStartCustomWorkout={handleStartCustomWorkout} />
-        ) : (
+        ) : activeTab === 'exercises' ? (
           <ExerciseLibraryView />
+        ) : (
+          <WorkoutHistoryView />
         )}
       </div>
 

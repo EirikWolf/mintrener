@@ -1,0 +1,160 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { CompletedWorkoutLog } from '../../types/models';
+import { getUserWorkoutHistory } from '../../services/firestoreService';
+import { useAuth } from '../../contexts/AuthContext';
+import {
+  History,
+  Flame,
+  Clock,
+  Trophy,
+  Calendar,
+  Sparkles,
+} from 'lucide-react';
+
+export const WorkoutHistoryView: React.FC = () => {
+  const { user } = useAuth();
+  const [history, setHistory] = useState<CompletedWorkoutLog[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getUserWorkoutHistory(user?.uid).then((logs) => {
+      setHistory(logs);
+      setLoading(false);
+    });
+  }, [user]);
+
+  const stats = useMemo(() => {
+    const totalWorkouts = history.length;
+    const totalSeconds = history.reduce((acc, log) => acc + log.durationSeconds, 0);
+    const totalMinutes = Math.round(totalSeconds / 60);
+
+    // Beregn unike treningsdager og streak
+    const dates = Array.from(
+      new Set(
+        history.map((log) => new Date(log.completedAt).toISOString().split('T')[0])
+      )
+    ).sort().reverse();
+
+    let streak = 0;
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+    if (dates.includes(today) || dates.includes(yesterday)) {
+      streak = 1;
+      let checkDate = new Date(dates[0]);
+      for (let i = 1; i < dates.length; i++) {
+        const prev = new Date(dates[i]);
+        const diffDays = Math.round(
+          (checkDate.getTime() - prev.getTime()) / (1000 * 3600 * 24)
+        );
+        if (diffDays === 1) {
+          streak++;
+          checkDate = prev;
+        } else {
+          break;
+        }
+      }
+    }
+
+    return { totalWorkouts, totalMinutes, streak };
+  }, [history]);
+
+  const formatDate = (isoString: string) => {
+    const d = new Date(isoString);
+    return d.toLocaleDateString('nb-NO', {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}m ${secs}s`;
+  };
+
+  return (
+    <div className="flex flex-col h-full max-w-md mx-auto px-4 pt-2 pb-2 select-none overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-2 shrink-0">
+        <div>
+          <h1 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
+            <History className="w-5 h-5 text-emerald-400" />
+            Treningshistorikk
+          </h1>
+          <p className="text-[11px] text-zinc-400">Dine fullførte økter og statistikk</p>
+        </div>
+      </div>
+
+      {/* 3 Statistikk-kort */}
+      <div className="grid grid-cols-3 gap-2 pb-3 shrink-0">
+        {/* Fullførte økter */}
+        <div className="bg-zinc-900/80 border border-zinc-800/80 rounded-2xl p-2.5 text-center shadow-sm">
+          <Trophy className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
+          <span className="text-base font-black text-white">{stats.totalWorkouts}</span>
+          <p className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider">Økter</p>
+        </div>
+
+        {/* Total treningstid */}
+        <div className="bg-zinc-900/80 border border-zinc-800/80 rounded-2xl p-2.5 text-center shadow-sm">
+          <Clock className="w-4 h-4 text-cyan-400 mx-auto mb-1" />
+          <span className="text-base font-black text-white">{stats.totalMinutes}</span>
+          <p className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider">Minutter</p>
+        </div>
+
+        {/* Streak */}
+        <div className="bg-zinc-900/80 border border-zinc-800/80 rounded-2xl p-2.5 text-center shadow-sm">
+          <Flame className="w-4 h-4 text-amber-400 mx-auto mb-1" />
+          <span className="text-base font-black text-white">{stats.streak}</span>
+          <p className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider">Dagers streak</p>
+        </div>
+      </div>
+
+      {/* Scrollbar liste over logger */}
+      <div className="flex-1 overflow-y-auto space-y-2 pr-0.5 mt-1 pb-4">
+        {loading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-16 bg-zinc-900/50 rounded-2xl animate-pulse" />
+            ))}
+          </div>
+        ) : history.length === 0 ? (
+          <div className="text-center py-12 space-y-2 text-zinc-500">
+            <Sparkles className="w-8 h-8 mx-auto text-zinc-600" />
+            <p className="text-xs">Ingen fullførte økter registrert ennå.</p>
+            <p className="text-[10px] text-zinc-400">Fullfør en økt i timeren for å starte loggen!</p>
+          </div>
+        ) : (
+          history.map((log) => (
+            <div
+              key={log.id}
+              className="p-3 bg-zinc-900/70 border border-zinc-800/80 rounded-2xl flex items-center justify-between shadow-sm"
+            >
+              <div className="space-y-1 overflow-hidden pr-2">
+                <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
+                  <Calendar className="w-3 h-3 text-zinc-500" />
+                  <span>{formatDate(log.completedAt)}</span>
+                  <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-[8px] uppercase font-bold text-zinc-300">
+                    {log.workoutType}
+                  </span>
+                </div>
+                <h4 className="text-xs font-bold text-white truncate">{log.workoutName}</h4>
+              </div>
+
+              <div className="text-right shrink-0">
+                <span className="text-xs font-mono font-black text-emerald-400">
+                  {formatDuration(log.durationSeconds)}
+                </span>
+                <p className="text-[9px] text-zinc-500 font-medium">
+                  {log.roundsCompleted} {log.roundsCompleted === 1 ? 'runde' : 'runder'}
+                </p>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};

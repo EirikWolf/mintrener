@@ -3,6 +3,8 @@ import { WorkoutTemplate, TimerState, IntervalPhase } from '../types/workout';
 import { audioService } from '../services/audioService';
 import { wakeLockService } from '../services/wakeLockService';
 import { vibrationService } from '../services/vibrationService';
+import { speechService } from '../services/speechService';
+import { motionTrackerService, MotionMetrics } from '../services/motionTrackerService';
 
 interface UseIntervalTimerProps {
   workout: WorkoutTemplate;
@@ -17,6 +19,8 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [vibrateEnabled, setVibrateEnabled] = useState<boolean>(true);
   const [wakeLockEnabled, setWakeLockEnabled] = useState<boolean>(true);
+  const [speechEnabled, setSpeechEnabled] = useState<boolean>(true);
+  const [motionReps, setMotionReps] = useState<number>(0);
 
   // Millisekund-presisjon tidsstempler
   const [phaseRemaining, setPhaseRemaining] = useState<number>(workout.prepareDurationSeconds);
@@ -35,6 +39,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     soundEnabled,
     vibrateEnabled,
     wakeLockEnabled,
+    speechEnabled,
     phaseStartTime: 0,
     workoutStartTime: 0,
     lastCountdownBeep: -1,
@@ -51,6 +56,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
   stateRef.current.soundEnabled = soundEnabled;
   stateRef.current.vibrateEnabled = vibrateEnabled;
   stateRef.current.wakeLockEnabled = wakeLockEnabled;
+  stateRef.current.speechEnabled = speechEnabled;
   stateRef.current.workout = workout;
 
   const animFrameRef = useRef<number | null>(null);
@@ -86,22 +92,35 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
 
       if (newPhase === 'prepare') {
         duration = w.prepareDurationSeconds;
+        speechService.announcePrepare(w.items[0]?.exercise.name);
       } else if (newPhase === 'work') {
         duration = w.items[itemIdx]?.workDurationSeconds || 20;
         audioService.playWorkStart(stateRef.current.soundEnabled);
         vibrationService.workStart(stateRef.current.vibrateEnabled);
+        speechService.announceWork(w.items[itemIdx]?.exercise.name);
+
+        // Start bevegelsessporing
+        motionTrackerService.start((m: MotionMetrics) => {
+          setMotionReps(m.count);
+        }, 'hopp');
       } else if (newPhase === 'rest') {
         duration = w.items[itemIdx]?.restDurationSeconds || 10;
         audioService.playRestStart(stateRef.current.soundEnabled);
         vibrationService.restStart(stateRef.current.vibrateEnabled);
+        speechService.announceRest(w.items[itemIdx + 1]?.exercise.name);
+        motionTrackerService.stop();
       } else if (newPhase === 'round_rest') {
         duration = w.roundRestDurationSeconds;
         audioService.playRestStart(stateRef.current.soundEnabled);
         vibrationService.restStart(stateRef.current.vibrateEnabled);
+        speechService.announceRest(w.items[0]?.exercise.name);
+        motionTrackerService.stop();
       } else if (newPhase === 'complete') {
         duration = 0;
         audioService.playWorkoutComplete(stateRef.current.soundEnabled);
         vibrationService.workoutComplete(stateRef.current.vibrateEnabled);
+        speechService.announceComplete();
+        motionTrackerService.stop();
         wakeLockService.releaseLock();
       }
 
@@ -351,7 +370,17 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     soundEnabled,
     vibrateEnabled,
     wakeLockEnabled,
+    speechEnabled,
+    motionReps,
   };
+
+  const toggleSpeech = useCallback(() => {
+    setSpeechEnabled((prev) => {
+      const next = !prev;
+      speechService.setEnabled(next);
+      return next;
+    });
+  }, []);
 
   return {
     state: timerState,
@@ -365,5 +394,6 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     toggleSound,
     toggleVibrate,
     toggleWakeLock,
+    toggleSpeech,
   };
 }

@@ -3,6 +3,7 @@ import { TimerState, WorkoutTemplate } from '../../types/workout';
 import { CircularProgress } from './CircularProgress';
 import { UserMenu } from '../auth/UserMenu';
 import { SensorStatusModal } from '../sensors/SensorStatusModal';
+import { HeartRateWidget } from '../sensors/HeartRateWidget';
 import {
   Play,
   Pause,
@@ -19,6 +20,8 @@ import {
   Zap,
   Activity,
   Dumbbell,
+  Mic,
+  MicOff,
 } from 'lucide-react';
 
 interface TimerDisplayProps {
@@ -36,6 +39,7 @@ interface TimerDisplayProps {
   onToggleSound: () => void;
   onToggleVibrate: () => void;
   onToggleWakeLock: () => void;
+  onToggleSpeech?: () => void;
 }
 
 export const TimerDisplay: React.FC<TimerDisplayProps> = ({
@@ -53,6 +57,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   onToggleSound,
   onToggleVibrate,
   onToggleWakeLock,
+  onToggleSpeech,
 }) => {
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
 
@@ -111,65 +116,84 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             </div>
           </div>
 
-          {/* Høyre: Sensor- og kontrollknapper */}
-          <div className="flex items-center gap-0.5 bg-zinc-900/90 border border-zinc-800/80 backdrop-blur-md rounded-full p-1 shadow-sm">
-            {/* Dvale / Skjerm */}
-            <button
-              onClick={onToggleWakeLock}
-              title={state.wakeLockEnabled ? 'Skjerm holdes på (dvale av)' : 'Skjerm kan gå i dvale'}
-              aria-label={state.wakeLockEnabled ? 'Skjerm holdes på' : 'Skjerm kan gå i dvale'}
-              className={`p-1.5 rounded-full transition-all ${
-                state.wakeLockEnabled ? 'text-amber-400 bg-amber-950/60 shadow-inner' : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              {state.wakeLockEnabled ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-            </button>
+          {/* Høyre: Sensor-, puls- og kontrollknapper */}
+          <div className="flex items-center gap-1">
+            {/* Heart Rate Widget */}
+            <HeartRateWidget />
 
-            {/* Lyd */}
-            <button
-              onClick={onToggleSound}
-              title={state.soundEnabled ? 'Lyd på' : 'Lyd av'}
-              aria-label={state.soundEnabled ? 'Slå av lyd' : 'Slå på lyd'}
-              className={`p-1.5 rounded-full transition-all ${
-                state.soundEnabled ? 'text-emerald-400 bg-emerald-950/60' : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              {state.soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-            </button>
+            <div className="flex items-center gap-0.5 bg-zinc-900/90 border border-zinc-800/80 backdrop-blur-md rounded-full p-1 shadow-sm">
+              {/* Norsk stemmeveiledning */}
+              {onToggleSpeech && (
+                <button
+                  onClick={onToggleSpeech}
+                  title={state.speechEnabled ? 'Norsk stemme på' : 'Stemme av'}
+                  aria-label={state.speechEnabled ? 'Slå av stemme' : 'Slå på stemme'}
+                  className={`p-1.5 rounded-full transition-all ${
+                    state.speechEnabled ? 'text-emerald-400 bg-emerald-950/60' : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {state.speechEnabled ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
+                </button>
+              )}
 
-            {/* Vibrasjon */}
-            <button
-              onClick={onToggleVibrate}
-              title={state.vibrateEnabled ? 'Vibrasjon på' : 'Vibrasjon av'}
-              aria-label={state.vibrateEnabled ? 'Slå av vibrasjon' : 'Slå på vibrasjon'}
-              className={`p-1.5 rounded-full transition-all ${
-                state.vibrateEnabled ? 'text-amber-400 bg-amber-950/60' : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              <Smartphone className="w-3.5 h-3.5" />
-            </button>
+              {/* Dvale / Skjerm */}
+              <button
+                onClick={onToggleWakeLock}
+                title={state.wakeLockEnabled ? 'Skjerm holdes på (dvale av)' : 'Skjerm kan gå i dvale'}
+                aria-label={state.wakeLockEnabled ? 'Skjerm holdes på' : 'Skjerm kan gå i dvale'}
+                className={`p-1.5 rounded-full transition-all ${
+                  state.wakeLockEnabled ? 'text-amber-400 bg-amber-950/60 shadow-inner' : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                {state.wakeLockEnabled ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+              </button>
 
-            {/* Sensorstatus */}
-            <button
-              onClick={() => setIsSensorModalOpen(true)}
-              title="Sensorstatus"
-              aria-label="Åpne sensorstatus"
-              className="p-1.5 rounded-full text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 transition-all"
-            >
-              <Activity className="w-3.5 h-3.5" />
-            </button>
+              {/* Lyd */}
+              <button
+                onClick={onToggleSound}
+                title={state.soundEnabled ? 'Lyd på' : 'Lyd av'}
+                aria-label={state.soundEnabled ? 'Slå av lyd' : 'Slå på lyd'}
+                className={`p-1.5 rounded-full transition-all ${
+                  state.soundEnabled ? 'text-emerald-400 bg-emerald-950/60' : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                {state.soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+              </button>
 
-            {/* Berøringslås */}
-            <button
-              onClick={onToggleLock}
-              title={state.isLocked ? 'Skjerm låst' : 'Lås mot feiltrykk'}
-              aria-label={state.isLocked ? 'Lås opp skjerm' : 'Lås skjerm mot feiltrykk'}
-              className={`p-1.5 rounded-full transition-all ${
-                state.isLocked ? 'text-rose-400 bg-rose-950/60' : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              {state.isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
-            </button>
+              {/* Vibrasjon */}
+              <button
+                onClick={onToggleVibrate}
+                title={state.vibrateEnabled ? 'Vibrasjon på' : 'Vibrasjon av'}
+                aria-label={state.vibrateEnabled ? 'Slå av vibrasjon' : 'Slå på vibrasjon'}
+                className={`p-1.5 rounded-full transition-all ${
+                  state.vibrateEnabled ? 'text-amber-400 bg-amber-950/60' : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Sensorstatus */}
+              <button
+                onClick={() => setIsSensorModalOpen(true)}
+                title="Sensorstatus"
+                aria-label="Åpne sensorstatus"
+                className="p-1.5 rounded-full text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 transition-all"
+              >
+                <Activity className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Berøringslås */}
+              <button
+                onClick={onToggleLock}
+                title={state.isLocked ? 'Skjerm låst' : 'Lås mot feiltrykk'}
+                aria-label={state.isLocked ? 'Lås opp skjerm' : 'Lås skjerm mot feiltrykk'}
+                className={`p-1.5 rounded-full transition-all ${
+                  state.isLocked ? 'text-rose-400 bg-rose-950/60' : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                {state.isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -245,8 +269,15 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           />
         </div>
 
-        {/* Neste øvelse under timeren */}
-        <div className="min-h-[1.5rem] flex items-center justify-center">
+        {/* Neste øvelse / Bevegelsesteller under timeren */}
+        <div className="min-h-[1.5rem] flex items-center justify-center gap-2">
+          {state.motionReps !== undefined && state.motionReps > 0 && state.phase === 'work' && (
+            <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-950/70 border border-emerald-800/80 text-[11px] text-emerald-300 font-bold backdrop-blur-sm animate-in fade-in">
+              <Activity className="w-3 h-3 text-emerald-400" />
+              <span>{state.motionReps} reps</span>
+            </div>
+          )}
+
           {state.nextExercise && state.phase !== 'prepare' ? (
             <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-zinc-900/60 border border-zinc-800/60 text-[11px] text-zinc-300 backdrop-blur-sm">
               <span className="text-zinc-500 font-semibold uppercase text-[10px]">Neste:</span>
