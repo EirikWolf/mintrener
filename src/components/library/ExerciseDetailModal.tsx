@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ExerciseItem } from '../../schemas/exerciseSchema';
 import { ExerciseIllustration } from '../exercises/ExerciseIllustration';
 import { X, CheckCircle2, AlertTriangle, Dumbbell, Target } from 'lucide-react';
@@ -14,9 +15,9 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 }) => {
   const [activePhase, setActivePhase] = useState<number>(0);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-md max-h-[90vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col overflow-hidden space-y-3.5">
+  const modal = (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="w-full max-w-md max-h-[90vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col overflow-hidden space-y-3.5 relative z-[101]">
         {/* Header */}
         <div className="flex items-start justify-between border-b border-zinc-800 pb-2.5 shrink-0">
           <div>
@@ -157,4 +158,6 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modal, document.body) : null;
 };

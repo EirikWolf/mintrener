@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   bluetoothHeartRateService,
   HeartRateData,
@@ -38,7 +39,7 @@ export const HeartRateWidget: React.FC<HeartRateWidgetProps> = ({ onHeartRateUpd
       if (ok) {
         setIsModalOpen(false);
       } else {
-        setErrorMsg('Kunne ikke koble til. Sørg for at pulsbeltet eller klokken sender puls (Broadcast Heart Rate).');
+        setErrorMsg('Ingen enhet valgt, eller klokken sender ikke puls. Sjekk at «Send puls / Broadcast Heart Rate» er aktivert på klokken.');
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Tilkobling feilet.');
@@ -54,18 +55,96 @@ export const HeartRateWidget: React.FC<HeartRateWidgetProps> = ({ onHeartRateUpd
   };
 
   if (!isSupported) {
-    return null; // Skjules i nettlesere uten Web Bluetooth
+    return null; // Skjules i nettlesere uten Web Bluetooth (f.eks. iOS Safari)
   }
+
+  const modalContent = isModalOpen ? (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl space-y-4 relative z-[101]">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+          <div className="flex items-center gap-2">
+            <Heart className="w-5 h-5 text-rose-500 fill-current" />
+            <h3 className="text-sm font-bold text-white">Pulsmåler & Klokke (BLE)</h3>
+          </div>
+          <button
+            onClick={() => setIsModalOpen(false)}
+            aria-label="Lukk modal"
+            className="p-1.5 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Info & Instruksjoner */}
+        <div className="space-y-3 text-xs text-zinc-300">
+          <p className="text-[11px] text-zinc-400 leading-relaxed">
+            Koble direkte til standard <strong>Bluetooth Smart (BLE)</strong> pulsbelter eller smartklokker (Garmin, Amazfit, Polar, Wahoo).
+          </p>
+
+          <div className="bg-zinc-950 border border-zinc-800/80 rounded-2xl p-3 text-[11px] text-zinc-400 space-y-2">
+            <p className="font-bold text-zinc-200">💡 Slik gjør du klokken synlig:</p>
+            <div className="space-y-1.5 text-[10.5px]">
+              <p>
+                • <strong>Garmin:</strong> Hold inne meny → <em>Sensorer og tilbehør</em> → <em>Pulsmåler</em> → <strong>Send puls (Broadcast HR)</strong> → <em>Start</em>.
+              </p>
+              <p>
+                • <strong>Amazfit:</strong> Åpne Zepp-app → <em>Profil</em> → <em>Klokke</em> → <strong>Del pulsaktivitet (Heart Rate Sharing)</strong> → <em>På</em>.
+              </p>
+              <p>
+                • <strong>Polar / Wahoo pulsbelte:</strong> Ta på beltet med fuktede elektroder.
+              </p>
+            </div>
+          </div>
+
+          {isConnected && data ? (
+            <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-2.5 text-center">
+              <div className="flex items-center justify-center gap-2">
+                <Heart className="w-7 h-7 text-rose-500 fill-current animate-pulse" />
+                <span className="text-4xl font-black text-white font-mono">{data.heartRate}</span>
+                <span className="text-xs font-bold text-zinc-400">BPM</span>
+              </div>
+              <div className="inline-block px-3 py-0.5 rounded-full text-[10px] font-bold uppercase bg-zinc-900 border border-zinc-800 text-zinc-200">
+                {data.zoneName}
+              </div>
+              <button
+                onClick={handleDisconnect}
+                className="w-full mt-2 py-2.5 bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-rose-400 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all"
+              >
+                <BluetoothOff className="w-4 h-4" />
+                Koble fra ({data.deviceName})
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleConnect}
+              disabled={isConnecting}
+              className="w-full py-3.5 bg-rose-600 hover:bg-rose-500 active:scale-95 disabled:opacity-50 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-rose-600/30"
+            >
+              <Bluetooth className="w-4 h-4" />
+              {isConnecting ? 'Åpner Bluetooth-søker...' : 'Koble til pulssensor'}
+            </button>
+          )}
+
+          {errorMsg && (
+            <div className="p-2.5 bg-rose-950/50 border border-rose-900/60 rounded-xl text-rose-300 text-[11px] leading-relaxed">
+              {errorMsg}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <>
-      {/* Liten sanntids-widget */}
+      {/* Liten puls-badge eller ikon i topplinjen */}
       {isConnected && data ? (
         <button
           onClick={() => setIsModalOpen(true)}
-          className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-bold transition-all animate-in fade-in ${data.zoneColor}`}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold transition-all shadow-sm ${data.zoneColor}`}
         >
-          <Heart className="w-3 h-3 text-rose-500 fill-current animate-pulse" />
+          <Heart className="w-3.5 h-3.5 text-rose-500 fill-current animate-pulse" />
           <span className="font-mono font-black">{data.heartRate}</span>
           <span className="text-[9px] uppercase font-bold opacity-80">bpm</span>
         </button>
@@ -73,78 +152,15 @@ export const HeartRateWidget: React.FC<HeartRateWidgetProps> = ({ onHeartRateUpd
         <button
           onClick={() => setIsModalOpen(true)}
           title="Koble til pulsbelte / Garmin / Amazfit"
-          className="p-1.5 rounded-full text-zinc-500 hover:text-rose-400 hover:bg-zinc-800/80 transition-all"
+          aria-label="Åpne pulsmåler"
+          className="p-1.5 rounded-full text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 transition-all"
         >
           <Heart className="w-3.5 h-3.5" />
         </button>
       )}
 
-      {/* Modal for tilkobling */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
-              <div className="flex items-center gap-2">
-                <Heart className="w-5 h-5 text-rose-500 fill-current" />
-                <h3 className="text-sm font-bold text-white">Pulsmåler & Klokke (BLE)</h3>
-              </div>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-1 text-zinc-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-2 text-xs text-zinc-300">
-              <p className="text-[11px] text-zinc-400">
-                Koble til standard <strong>Bluetooth Smart (BLE)</strong> pulsbelter eller smartklokker (Garmin, Amazfit/Zepp, Polar, Wahoo).
-              </p>
-
-              <div className="bg-zinc-950/80 border border-zinc-800 rounded-xl p-2.5 text-[10px] text-zinc-400 space-y-1">
-                <p className="font-bold text-zinc-300">💡 For Garmin / Amazfit:</p>
-                <p>• <strong>Garmin:</strong> Innstillinger → Sensorer → Send puls (Broadcast Heart Rate) → Start.</p>
-                <p>• <strong>Amazfit:</strong> Profil → Klokke → Del pulsaktivitet (Heart Rate Sharing) → På.</p>
-              </div>
-
-              {isConnected && data ? (
-                <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-2 text-center">
-                  <div className="flex items-center justify-center gap-2">
-                    <Heart className="w-6 h-6 text-rose-500 fill-current animate-pulse" />
-                    <span className="text-3xl font-black text-white font-mono">{data.heartRate}</span>
-                    <span className="text-xs font-bold text-zinc-400">BPM</span>
-                  </div>
-                  <div className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-zinc-900 border border-zinc-800 text-zinc-200">
-                    {data.zoneName}
-                  </div>
-                  <button
-                    onClick={handleDisconnect}
-                    className="w-full mt-2 py-2 bg-zinc-800 hover:bg-zinc-700 text-rose-400 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5"
-                  >
-                    <BluetoothOff className="w-3.5 h-3.5" />
-                    Koble fra ({data.deviceName})
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={handleConnect}
-                  disabled={isConnecting}
-                  className="w-full py-3 bg-rose-600 hover:bg-rose-500 active:scale-95 disabled:opacity-50 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-rose-600/20"
-                >
-                  <Bluetooth className="w-4 h-4" />
-                  {isConnecting ? 'Søker etter enheter...' : 'Koble til pulssensor'}
-                </button>
-              )}
-
-              {errorMsg && (
-                <div className="p-2 bg-rose-950/40 border border-rose-900/50 rounded-xl text-rose-300 text-[10px]">
-                  {errorMsg}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modal rendret på document.body via Portal */}
+      {typeof document !== 'undefined' && modalContent && createPortal(modalContent, document.body)}
     </>
   );
 };

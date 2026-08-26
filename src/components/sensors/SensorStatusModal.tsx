@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { sensorDiagnosticsService, SensorStatus } from '../../services/sensorDiagnosticsService';
 import { audioService } from '../../services/audioService';
 import { speechService } from '../../services/speechService';
@@ -43,9 +44,9 @@ export const SensorStatusModal: React.FC<SensorStatusModalProps> = ({ onClose })
     setTimeout(() => setTestedAudio(false), 1500);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-md max-h-[85vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-3">
+  const modal = (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="w-full max-w-md max-h-[85vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-3 relative z-[101]">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
           <div className="flex items-center gap-2">
@@ -168,4 +169,6 @@ export const SensorStatusModal: React.FC<SensorStatusModalProps> = ({ onClose })
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modal, document.body) : null;
 };
