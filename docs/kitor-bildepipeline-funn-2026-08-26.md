@@ -22,8 +22,10 @@ Bestillingen er godkjent med endringer, og infrastrukturen er foreslått i
 Arbiter v2 / chat-routing ble tatt ut av bestillingen (ubegrunnet behov +
 selvmotsigende konfig — send egen bestilling hvis LLM-behov oppstår).
 
-**Aktiv etter:** merge av PR #78 + deploy på kitor (token inn i `.env`,
-Caddy-restart). Dere får beskjed når ruta svarer.
+**Status: AKTIV (deployet 2026-08-26).** Begge ruter er verifisert:
+`/arbiter/status` og `/comfy-mintrener/system_stats` svarer 200 med token,
+401 uten. Dere kan hente tokenet fra Vaultwarden og starte pilot-batchen
+(seksjon 6) når som helst.
 
 ## 2. Hva vi testet (3 batcher, 24 bilder)
 
