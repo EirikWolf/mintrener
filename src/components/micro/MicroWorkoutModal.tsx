@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { EXERCISE_LIBRARY } from '../../data/exercises';
-import { ExerciseItem } from '../../schemas/exerciseSchema';
 import { WorkoutTemplate } from '../../types/workout';
 import { Zap, X, Play } from 'lucide-react';
 
