@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Download, X, Share, PlusSquare, Smartphone, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Download, X, Share, PlusSquare, Smartphone } from 'lucide-react';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;

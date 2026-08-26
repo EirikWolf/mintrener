@@ -93,12 +93,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteAccount = async () => {
     if (!user) return;
     const uid = user.uid;
-    // 1. Slett data fra Firestore
-    await deleteUserData(uid);
-    // 2. Slett selve auth-kontoen
-    await deleteUser(user);
-    setUser(null);
-    setProfile(null);
+    try {
+      // 1. Slett data fra Firestore og localStorage
+      await deleteUserData(uid);
+      // 2. Slett selve auth-kontoen
+      await deleteUser(user);
+    } catch (err: any) {
+      if (err.code === 'auth/requires-recent-login') {
+        // Bruker må logge inn på nytt for å bekrefte sletting
+        await signInWithPopup(auth, googleProvider);
+        if (auth.currentUser) {
+          await deleteUserData(uid);
+          await deleteUser(auth.currentUser);
+        }
+      } else {
+        throw err;
+      }
+    } finally {
+      setUser(null);
+      setProfile(null);
+    }
   };
 
   return (

@@ -13,9 +13,9 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Min Trener',
-        short_name: 'Trening',
+        short_name: 'Min Trener',
         description: 'Minimalistisk, sensorbasert intervall- og treningsapp for mobil',
-        theme_color: '#10b981',
+        theme_color: '#09090b',
         background_color: '#09090b',
         display: 'standalone',
         orientation: 'portrait',
@@ -42,10 +42,36 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,json}'],
+        globPatterns: ['**/*.{js,css,html,svg,ico,json}'],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith('/images/exercises/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'exercise-images-cache',
+              expiration: {
+                maxEntries: 120,
+                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 dager
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+          lucide: ['lucide-react'],
+        },
+      },
+    },
+  },
   server: {
     host: true,
   },

@@ -186,7 +186,32 @@ export async function deleteUserData(userId: string): Promise<void> {
     await deleteDoc(d.ref);
   }
 
-  // 3. Slett brukerprofil
+  // 3. Slett egne øvelser
+  const customExercisesRef = collection(db, 'users', userId, 'custom_exercises');
+  const customExercisesSnap = await getDocs(customExercisesRef);
+  for (const d of customExercisesSnap.docs) {
+    await deleteDoc(d.ref);
+  }
+
+  // 4. Slett styrkelogger
+  const strengthLogsRef = collection(db, 'users', userId, 'strength_logs');
+  const strengthLogsSnap = await getDocs(strengthLogsRef);
+  for (const d of strengthLogsSnap.docs) {
+    await deleteDoc(d.ref);
+  }
+
+  // 5. Slett brukerprofil-dokument
   const userRef = doc(db, 'users', userId);
   await deleteDoc(userRef);
+
+  // 6. Tøm lokale lagringsnøkler
+  try {
+    localStorage.removeItem('mintrener_local_history');
+    localStorage.removeItem('mintrener_custom_workouts');
+    localStorage.removeItem('mintrener_custom_exercises');
+    localStorage.removeItem('mintrener_local_strength_logs');
+    localStorage.removeItem('mintrener_favorites');
+  } catch (e) {
+    // Ignore localStorage errors
+  }
 }

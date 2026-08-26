@@ -52,9 +52,10 @@ describe('P2 Spesifikasjon og Utvidelser', () => {
   });
 
   describe('Group Room Service', () => {
-    it('genererer 4-sifret romkode', () => {
+    it('genererer 6-tegns alfanumerisk romkode', () => {
       const code = generateRoomCode();
-      expect(code).toMatch(/^\d{4}$/);
+      expect(code).toHaveLength(6);
+      expect(code).toMatch(/^[2-9A-Z]{6}$/);
     });
   });
 });

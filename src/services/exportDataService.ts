@@ -8,7 +8,8 @@ import { WorkoutTemplate } from '../types/workout';
 export function exportAllDataAsJson(
   history: CompletedWorkoutLog[],
   customExercises?: CustomExerciseItem[],
-  customWorkouts?: WorkoutTemplate[]
+  customWorkouts?: WorkoutTemplate[],
+  strengthLogs?: any[]
 ): void {
   const exportPayload = {
     exportedAt: new Date().toISOString(),
@@ -17,6 +18,7 @@ export function exportAllDataAsJson(
     history,
     customExercises: customExercises || [],
     customWorkouts: customWorkouts || [],
+    strengthLogs: strengthLogs || [],
   };
 
   const jsonStr = JSON.stringify(exportPayload, null, 2);

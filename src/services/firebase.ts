@@ -5,7 +5,6 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
   projectId: "mintrener",
@@ -31,6 +30,3 @@ export const db = initializeFirestore(app, {
     tabManager: persistentMultipleTabManager(),
   }),
 });
-
-// Storage
-export const storage = getStorage(app);

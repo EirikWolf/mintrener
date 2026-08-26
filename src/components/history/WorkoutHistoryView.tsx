@@ -122,7 +122,21 @@ export const WorkoutHistoryView: React.FC<WorkoutHistoryViewProps> = ({
             <span className="hidden sm:inline">CSV</span>
           </button>
           <button
-            onClick={() => exportAllDataAsJson(history)}
+            onClick={async () => {
+              let customEx: any[] = [];
+              let customWk: any[] = [];
+              let strengthLogs: any[] = [];
+              try {
+                const storedEx = localStorage.getItem('mintrener_custom_exercises');
+                if (storedEx) customEx = JSON.parse(storedEx);
+                const storedWk = localStorage.getItem('mintrener_custom_workouts');
+                if (storedWk) customWk = JSON.parse(storedWk);
+                const storedSt = localStorage.getItem('mintrener_local_strength_logs');
+                if (storedSt) strengthLogs = JSON.parse(storedSt);
+              } catch (e) {}
+
+              exportAllDataAsJson(history, customEx, customWk, strengthLogs);
+            }}
             title="Last ned JSON (Alle data)"
             className="p-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-cyan-400 text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95"
           >

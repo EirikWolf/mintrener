@@ -48,8 +48,8 @@ export const GroupRoomModal: React.FC<GroupRoomModalProps> = ({
 
   // Deltaker blir med i rom
   const handleJoinRoom = async () => {
-    if (inputCode.trim().length < 4) {
-      setErrorMsg('Tast inn en 4-sifret romkode.');
+    if (inputCode.trim().length < 6) {
+      setErrorMsg('Tast inn en 6-tegns romkode.');
       return;
     }
 
@@ -223,13 +223,13 @@ export const GroupRoomModal: React.FC<GroupRoomModalProps> = ({
         {tab === 'join' && !roomState && (
           <div className="space-y-4">
             <div className="space-y-1.5 text-center">
-              <label className="text-xs font-bold text-zinc-300">Tast inn 4-sifret romkode</label>
+              <label className="text-xs font-bold text-zinc-300">Tast inn 6-tegns romkode</label>
               <input
                 type="text"
                 maxLength={6}
                 value={inputCode}
                 onChange={(e) => setInputCode(e.target.value.toUpperCase())}
-                placeholder="f.eks. 8492"
+                placeholder="f.eks. K7M9P2"
                 className="w-full py-3 text-center font-mono text-2xl font-black bg-zinc-950 border border-zinc-800 rounded-2xl text-white tracking-widest focus:outline-none focus:border-purple-500"
               />
             </div>

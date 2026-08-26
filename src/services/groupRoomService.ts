@@ -1,4 +1,5 @@
-import { db } from './firebase';
+import { auth, db } from './firebase';
+import { signInAnonymously } from 'firebase/auth';
 import {
   doc,
   setDoc,
@@ -22,27 +23,51 @@ export interface GroupRoomState {
   createdAt: string;
 }
 
+const ROOM_CODE_CHARS = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+
 /**
- * Genererer en tilfeldig 4-sifret romkode (f.eks. "8492")
+ * Genererer en 6-tegns alfanumerisk romkode (f.eks. "K7M9P2")
  */
 export function generateRoomCode(): string {
-  return Math.floor(1000 + Math.random() * 9000).toString();
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += ROOM_CODE_CHARS.charAt(Math.floor(Math.random() * ROOM_CODE_CHARS.length));
+  }
+  return result;
 }
 
 /**
- * Oppretter et nytt grupperom i Firestore
+ * Oppretter et nytt grupperom i Firestore med kollisjonssjekk og auth-garanti
  */
 export async function createGroupRoom(
   hostUid: string,
   hostName: string,
   workout: WorkoutTemplate
 ): Promise<string> {
-  const roomId = generateRoomCode();
+  // Sørg for at verten har en gyldig Firebase Auth UID
+  let currentUid = hostUid;
+  if (!auth.currentUser) {
+    const anon = await signInAnonymously(auth);
+    currentUid = anon.user.uid;
+  } else {
+    currentUid = auth.currentUser.uid;
+  }
+
+  // Generer romkode med kollisjonssjekk
+  let roomId = generateRoomCode();
+  let attempts = 0;
+  while (attempts < 5) {
+    const existing = await getDoc(doc(db, 'rooms', roomId));
+    if (!existing.exists()) break;
+    roomId = generateRoomCode();
+    attempts++;
+  }
+
   const roomRef = doc(db, 'rooms', roomId);
 
   const roomState: GroupRoomState = {
     roomId,
-    hostUid,
+    hostUid: currentUid,
     hostName: hostName || 'Instruktør',
     workout,
     status: 'waiting',
