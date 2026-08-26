@@ -17,6 +17,33 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // WCAG: Lukk ved trykk på Escape-tast (Må ligge før tidlige returer jf. Rules of Hooks)
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+        setIsConfirmingDelete(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteAccount();
+      setIsOpen(false);
+      setIsConfirmingDelete(false);
+    } catch (err) {
+      console.error('Feil ved sletting av konto:', err);
+      alert('Kunne ikke slette kontoen. Vennligst logg inn på nytt og prøv igjen.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="w-8 h-8 rounded-full bg-zinc-800 animate-pulse" />
@@ -40,33 +67,6 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
       </div>
     );
   }
-
-  const handleDelete = async () => {
-    setIsDeleting(true);
-    try {
-      await deleteAccount();
-      setIsOpen(false);
-      setIsConfirmingDelete(false);
-    } catch (err) {
-      console.error('Feil ved sletting av konto:', err);
-      alert('Kunne ikke slette kontoen. Vennligst logg inn på nytt og prøv igjen.');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  // WCAG: Lukk ved trykk på Escape-tast
-  React.useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setIsOpen(false);
-        setIsConfirmingDelete(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen]);
 
   const modal = isOpen ? (
     <div
