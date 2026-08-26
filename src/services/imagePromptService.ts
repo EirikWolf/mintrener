@@ -1,10 +1,14 @@
 import { ExerciseItem } from '../schemas/exerciseSchema';
 
-export const SDXL_STYLE_PREFIX =
-  'minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art';
+/**
+ * Kanonisk stilmal for Min Trener (Flux.1 Dev + Astrid LoRA)
+ * Referanse: Vedlegg A (v2) & revidert spesifikasjon 2026-08-26
+ */
+export const ASTRID_FLUX_BASE_STYLE =
+  'ASTRID, a woman, photorealistic photo of a fit, toned and visibly muscular athletic woman with sun-tanned skin, golden tan, defined shoulders and abs';
 
-export const SDXL_NEGATIVE_PROMPT =
-  'photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment';
+export const ASTRID_FLUX_OUTFIT_STYLE =
+  'in a bright modern gym, wearing a charcoal modern seamless cropped racerback sports bra and matching high-waist ribbed leggings, black training shoes, natural lighting, sharp focus, full body';
 
 export interface ComfyPromptJob {
   exerciseId: string;
@@ -17,7 +21,7 @@ export interface ComfyPromptJob {
 }
 
 /**
- * Bygger en fullstendig ComfyUI prompt-jobb for en gitt øvelse og fase i henhold til Vedlegg A
+ * Bygger en fullstendig ComfyUI prompt-jobb for en gitt øvelse og fase i henhold til Vedlegg A (v2)
  */
 export function buildComfyPromptJob(
   exercise: ExerciseItem,
@@ -30,7 +34,7 @@ export function buildComfyPromptJob(
       : `${exercise.navn.en || exercise.navn.nb} execution step ${phaseIndex + 1}`;
 
   const viewAngle = exercise.bildeVinkel || 'side';
-  const positivePrompt = `${SDXL_STYLE_PREFIX}, ${viewAngle} view, ${specificAction}`;
+  const positivePrompt = `${ASTRID_FLUX_BASE_STYLE}, ${specificAction}, ${ASTRID_FLUX_OUTFIT_STYLE}, ${viewAngle} view`;
 
   return {
     exerciseId: exercise.id,
@@ -38,8 +42,8 @@ export function buildComfyPromptJob(
     phaseIndex,
     viewAngle,
     positivePrompt,
-    negativePrompt: SDXL_NEGATIVE_PROMPT,
-    outputFilename: `${exercise.id}-${phaseIndex}.webp`,
+    negativePrompt: '',
+    outputFilename: `${exercise.id}-${phaseIndex}.png`,
   };
 }
 
@@ -58,7 +62,7 @@ export function exportAllExercisePromptJobs(
         jobs.push(buildComfyPromptJob(exercise, i));
       }
     } else {
-      // Standard: 2 faser (start og bunn/topp)
+      // Standard: 2 faser (start og slutt)
       jobs.push(buildComfyPromptJob(exercise, 0));
       jobs.push(buildComfyPromptJob(exercise, 1));
     }

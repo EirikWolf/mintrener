@@ -1,17 +1,20 @@
-# Treningsapp – spesifikasjon (utkast v0.3)
+# Min Trener – spesifikasjon (utkast v0.6)
+
+**Arbeidsnavn:** Min Trener
 
 **URL:** trening.web.app (Firebase Hosting)
 **Type:** Progressiv webapp (PWA), mobil først, installerbar på hjemskjerm
 **Målgruppe:** Åpen for alle med Google-konto fra dag én
 **Primær testenhet:** Samsung Galaxy S21 (Chrome). iPhone (Safari) skal fungere fullt ut for kjernefunksjonene.
-**Hovedfokus:** Kroppsvekt, intervall og kondisjon. Styrke med vekter og kettlebells støttes, men prioriteres etter.
+**Hovedfokus:** Kroppsvekt, intervall og kondisjon, med **microtrening på kontoret** som en bærende bruksmåte. Styrke med vekter og kettlebells støttes, men prioriteres etter.
 
 **Dokumenter i settet**
 | Fil | Innhold |
 |---|---|
 | `00-README.md` | Overlevering til kodeagent, leserekkefølge, første prompt |
 | `trening-app-spesifikasjon.md` | Dette dokumentet – krav, funksjoner, arkitektur, faseplan |
-| `vedlegg-a-bildepipeline.md` | Generering av øvelsesillustrasjoner på Kitor (ComfyUI, SDXL, ControlNet) |
+| `vedlegg-a-bildepipeline.md` | Generering av øvelsesillustrasjoner på Kitor via arbiter-lease (ComfyUI, Flux.1-dev, astrid_k-LoRA, ControlNet OpenPose) – v2 etter testbatcher |
+| `vedlegg-b-microtrening-og-programmer.md` | Tre modus (Alene / Sammen / Led en gruppe), kontekstprofiler (kontor og barn først; kor, senior, idrettslag, møte senere), microtrening med stemme, grupperom, påminnelser, og programbibliotek |
 
 ---
 
@@ -57,7 +60,7 @@ En webapp har ikke samme sensortilgang som en native app. Dette er lagt til grun
 ### 3.1 Intervalltimer (P1) – kjernefunksjonen
 
 - Bygg egne økter: liste av øvelser med varighet eller antall repetisjoner, pauser mellom øvelser, antall runder, pause mellom runder
-- Ferdige maler: Tabata (20/10 × 8), EMOM, AMRAP, «7-minutters», egendefinerte favoritter
+- Ferdige maler: Tabata (20/10 × 8), EMOM, AMRAP, «7-minutters» – erstattes av programbiblioteket (3.1c) når det er på plass
 - Nedtelling per øvelse med stor sirkulær fremdriftsindikator
 - Viser nåværende øvelse stort, neste øvelse mindre under, runde X av Y og total tid igjen
 - Lydsignaler: korte pip ved 3-2-1, langt pip ved bytte, egen tone for pause og arbeid, avslutningssignal
@@ -69,6 +72,29 @@ En webapp har ikke samme sensortilgang som en native app. Dette er lagt til grun
 - Lås-modus mot utilsiktede trykk
 - Timeren styres av tidsstempler, ikke tellende `setInterval` – ellers drifter den når mobilen struper JavaScript
 - Lyder forhåndslastes og spilles via Web Audio, ikke `<audio>`-elementer
+
+### 3.1a Tre modus og kontekstprofiler (P1) – se Vedlegg B, del 0
+
+Appen har tre modus etter **hvem som trener**: **Alene** (P1), **Sammen** – grupperom og grupper (P2), og **Led en gruppe** – instruktørverktøy for én som leder andre uten mobil, med storskjerm, instruks lest av stemmen og repetisjonstelling (P2). Modusene er de tre store valgene på Hjem.
+
+**Kontekstprofiler** tilpasser innhold, stemmetone, tekststørrelse og lydprofil til en setting, uten å være egne modus. Første versjon: **Kontor** og **Barn og familie**. Spesifisert for senere: Kor og musikere, Senior og sittende, Idrettslag, Møte. Profiler er JSON-objekter og programmer er merket med kontekst, slik at nye profiler kan legges til uten kodeendring.
+
+### 3.1b Microtrening (P1) – se Vedlegg B, del 1
+
+Korte økter på 1–10 minutter i hverdagsklær, alene eller sammen med andre – kontoret først, men samme mekanisme for stua, koret og eldresenteret. Bygger på intervalltimerens motor, men med egen skjerm, stemmemeldinger hvert 30. sekund, talt nedtelling de siste 15 sekundene, og en diskré lydprofil som standard.
+
+- **Microtimer** med hurtigvalg for varighet og «hold til du gir opp»-modus for planke (P1)
+- **Stemmemeldinger** fra forhåndsinnspilte klipp i tre toner, generert på Kitor (P1: «rolig» på bokmål)
+- **Gruppeøkt i rommet**: vert oppretter rom med QR-kode, kollegaer blir med uten konto, synkronisert nedtelling, storskjermvisning på møteromsskjermen (P2)
+- **Grupper med påminnelser**: faste push-varsler («Armhevinger kl. 10»), ett-trykks registrering, felles ukesteller, valgfri toppliste (P2)
+
+Detaljer, datamodell, personvernregler og oppgaveliste i Vedlegg B, del 1.
+
+### 3.1c Programbibliotek (P1) – se Vedlegg B
+
+Kuraterte, ferdige programmer merket med varighet (1–45 min), nivå (nybegynner/middels/avansert), kategori, utstyr og om de er kontorvennlige. Startkatalog på 40 programmer og 3 progresjonsserier («Planke 30 dager», «Armhevinger til 50», «Kom i gang»). Inngang via filter eller tre spørsmål (tid, hardhet, utstyr). «For lett / passe / for tungt» etter økt styrer forslag. P1: minst 15 programmer, P2: full katalog og serier.
+
+Detaljer i Vedlegg B, del 2.
 
 ### 3.2 Øvelsesbibliotek (P1)
 
@@ -86,7 +112,7 @@ Biblioteket genereres som strukturert JSON etter et fast skjema, ikke som fritek
 1. Definer JSON-skjemaet først (se datamodell under). Valider alle genererte øvelser mot skjemaet automatisk.
 2. Generer i bolker på 15–20 øvelser per muskelgruppe/utstyr, med instruks om konsistent språk og detaljnivå. Én stor generering gir ujevn kvalitet.
 3. Bruk en åpen datakilde som kryssjekk og eventuelt utgangspunkt. Datasettet *free-exercise-db* (GitHub, yuhonas) er offentlig eiendom, har over 800 øvelser i JSON med bilder og et definert skjema med felt for muskelgrupper, utstyr, nivå og instruksjoner. Det er mer vektorientert enn appens fokus, men dekker det meste av styrkedelen, og KI-en kan oversette og supplere med kroppsvekt/intervall.
-4. Illustrasjoner genereres lokalt på Kitor (RTX 3090) med ComfyUI, SDXL og ControlNet OpenPose – to bilder per øvelse (start/slutt), flat stil, gjennomsiktig bakgrunn. Hele pipelinen, inkludert stilguide, promptmal, skript og lisensvurdering, er beskrevet i **Vedlegg A**. Ikoner for muskelgrupper og utstyr lages som SVG-kode, ikke i Stable Diffusion.
+4. Illustrasjoner genereres på Kitor (RTX 3090) med ComfyUI, Flux.1-dev og ControlNet OpenPose – to fotorealistiske bilder per øvelse (start/slutt) med samme fiktive instruktør (astrid_k-LoRA fra SynthIQ), portrettformat, studiobakgrunn. Tilgang via Tailscale og GPU-lease fra Kitors arbiter. Hele pipelinen er beskrevet i **Vedlegg A (v2)**. Ikoner for muskelgrupper og utstyr lages som SVG-kode.
 5. Manuell gjennomgang av hele biblioteket før lansering, både tekst og bilder. Åpen app betyr at feil instruks når andre enn deg.
 
 ### 3.3 Styrkelogg (P2)
@@ -171,8 +197,8 @@ Bunnmeny med fire faner:
 
 | Fane | Innhold |
 |---|---|
-| **Hjem** | Ukesmål-ring, «Start rask økt», siste økter |
-| **Økter** | Mine maler, ferdige programmer, øvelsesbibliotek |
+| **Hjem** | Modusvalg Alene / Sammen / Led en gruppe, hurtigrad styrt av kontekstprofil, pågående serie, ukesmål-ring, siste økter |
+| **Økter** | Programmer (filter og tre-spørsmåls-inngang), mine maler, øvelsesbibliotek |
 | **Historikk** | Kalender, grafer, PR-er |
 | **Mer** | Innstillinger, sensorer, integrasjoner, eksport, konto |
 
@@ -266,8 +292,14 @@ users/{uid}/templates/{id}        – øktmaler
 users/{uid}/sessions/{id}         – gjennomførte økter, ett dokument per økt
 users/{uid}/records/{exerciseId}  – personlige rekorder
 users/{uid}/integrations/strava   – tokens (kun lesbar for Cloud Functions)
+users/{uid}/devices/{token}       – FCM-tokens (Vedlegg B.6)
+users/{uid}/seriesProgress/{id}   – fremdrift i programserier (Vedlegg B.11)
 
-exercises/{id}                    – felles bibliotek, kun lesing
+exercises/{id}                    – felles øvelsesbibliotek, kun lesing
+programs/{id}                     – felles programkatalog, kun lesing (Vedlegg B.11)
+series/{id}                       – programserier, kun lesing
+rooms/{code}                      – kortlevde grupperom, TTL 2 t (Vedlegg B.5)
+groups/{id}                       – varige grupper med påminnelser (Vedlegg B.6)
 challenges/{id}                   – P3
 ```
 
@@ -291,7 +323,7 @@ challenges/{id}                   – P3
 }
 ```
 
-Bildefeltene er spesifisert i Vedlegg A.11. Ferdige bilder ligger som statiske filer under `/exercises/{id}/`, ikke i Storage.
+Bildefeltene er spesifisert i Vedlegg A.11. Ferdige bilder ligger som statiske filer under `/exercises/{id}/` i portrettformat 7:9, ikke i Storage.
 
 ### Sensormodul
 
@@ -311,7 +343,10 @@ Hver leverer `{ verdi, tidsstempel, kvalitet }` og kan mangle uten at appen feil
 
 **Fase 1 – MVP**
 - Intervalltimer med lyd, tale, vibrasjon og Wake Lock
-- Bygg og lagre egne økter, tre–fire maler
+- Modusvalg på Hjem (kun Alene aktiv), kontekstprofiler kontor og barn
+- Microtimer med stemmemeldinger («rolig» og «lek», bokmål) og diskré lydprofil
+- Programkatalog med minst 18 programmer (kontor, barn og familie, kroppsvekt HIIT)
+- Bygg og lagre egne økter
 - Øvelsesbibliotek generert etter skjema, manuelt gjennomgått
 - Øvelsesillustrasjoner fra bildepipelinen (Vedlegg A). Kan starte med muskelgruppe-ikon som fallback og fylle inn bilder etter hvert
 - Google-innlogging, Firestore med sikkerhetsregler og App Check, offline
@@ -319,13 +354,19 @@ Hver leverer `{ verdi, tidsstempel, kvalitet }` og kan mangle uten at appen feil
 - Personvernerklæring, slett konto, budsjettvarsel
 - Installerbar PWA, testet på S21 og iPhone
 
-**Fase 2 – Sensorer og logg**
+**Fase 2 – Sensorer, logg og grupper**
+- Led en gruppe: instruktørskjerm, instruks-fase, repetisjonstelling
+- Gruppeøkt i rom med QR og storskjermvisning
+- Grupper med påminnelser og .ics-fallback
+- Full programkatalog (40 + 3 serier), «for lett/tungt»-tilpasning
+- Stemmetoner «gira» og «tørr», engelsk
 - Skritteller og kadens
 - GPS-økter med kart og GPX-eksport
 - Styrkelogg med kettlebell-støtte, PR og grafer
 - Historikk, ukesmål, streak
 
 **Fase 3 – Utvidelser**
+- Kontekstprofiler kor, senior og sittende, idrettslag, møte – med tilhørende programmer og øvelser
 - Strava-integrasjon
 - Pulsbelte (Android)
 - Automatisk repetisjonstelling
@@ -344,4 +385,7 @@ Hver leverer `{ verdi, tidsstempel, kvalitet }` og kan mangle uten at appen feil
 | 3 | Styrke | Relevant, men kroppsvekt/intervall/kondisjon viktigst | Styrkelogg forblir P2, kettlebell-støtte lagt inn, bibliotek vektet mot kroppsvekt |
 | 4 | Øvelsesbibliotek | KI-generert | Fast JSON-skjema, generering i bolker, åpen datakilde som kryssjekk, manuell gjennomgang |
 | 5 | Integrasjoner | Interessant | GPX i P2, Strava i P3, Google Fit avvist, Apple Health/Health Connect krever Capacitor |
-| 6 | Øvelsesbilder | Genereres på Kitor | Eget vedlegg A med ComfyUI/SDXL/ControlNet-pipeline, SDXL valgt fremfor Flux.1-dev av lisenshensyn |
+| 6 | Øvelsesbilder | Genereres på Kitor | Eget vedlegg A. v1 valgte SDXL og vektorstil av lisenshensyn |
+| 9 | Bildestil og modell, etter testbatcher på Kitor | Fotorealistisk Flux.1-dev med fast instruktør (astrid_k), godkjent av Eirik | Vedlegg A v2. Flux.1-dev er ikke-kommersiell: gratis app er innenfor, men skal appen gi inntekt må bildene regenereres. Bevisst valg, dokumenteres i DECISIONS.md. All GPU-bruk via arbiter-lease |
+| 7 | Microtrening på kontoret og programbibliotek | Bærende bruksmåte, egen spekk | Vedlegg B. Microtimer og startkatalog inn i P1, grupperom og påminnelser i P2. Stemmeklipp genereres på Kitor. Ingen arbeidsgiver-/rapporteringsnivå i gruppene |
+| 8 | Flere modus | Tre modus etter hvem som trener (Alene / Sammen / Led en gruppe), kontekstprofiler for setting | Kontor og Barn og familie i første versjon. Kor, senior, idrettslag og møte spesifisert i Vedlegg B.0.2 med `status: planned`, slik at de ikke glemmes |

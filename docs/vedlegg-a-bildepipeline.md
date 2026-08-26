@@ -1,482 +1,439 @@
-# Vedlegg A – Bildepipeline for øvelsesbiblioteket
+# Vedlegg A – Bildepipeline for øvelsesbiblioteket (v2)
 
-**Tilhører:** Treningsapp-spesifikasjon v0.2, kapittel 3.2
-**Kjøres på:** Kitor (i9-11900K, RTX 3090 24 GB, 32 GB RAM)
-**Formål:** Generere et komplett, konsistent sett illustrasjoner for 80–120 øvelser, automatisert fra øvelsesbibliotekets JSON, med lisens som tåler en åpen app.
+**Tilhører:** Min Trener – spesifikasjon v0.6, kapittel 3.2
+**Kjøres mot:** Kitor (RTX 3090) via Tailscale, med GPU-lease fra Kitors arbiter
+**Grunnlag for v2:** `kitor-bildepipeline-funn-2026-08-26.md` fra kitor-eier, som svar på bestillingen i `homelab-vault/02-Tjenester/AI/mintrener-arbiter-comfyui-bestilling.md`
+**Formål:** Generere et komplett, konsistent sett illustrasjoner for 80–120 øvelser, automatisert fra øvelsesbibliotekets JSON.
+
+> **Avvik fra v1:** v1 spesifiserte flat vektorstil med SDXL og lokal ComfyUI-tilgang. Etter testbatchene på Kitor er retningen endret til **fotorealistisk Flux med en fast instruktør (astrid_k-LoRA)**, godkjent av Eirik, og all tilgang går via HTTPS-ruter og arbiter-lease. Se A.14 for hva som ble endret og hvorfor.
 
 ---
 
 ## A.1 Mål og krav
 
 **Hva som skal produseres**
-- To bilder per øvelse: startposisjon (`0`) og sluttposisjon (`1`). Appen kan vise dem som statisk par eller veksle mellom dem for enkel «animasjon».
-- Ett ikon per muskelgruppe (ca. 12 stk) og ett per utstyrstype (ca. 8 stk). Disse lages som SVG, ikke i Stable Diffusion – se A.9.
+- To bilder per øvelse: startposisjon (`0`) og sluttposisjon (`1`). Appen kan vise dem som statisk par eller veksle mellom dem.
+- Ett ikon per muskelgruppe (ca. 12) og ett per utstyrstype (ca. 8). Disse lages som SVG, ikke i diffusjonsmodellen – se A.9.
 
 **Krav til bildene**
+
 | Krav | Verdi | Begrunnelse |
 |---|---|---|
-| Stil | Flat illustrasjon, én figur, ingen ansiktstrekk, ingen bakgrunn | Konsistent på tvers av 200+ bilder, nøytralt kjønn/etnisitet, fungerer på mørkt og lyst tema |
-| Format | WebP med gjennomsiktig bakgrunn | Liten fil, transparens gjør at figuren ligger rett på appens bakgrunn |
-| Størrelser | 512×512 (visning), 128×128 (liste/miniatyr) | Mobil trenger ikke mer; 512 px holder også på høyoppløste skjermer |
-| Filstørrelse | Maks 40 KB (512), maks 6 KB (128) | Hele biblioteket under 8 MB, miniatyrer under 1 MB |
-| Riktig stilling | Kroppsstilling må tydelig vise øvelsen | Feil stilling er verre enn ingen bilde |
-| Lisens | Kun modeller som tillater bruk av generert innhold i en offentlig app | Appen er åpen fra dag én |
+| Stil | Fotorealistisk, samme instruktør på alle bilder, nøytral lys studiobakgrunn | Testbatch 2 og 3 viste høy kvalitet og gjenkjennbar instruktør på tvers av bilder. Én fast person gir appen identitet |
+| Format | WebP, **portrett 7:9** (896×1152 fra modellen) | Portrett passer stående og sittende figurer, og mobilskjermen |
+| Størrelser | 448×576 (visning), 224×288 (miniatyr) | Halvering av modelloppløsning holder på mobil |
+| Filstørrelse | Maks 60 KB (448), maks 12 KB (224) | Fotorealistisk komprimerer dårligere enn vektor; hele biblioteket under 15 MB, miniatyrer under 3 MB |
+| Bakgrunn | **Bakes inn**, ingen transparens | Bakgrunnsfjerning på fotorealistiske bilder gir kanter og hårartefakter. Bildene vises som kort med avrundede hjørner, ikke fristilt |
+| Riktig stilling | Kroppsstilling må tydelig vise øvelsen, hendene må se riktige ut | Feil stilling eller feil hender er verre enn ingen bilde |
+| Konsistens | Samme antrekk, samme farger, samme lyssetting | Låses i prompt (A.4) |
 
 **Hva som ikke er mål**
-- Fotorealisme. Flat stil er enklere å få konsistent, og skjuler AI-artefakter som feil antall fingre.
-- Animasjon utover to bilder. Kan vurderes senere med video-modeller, men ikke nå.
+- Transparent bakgrunn eller vektorstil. Vektor er fortsatt mulig (A.2) hvis retningen endres.
+- Animasjon utover to bilder.
+
+**Konsekvens for kontekstprofilene (Vedlegg B.0.2):** Instruktøren er en voksen kvinne i treningstøy. Det fungerer for kontor, barn (barna ser en voksen vise øvelsen), kor og idrettslag. For profilen *senior og sittende* trengs egne skjeletter for sittende utførelse – samme instruktør, egne poser. Merk det i katalogen når profilen aktiveres.
 
 ---
 
 ## A.2 Valg av verktøy og modeller
 
-### Anbefaling: ComfyUI + SDXL + ControlNet OpenPose
+**Verifisert produksjonsoppsett** (fra testbatchene på Kitor):
 
-| Valg | Anbefalt | Alternativ | Begrunnelse |
-|---|---|---|---|
-| Grensesnitt | **ComfyUI** | Automatic1111 / Forge | ComfyUI har et rent HTTP-API der hele arbeidsflyten sendes som JSON. Det er laget for batch fra skript. A1111 har også API, men ControlNet der styres via utvidelsesparametre som er mer skjøre |
-| Basemodell | **SDXL 1.0** (`sd_xl_base_1.0.safetensors`) | Flux.1-schnell | SDXL har det modne ControlNet-økosystemet, og lisensen (CreativeML Open RAIL++-M) tillater bruk av generert innhold. **Unngå Flux.1-dev**: lisensen er ikke-kommersiell, og selv om appen er gratis, er det unødvendig risiko for et åpent produkt |
-| Stil-LoRA | Valgfritt: en «flat vector illustration»-LoRA for SDXL fra Civitai | Kun prompt | En stil-LoRA gir mer konsistent strek. Sjekk lisens på hver LoRA før bruk – mange er «ingen kommersiell bruk» |
-| Positurkontroll | **ControlNet OpenPose for SDXL** (`xinsir/controlnet-openpose-sdxl-1.0`) | `thibaud/controlnet-openpose-sdxl-1.0` | Uten ControlNet treffer modellen feil kroppsstilling på en betydelig andel øvelser. xinsir-versjonen er den mest presise per i dag |
-| Preprosessor | `comfyui_controlnet_aux` (custom node) | – | Lager OpenPose-skjelett fra et foto |
-| Bakgrunnsfjerning | **rembg** (Python, modell `isnet-general-use`) | Generere på grønn bakgrunn og maskere | rembg er robust på enkle figurer mot hvit bakgrunn |
-| Etterbehandling | Pillow | – | Beskjære, sentrere, skalere, WebP |
+| Komponent | Valg | Kommentar |
+|---|---|---|
+| Grensesnitt | ComfyUI på Kitor, via HTTPS-rute | Aldri direkte mot `localhost:8188` – klienten kjører utenfor Kitor |
+| Basemodell | `flux1-dev-fp8.safetensors` (UNETLoader, `fp8_e4m3fn`) | Flux dev fp8 passer i 24 GB sammen med ControlNet |
+| Instruktør-LoRA | `synthiq/astrid_k.safetensors`, styrke 1,0, triggerord `ASTRID` | Egen LoRA fra SynthIQ-prosjektet. Gir gjenkjennbar instruktør. Tilfører ingenting i vektorstil – kun relevant fotorealistisk |
+| Tekstkodere | `clip_l.safetensors` + `t5xxl_fp8_e4m3fn.safetensors` (DualCLIPLoader, type `flux`) | |
+| VAE | `ae.safetensors` | |
+| ControlNet | `flux1-dev-controlnet-union-pro-2.0.safetensors` (Shakker-Labs Union Pro 2.0) → `SetUnionControlNetType: openpose` | Installert på Kitor. Positurstyring verifisert med både DWPose fra foto og håndtegnede skjeletter |
+| Preprosessor | `DWPreprocessor` (`detect_body: enable`, `detect_hand: enable`, resolution 1024) | `detect_hand` var av i testene – slås på i produksjon for bedre hender |
+| Etterbehandling | `sharp` (Node) | Skalering og WebP. Ingen bakgrunnsfjerning |
 
-**VRAM-budsjett på 3090:** SDXL base (~6,5 GB) + ControlNet (~2,5 GB) + VAE og aktiveringer ved 1024×1024 ligger under 14 GB. Det er god margin, og du kan kjøre batch på 2–4 bilder samtidig.
+**Alternativ som holdes åpen:** flat vektorstil med Flux **uten** LoRA fungerte utmerket i testbatch 1. Hvis retningen endres tilbake, er det bare stilprompten og LoRA-noden som byttes; ControlNet-oppsettet er det samme.
 
-### Hvis Automatic1111 eller Forge allerede er installert på Kitor
-
-Pipelinen fungerer også der, med to endringer:
-- Bruk `POST /sdapi/v1/txt2img` med ControlNet-parametre i `alwayson_scripts.controlnet.args`
-- Start med `--api`-flagget
-
-Det anbefales likevel å installere ComfyUI ved siden av. Det tar 15 minutter, deler modellmappe med A1111 via `extra_model_paths.yaml`, og gjør skriptet i A.7 enklere.
+**Lisens – les A.12.** Flux.1-dev har ikke-kommersiell lisens. Det er akseptert for en gratis app, men det låser en beslutning: skal appen tjene penger, må bildene regenereres med en modell som tillater det.
 
 ---
 
-## A.3 Oppsett på Kitor
+## A.3 Tilgang til Kitor
 
-Antatt Linux-vert eller Windows med WSL2. Tilpass stier.
+Infrastrukturen eies av kitor-eier og er definert i `kitor-infra` (PR #78). Min Trener-prosjektet installerer ingenting på Kitor selv.
 
-```bash
-# 1. ComfyUI
-git clone https://github.com/comfyanonymous/ComfyUI.git ~/ComfyUI
-cd ~/ComfyUI
-python3 -m venv venv && source venv/bin/activate
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-pip install -r requirements.txt
+| Leveranse | Verdi |
+|---|---|
+| ComfyUI API | `https://kitor.tail49f298.ts.net/comfy-mintrener/*` – **ikke** `/comfyui/*` |
+| Arbiter (GPU-lease) | `https://kitor.tail49f298.ts.net/arbiter/*` |
+| Autentisering | `Authorization: Bearer $KITOR_TOKEN_MINTRENER` på begge ruter |
+| Token | Vaultwarden: `homelab/mintrener` → `kitor-token`. Legges i `.env` lokalt, **aldri** i repoet |
+| Arbiter-prioritet | `mintrener: normal` |
+| Aktiv fra | Når PR #78 er merget og deployet (token i `.env` på Kitor, Caddy-restart). Kitor-eier gir beskjed |
 
-# 2. Custom nodes (OpenPose-preprosessor)
-cd custom_nodes
-git clone https://github.com/Fannovel16/comfyui_controlnet_aux.git
-cd comfyui_controlnet_aux && pip install -r requirements.txt
+**Kjøreregler – obligatoriske**
 
-# 3. Modeller – legg i riktige mapper
-#   models/checkpoints/sd_xl_base_1.0.safetensors
-#   models/controlnet/controlnet-openpose-sdxl-1.0.safetensors   (xinsir, fra Hugging Face)
-#   models/loras/<stil-lora>.safetensors                          (valgfritt)
+1. **Aldri kall ComfyUI uten aktiv `image`-lease.** Leasen stopper vLLM og andre GPU-prosesser; uten lease risikerer man OOM og krasj for andre prosjekter på Kitor.
+2. **Acquire** blokkerer til GPU er ledig: `POST /arbiter/acquire` med `{"kind":"image","requester":"mintrener","label":"exercise-batch","duration_h":2}`. Svaret inneholder `token`.
+3. **Heartbeat hvert 5. minutt** – `POST /arbiter/heartbeat` med `{"token":...}`. Påkrevd for jobber over 25 minutter; uten heartbeat frigis leasen etter 30 minutter og batchen krasjer. En full batch på 60–100 bilder tar 35–60 minutter, så heartbeat-loop er ikke valgfritt.
+4. **Release alltid** – `POST /arbiter/release` i `finally`, idempotent og trygt å gjenta.
+5. Ved kø: `GET /arbiter/status` viser aktive leases og estimert ventetid.
 
-# 4. Start med API åpent på LAN
-cd ~/ComfyUI && source venv/bin/activate
-python main.py --listen 0.0.0.0 --port 8188
-```
-
-**Nettverk:** ComfyUI skal kun være tilgjengelig på hjemmenettet. Ikke eksponer port 8188 gjennom Cloudflare Tunnel – det finnes ingen autentisering.
-
-**Verifisering:** Åpne `http://kitor:8188` i nettleser, last inn arbeidsflyten fra A.6 og generer ett bilde manuelt før skriptet kjøres.
-
-**Python-miljø for pipeline-skriptet** (kan kjøre på Kitor eller på LarkBox/EliteDesk mot Kitor over LAN):
-```bash
-pip install requests pillow rembg[cpu] onnxruntime
-```
+Klienten kjører fra Eiriks utviklingsmaskin (LarkBox/EliteDesk) eller hvor som helst på Tailscale-nettet.
 
 ---
 
 ## A.4 Stilguide
 
-Alle bilder følger denne guiden. Den er også grunnlaget for promptmalen i A.5.
+**Instruktør**
+- Triggerord `ASTRID` først i prompten, LoRA-styrke 1,0
+- Antrekk låses eksplisitt med farge, ellers drifter det mellom bilder: f.eks. «fitted charcoal gray sports bra and matching high-waist leggings, white training shoes». Velg ett antrekk for hele biblioteket og hardkod det i stilprefiksen
+- Hår samlet (hestehale) – reduserer variasjon og kantproblemer
 
-**Figur**
-- Enkel, stilisert menneskefigur, nøytral kroppsbygning
-- Ingen ansiktstrekk (kun hodeform), ingen hår som krever detaljer
-- Ensfarget hud/figur i én aksentfarge, mørkere kontur
-- Enkle, tettsittende treningsklær i én dempet farge, uten mønster eller logo
-
-**Farger** (samme som appens tema)
-- Figur: `#3B82F6` (blå) med kontur `#1E3A8A`
-- Klær: `#1F2937` (mørk grå)
-- Utstyr: `#6B7280` (grå) med kontur `#111827`
-- Bakgrunn: hvit under generering, fjernes etterpå
-
-**Komposisjon**
-- Figuren fyller 70–85 % av bildehøyden
-- Profilvinkel (sett fra siden) som standard – det viser leddvinkler best. Frontvinkel brukes kun der profilen skjuler bevegelsen (f.eks. sidehev, jumping jacks)
-- Utstyr skal alltid vises der det brukes
-- Ingen gulv, skygge, matte eller omgivelser. Unntak: en tynn gulvlinje der kontakt med gulvet er poenget (planke, armhevinger, burpees)
+**Scene**
+- Nøytral, lys studiobakgrunn (`light gray seamless studio backdrop`), mykt jevnt lys, ingen rekvisitter utover øvelsens utstyr
+- Kamera i hoftehøyde, **profil** (fra siden) som standard. Front kun der profilen skjuler bevegelsen
+- Hele kroppen synlig med luft over og under; ikke beskåret ved føttene
+- Utstyr skal alltid vises der det brukes, i grep (se A.5 om hender)
 
 **Uttrykk**
-- Ingen bevegelseslinjer, piler eller tekst. Slikt legges eventuelt på i appen som SVG-overlegg
-- Startposisjon og sluttposisjon skal være tydelig forskjellige
+- Ingen tekst, piler, bevegelseslinjer eller overlegg. Slikt legges eventuelt på i appen som SVG
+- Nøytralt til lett konsentrert ansiktsuttrykk, ikke poserende
+- Start- og sluttposisjon skal være tydelig forskjellige, men fra samme kameraposisjon
 
 ---
 
 ## A.5 Promptmal
 
-Promptene bygges av tre deler: **fast stilprompt** (lik for alle), **øvelsesspesifikk beskrivelse** (fra JSON) og **fast negativ prompt**.
+Flux med LoRA og ControlNet kjører med **cfg 1,0**. Da er negativ prompt **fullstendig inaktiv**. Alt må sies positivt, og «no shadow» eller «no more than five fingers» gjør ingenting.
 
-**Fast stilprompt (prefix)**
+**Fast stilprefiks**
 ```
-flat vector illustration, minimalist fitness pictogram, single stylized human figure,
-faceless, smooth solid fill colors, clean dark outline, blue figure with dark gray
-athletic clothing, isolated on pure white background, no shadow, no floor, no text,
-centered, full body visible, side view,
+ASTRID, photorealistic full-body photo of a fitness instructor demonstrating an exercise,
+fitted charcoal gray sports bra and matching high-waist leggings, white training shoes,
+hair in a ponytail, light gray seamless studio backdrop, soft even studio lighting,
+camera at hip height, side view, full body visible with space above head and below feet,
+sharp focus, natural skin,
 ```
 
-**Øvelsesspesifikk del** – ett felt per posisjon i JSON, skrevet som en presis anatomisk beskrivelse:
-```
+**Øvelsesspesifikk del** – ett felt per posisjon i JSON. Beskriv geometri og **hva hendene gjør**:
+```json
 "bildePrompt": {
-  "0": "standing upright holding a kettlebell with both hands between the legs, knees slightly bent, hips hinged back, flat back",
-  "1": "standing tall with hips fully extended, arms straight, kettlebell swung up to chest height in front"
+  "0": "standing with feet shoulder-width apart, hips hinged back, torso leaning forward with flat back, both hands in a firm grip around the kettlebell handle hanging between the legs",
+  "1": "standing tall with hips fully extended, arms straight in front at chest height, both hands in a firm grip around the kettlebell handle"
 }
 ```
 
-**Fast negativ prompt**
-```
-photo, photorealistic, realistic skin, face, eyes, mouth, hair detail, text, watermark,
-logo, signature, background, gym, floor, shadow, gradient, 3d render, multiple people,
-extra limbs, extra fingers, deformed hands, blurry, low quality, noise, frame, border
-```
+**Regler for øvelsesbeskrivelsen** (gjelder når Claude Code eller Antigravity genererer feltet):
+1. Beskriv kroppsstillingen, ikke øvelsen. «Squat» er ubrukelig; «hips lowered below knee height, torso upright, arms extended forward, hands together palms down» fungerer.
+2. **Alltid en setning om hendene**, formulert som hva de gjør: «firm grip around the handle», «palms flat on the floor, fingers together», «hands resting on hips». Aldri antall fingre.
+3. Nevn utstyret og hvor det holdes.
+4. Nevn vinkel eksplisitt hvis den avviker fra siden: «front view».
+5. Engelsk, maks 50 ord.
+6. Start- og sluttposisjon skal beskrive faktisk forskjellig geometri.
+7. Ingen negasjoner – de virker ikke.
 
-**Regler for øvelsesbeskrivelsen** (gjelder når Claude Code/Antigravity genererer feltet):
-1. Beskriv kroppsstillingen, ikke øvelsen. «Squat» er ubrukelig; «hips lowered below knee height, torso upright, arms extended forward» fungerer.
-2. Nevn utstyret og hvor det holdes.
-3. Nevn vinkel eksplisitt hvis den avviker fra siden: «front view».
-4. Én setning, engelsk, maks 40 ord.
-5. Start- og sluttposisjon skal beskrive faktisk forskjellig geometri.
+**Samplerinnstillinger (verifisert)**
 
-**Samplerinnstillinger**
 | Parameter | Verdi |
 |---|---|
-| Oppløsning | 1024×1024 |
-| Steps | 30 |
-| CFG | 6,0 |
-| Sampler / scheduler | dpmpp_2m / karras |
-| ControlNet strength | 0,8 |
-| ControlNet start/end | 0,0 / 0,8 (slipper kontrollen mot slutten for renere strek) |
-| Seed | Fast per øvelse (hash av `id`) – gir reproduserbarhet og lik figur mellom posisjon 0 og 1 |
-| LoRA strength (hvis brukt) | 0,7 |
+| Oppløsning | 896×1152 (portrett) |
+| Steps | 24 |
+| Sampler / scheduler | euler / simple |
+| CFG | **1,0** (negativ prompt inaktiv) |
+| FluxGuidance | 3,5 |
+| LoRA-styrke | 1,0 |
+| ControlNet strength | **0,9** |
+| ControlNet start / end | 0,0 / **0,65** |
+| Seeds per posisjon | **3** – beste velges i QA (A.10) |
+| Seed-basis | Hash av `id`, pluss 0/1/2 |
+| Kjøretid | 30–60 s per bilde under `image`-lease |
 
 ---
 
 ## A.6 Positurkontroll med OpenPose
 
-Dette er den delen som avgjør om bildene blir riktige. To måter å lage skjelettene på:
+Positurstyring med ControlNet er det som gjorde at hip-hinge-svingen ble riktig etter å ha feilet i begge prompt-baserte batcher. Uten skjelett er posisjonen upålitelig.
 
-**Metode 1 – egne foto (anbefalt)**
-Ta bilder av deg selv i start- og sluttposisjon for hver øvelse, mot en rolig bakgrunn, fra siden. Mobil på stativ, selvutløser eller video som deles opp. 120 øvelser × 2 = 240 bilder, realistisk på en ettermiddag. Fordeler: riktig posisjon garantert, ingen lisensspørsmål, og du får samtidig kvalitetssikret at øvelsen i biblioteket faktisk gir mening.
+**Skjelett per posisjon – to kilder**
 
-**Metode 2 – bilder fra free-exercise-db**
-Datasettet er offentlig eiendom og har to bilder per øvelse (start/slutt) som allerede følger samme konvensjon. Dekker styrke og en del kroppsvekt, men mangler mye av intervall/kondisjon.
+| Kilde | Når | Hvordan |
+|---|---|---|
+| **Referansefoto** | Når vi har et foto av korrekt utførelse (egne foto, eller free-exercise-db for styrkeøvelser) | `DWPreprocessor` med `detect_body: enable`, `detect_hand: enable`, resolution 1024. Håndpunkter gjør at ControlNet styrer fingrene også |
+| **Programmatisk tegnet COCO-18-skjelett** | Når foto mangler, eller for sittende/senior-varianter | Tegnes fra en liste med 18 leddkoordinater, svart bakgrunn, OpenPose-fargekonvensjon for lemmer. Fungerte på første forsøk i testen. Kan genereres av kodeagenten fra en tekstlig posebeskrivelse, men må sjekkes visuelt |
 
-Praktisk kombinasjon: metode 2 for det som finnes der, metode 1 for resten.
+**Ufravikelig:** skjelettets lerret må ha **samme sideforhold som latenten** – 896×1152. Et kvadratisk skjelett gir forskjøvet positur.
 
-**Skjelettgenerering** skjer i ComfyUI-flyten (node `OpenposePreprocessor` med `detect_hand: enable`, `detect_body: enable`, `detect_face: disable`). Skjelettbildet lagres ved siden av kildefotoet, slik at det kan sjekkes og gjenbrukes.
+**Håndregler i skjelettdesignet** (se A.10 om hvorfor):
+- Hender skal være **opptatt eller nøytrale**: grep rundt utstyr, flate mot gulv, på hoftene, langs siden
+- Unngå åpne håndflater mot kamera og sprikende fingre – det er der artefaktene kommer
+- Der en øvelse naturlig har frie hender (jumping jacks), velg posisjoner der hendene er samlet eller i bevegelsens ytterpunkt med fingrene sammen
 
-**Mappestruktur for kildemateriale**
+**Mappestruktur**
 ```
 pipeline/
   poses/
     kettlebell-swing/
-      0.jpg            # kildefoto startposisjon
-      1.jpg            # kildefoto sluttposisjon
-      0_pose.png       # generert skjelett (lages av skriptet)
+      0.jpg            # referansefoto (valgfritt)
+      1.jpg
+      0_pose.png       # skjelett 896×1152 – enten fra DWPose eller tegnet
       1_pose.png
-    push-up/
-      ...
+    chair-squat/
+      0_pose.png       # tegnet, ingen foto
+      1_pose.png
+      0_pose.json      # leddkoordinater brukt til tegningen
 ```
+
+Skjelettene sjekkes inn i repoet. De er små og er det som faktisk definerer biblioteket visuelt.
 
 ---
 
-## A.7 ComfyUI-arbeidsflyt (API-format)
+## A.7 ComfyUI-arbeidsflyt
 
-Lagres som `pipeline/workflow_api.json`. Skriptet i A.8 bytter ut feltene merket `<<...>>`.
+**Autoritativ kilde:** de to testskriptene på Kitor, `/tmp/mintrener_openpose_test.py` og `/tmp/mintrener_astrid_photo_testbatch.py`, inneholder den verifiserte grafen inkludert lease-håndtering. **Kopier grafen derfra** inn i `pipeline/workflow_api.json` – ikke skriv den på nytt fra dette dokumentet. Skissen under viser strukturen slik at skriptet i A.8 kan referere noder ved rolle.
 
-```json
-{
-  "1": { "class_type": "CheckpointLoaderSimple",
-         "inputs": { "ckpt_name": "sd_xl_base_1.0.safetensors" } },
-
-  "2": { "class_type": "CLIPTextEncode",
-         "inputs": { "clip": ["1", 1], "text": "<<POSITIVE>>" } },
-
-  "3": { "class_type": "CLIPTextEncode",
-         "inputs": { "clip": ["1", 1], "text": "<<NEGATIVE>>" } },
-
-  "4": { "class_type": "EmptyLatentImage",
-         "inputs": { "width": 1024, "height": 1024, "batch_size": 1 } },
-
-  "5": { "class_type": "LoadImage",
-         "inputs": { "image": "<<POSE_SOURCE_FILENAME>>" } },
-
-  "6": { "class_type": "OpenposePreprocessor",
-         "inputs": { "image": ["5", 0], "detect_hand": "enable",
-                     "detect_body": "enable", "detect_face": "disable",
-                     "resolution": 1024 } },
-
-  "7": { "class_type": "ControlNetLoader",
-         "inputs": { "control_net_name": "controlnet-openpose-sdxl-1.0.safetensors" } },
-
-  "8": { "class_type": "ControlNetApplyAdvanced",
-         "inputs": { "positive": ["2", 0], "negative": ["3", 0],
-                     "control_net": ["7", 0], "image": ["6", 0],
-                     "strength": 0.8, "start_percent": 0.0, "end_percent": 0.8 } },
-
-  "9": { "class_type": "KSampler",
-         "inputs": { "model": ["1", 0], "positive": ["8", 0], "negative": ["8", 1],
-                     "latent_image": ["4", 0], "seed": "<<SEED>>", "steps": 30,
-                     "cfg": 6.0, "sampler_name": "dpmpp_2m", "scheduler": "karras",
-                     "denoise": 1.0 } },
-
-  "10": { "class_type": "VAEDecode",
-          "inputs": { "samples": ["9", 0], "vae": ["1", 2] } },
-
-  "11": { "class_type": "SaveImage",
-          "inputs": { "images": ["10", 0], "filename_prefix": "<<OUTPUT_PREFIX>>" } }
-}
+```
+UNETLoader (flux1-dev-fp8, fp8_e4m3fn)
+  └─ LoraLoaderModelOnly (astrid_k, 1.0) ──────────────────────┐
+DualCLIPLoader (clip_l + t5xxl_fp8, type flux)                  │
+  └─ CLIPTextEncode (positiv prompt) ──┐                        │
+       └─ FluxGuidance (3.5) ──────────┤                        │
+     ConditioningZeroOut ──────────────┤ (negativ, inaktiv)     │
+LoadImage (<<POSE_PNG>>) ──────────────┤                        │
+ControlNetLoader (union-pro-2.0)       │                        │
+  └─ SetUnionControlNetType (openpose) ┤                        │
+       └─ ControlNetApplyAdvanced (0.9, 0.0–0.65) ─┐            │
+EmptySD3LatentImage (896×1152) ─────────────────────┤            │
+                                                    └─ KSampler (euler, simple, 24, cfg 1.0, <<SEED>>)
+                                                         └─ VAEDecode (ae) ─ SaveImage (<<PREFIX>>)
 ```
 
-**Med stil-LoRA:** legg inn en `LoraLoader`-node mellom `1` og `2/3/9`, og pek `model` og `clip` gjennom den.
-
-**Skjelettet lagres i tillegg** ved å legge til en ekstra `SaveImage` koblet til node `6` – nyttig for feilsøking.
-
-Merk: nodenavn og feltnavn er hentet fra ComfyUI og `comfyui_controlnet_aux` slik de har vært stabile en stund, men bør verifiseres mot den installerte versjonen. Enkleste måte: bygg flyten én gang i ComfyUI-grensesnittet, aktiver «Enable Dev mode Options» i innstillinger, og bruk «Save (API Format)». Da får du nøyaktig riktig JSON for din installasjon.
+Skriptet bytter ut tre ting: positiv prompt, skjelettfil og seed. Alt annet er konstant. Bruk DWPreprocessor i grafen bare i det separate «lag skjelett fra foto»-steget; i produksjonsgrafen lastes ferdige skjelett-PNG-er direkte.
 
 ---
 
 ## A.8 Pipeline-skript
 
-`pipeline/generate.py`. Leser øvelsesbiblioteket, genererer skjelett og bilde per posisjon, etterbehandler og legger resultatet klart for appen. Idempotent: hopper over øvelser som allerede har ferdige filer, med mindre `--force`.
+Ligger i app-repoet som `scripts/exportComfyUiBatch.ts` (TypeScript, Node 20+, `tsx`). Leser øvelsesbiblioteket, henter lease, genererer tre seeds per posisjon, laster ned, skalerer, og frigir leasen uansett utfall. Idempotent: hopper over posisjoner som allerede har tre kandidater, med mindre `--force`.
 
-```python
-#!/usr/bin/env python3
-"""
-Genererer øvelsesillustrasjoner via ComfyUI på Kitor.
+```bash
+# .env (ikke i git)
+KITOR_TOKEN_MINTRENER=...
+KITOR_BASE=https://kitor.tail49f298.ts.net
 
-Bruk:
-  python generate.py --exercises ../data/exercises.json --out ../public/exercises
-  python generate.py --only kettlebell-swing push-up
-  python generate.py --force
-"""
-import argparse, hashlib, io, json, sys, time
-from pathlib import Path
-
-import requests
-from PIL import Image
-from rembg import remove, new_session
-
-COMFY = "http://kitor:8188"
-WORKFLOW = Path(__file__).parent / "workflow_api.json"
-POSES = Path(__file__).parent / "poses"
-
-STYLE_PREFIX = (
-    "flat vector illustration, minimalist fitness pictogram, single stylized human figure, "
-    "faceless, smooth solid fill colors, clean dark outline, blue figure with dark gray "
-    "athletic clothing, isolated on pure white background, no shadow, no floor, no text, "
-    "centered, full body visible, side view, "
-)
-NEGATIVE = (
-    "photo, photorealistic, realistic skin, face, eyes, mouth, hair detail, text, watermark, "
-    "logo, signature, background, gym, floor, shadow, gradient, 3d render, multiple people, "
-    "extra limbs, extra fingers, deformed hands, blurry, low quality, noise, frame, border"
-)
-
-SIZES = {"": 512, "_thumb": 128}
-rembg_session = new_session("isnet-general-use")
-
-
-def seed_for(exercise_id: str) -> int:
-    return int(hashlib.sha256(exercise_id.encode()).hexdigest()[:8], 16)
-
-
-def upload_image(path: Path) -> str:
-    """Laster kildefoto opp til ComfyUI sin input-mappe, returnerer filnavn."""
-    with open(path, "rb") as f:
-        r = requests.post(f"{COMFY}/upload/image",
-                          files={"image": (path.name, f, "image/jpeg")},
-                          data={"overwrite": "true"})
-    r.raise_for_status()
-    return r.json()["name"]
-
-
-def build_workflow(positive: str, pose_filename: str, seed: int, prefix: str) -> dict:
-    wf = json.loads(WORKFLOW.read_text())
-    wf["2"]["inputs"]["text"] = positive
-    wf["3"]["inputs"]["text"] = NEGATIVE
-    wf["5"]["inputs"]["image"] = pose_filename
-    wf["9"]["inputs"]["seed"] = seed
-    wf["11"]["inputs"]["filename_prefix"] = prefix
-    return wf
-
-
-def run_workflow(wf: dict) -> bytes:
-    """Køer arbeidsflyten, venter på resultat, returnerer PNG-bytes for første bilde."""
-    r = requests.post(f"{COMFY}/prompt", json={"prompt": wf, "client_id": "trening-pipeline"})
-    r.raise_for_status()
-    prompt_id = r.json()["prompt_id"]
-
-    while True:
-        h = requests.get(f"{COMFY}/history/{prompt_id}").json()
-        if prompt_id in h:
-            break
-        time.sleep(1.0)
-
-    outputs = h[prompt_id]["outputs"]
-    for node_id, node in outputs.items():
-        for img in node.get("images", []):
-            if node_id == "11":
-                r = requests.get(f"{COMFY}/view", params={
-                    "filename": img["filename"], "subfolder": img.get("subfolder", ""),
-                    "type": img["type"]})
-                r.raise_for_status()
-                return r.content
-    raise RuntimeError(f"Ingen bilde fra node 11 for {prompt_id}")
-
-
-def postprocess(png_bytes: bytes, out_base: Path) -> None:
-    """Fjerner bakgrunn, beskjærer, sentrerer på kvadrat, lagrer WebP i alle størrelser."""
-    img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
-    img = remove(img, session=rembg_session)
-
-    bbox = img.getbbox()
-    if not bbox:
-        raise RuntimeError("Tomt bilde etter bakgrunnsfjerning")
-    img = img.crop(bbox)
-
-    # Kvadrat med 8 % luft rundt figuren
-    side = int(max(img.size) * 1.16)
-    canvas = Image.new("RGBA", (side, side), (0, 0, 0, 0))
-    canvas.paste(img, ((side - img.width) // 2, (side - img.height) // 2), img)
-
-    for suffix, px in SIZES.items():
-        out = canvas.resize((px, px), Image.LANCZOS)
-        out.save(out_base.with_name(out_base.name + suffix + ".webp"),
-                 "WEBP", quality=85, method=6)
-
-
-def process_exercise(ex: dict, out_dir: Path, force: bool) -> None:
-    ex_id = ex["id"]
-    target = out_dir / ex_id
-    target.mkdir(parents=True, exist_ok=True)
-    prompts = ex.get("bildePrompt") or {}
-
-    for pos in ("0", "1"):
-        final = target / f"{pos}.webp"
-        if final.exists() and not force:
-            print(f"  {ex_id}/{pos}: finnes, hopper over")
-            continue
-
-        pose_src = POSES / ex_id / f"{pos}.jpg"
-        if not pose_src.exists():
-            print(f"  {ex_id}/{pos}: MANGLER kildefoto {pose_src}", file=sys.stderr)
-            continue
-        if pos not in prompts:
-            print(f"  {ex_id}/{pos}: MANGLER bildePrompt", file=sys.stderr)
-            continue
-
-        pose_name = upload_image(pose_src)
-        wf = build_workflow(
-            positive=STYLE_PREFIX + prompts[pos],
-            pose_filename=pose_name,
-            seed=seed_for(ex_id),
-            prefix=f"trening/{ex_id}_{pos}",
-        )
-        t0 = time.time()
-        png = run_workflow(wf)
-        postprocess(png, target / pos)
-        print(f"  {ex_id}/{pos}: ferdig ({time.time() - t0:.1f}s)")
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--exercises", required=True, type=Path)
-    ap.add_argument("--out", required=True, type=Path)
-    ap.add_argument("--only", nargs="*", default=None)
-    ap.add_argument("--force", action="store_true")
-    args = ap.parse_args()
-
-    exercises = json.loads(args.exercises.read_text(encoding="utf-8"))
-    if args.only:
-        exercises = [e for e in exercises if e["id"] in args.only]
-
-    print(f"{len(exercises)} øvelser mot {COMFY}")
-    for ex in exercises:
-        process_exercise(ex, args.out, args.force)
-
-
-if __name__ == "__main__":
-    main()
+# Bruk
+npx tsx scripts/exportComfyUiBatch.ts --exercises data/exercises.json --out pipeline/candidates
+npx tsx scripts/exportComfyUiBatch.ts --only kettlebell-swing push-up --seeds 3
+npx tsx scripts/exportComfyUiBatch.ts --dry-run          # validerer skjeletter og prompter uten lease
 ```
 
-**Kjøretid:** SDXL 1024² med ControlNet, 30 steg, tar 6–10 sekunder på en 3090. 240 bilder tar 30–45 minutter, plus rembg.
+```typescript
+import { readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import path from "node:path";
+import sharp from "sharp";
 
-**Feilhåndtering som bør legges til i neste iterasjon:** retry ved nettverksfeil mot ComfyUI, logg til fil, `--dry-run` som bare validerer at alle kildefoto og prompter finnes.
+const BASE = process.env.KITOR_BASE!;
+const TOKEN = process.env.KITOR_TOKEN_MINTRENER!;
+const COMFY = `${BASE}/comfy-mintrener`;
+const ARBITER = `${BASE}/arbiter`;
+const AUTH = { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" };
+
+const STYLE_PREFIX =
+  "ASTRID, photorealistic full-body photo of a fitness instructor demonstrating an exercise, " +
+  "fitted charcoal gray sports bra and matching high-waist leggings, white training shoes, " +
+  "hair in a ponytail, light gray seamless studio backdrop, soft even studio lighting, " +
+  "camera at hip height, side view, full body visible with space above head and below feet, " +
+  "sharp focus, natural skin, ";
+
+const WORKFLOW = JSON.parse(readFileSync("pipeline/workflow_api.json", "utf8"));
+// Node-id-er i den kopierte grafen – sett én gang etter kopiering fra Kitor-skriptene
+const NODE = { positive: "6", poseImage: "12", sampler: "3", save: "9" };
+
+// ---------- Arbiter ----------
+async function acquire(): Promise<string> {
+  const r = await fetch(`${ARBITER}/acquire`, {
+    method: "POST", headers: AUTH,
+    body: JSON.stringify({ kind: "image", requester: "mintrener", label: "exercise-batch", duration_h: 2 }),
+  });
+  if (!r.ok) throw new Error(`acquire: ${r.status}`);
+  return (await r.json()).token;
+}
+async function heartbeat(token: string) {
+  await fetch(`${ARBITER}/heartbeat`, { method: "POST", headers: AUTH, body: JSON.stringify({ token }) });
+}
+async function release(token: string) {
+  await fetch(`${ARBITER}/release`, { method: "POST", headers: AUTH, body: JSON.stringify({ token }) });
+}
+
+// ---------- ComfyUI ----------
+async function uploadImage(file: string): Promise<string> {
+  const form = new FormData();
+  form.append("image", new Blob([readFileSync(file)]), path.basename(file));
+  form.append("overwrite", "true");
+  const r = await fetch(`${COMFY}/upload/image`, { method: "POST", headers: { Authorization: AUTH.Authorization }, body: form });
+  if (!r.ok) throw new Error(`upload: ${r.status}`);
+  return (await r.json()).name;
+}
+
+async function generate(prompt: string, poseName: string, seed: number, prefix: string): Promise<Buffer> {
+  const wf = structuredClone(WORKFLOW);
+  wf[NODE.positive].inputs.text = prompt;
+  wf[NODE.poseImage].inputs.image = poseName;
+  wf[NODE.sampler].inputs.seed = seed;
+  wf[NODE.save].inputs.filename_prefix = prefix;
+
+  const q = await fetch(`${COMFY}/prompt`, { method: "POST", headers: AUTH, body: JSON.stringify({ prompt: wf, client_id: "mintrener" }) });
+  if (!q.ok) throw new Error(`prompt: ${q.status} ${await q.text()}`);
+  const { prompt_id } = await q.json();
+
+  for (;;) {
+    await new Promise((res) => setTimeout(res, 2000));
+    const h = await (await fetch(`${COMFY}/history/${prompt_id}`, { headers: AUTH })).json();
+    const entry = h[prompt_id];
+    if (!entry) continue;
+    if (entry.status?.status_str === "error") throw new Error(`ComfyUI-feil for ${prefix}`);
+    const img = entry.outputs?.[NODE.save]?.images?.[0];
+    if (!img) continue;
+    const params = new URLSearchParams({ filename: img.filename, subfolder: img.subfolder ?? "", type: img.type });
+    return Buffer.from(await (await fetch(`${COMFY}/view?${params}`, { headers: AUTH })).arrayBuffer());
+  }
+}
+
+// ---------- Etterbehandling ----------
+async function saveCandidate(png: Buffer, outBase: string) {
+  await sharp(png).resize(448, 576).webp({ quality: 82 }).toFile(`${outBase}.webp`);
+  await sharp(png).resize(224, 288).webp({ quality: 78 }).toFile(`${outBase}_thumb.webp`);
+}
+
+function seedFor(id: string, n: number) {
+  return (parseInt(createHash("sha256").update(id).digest("hex").slice(0, 8), 16) + n) >>> 0;
+}
+
+// ---------- Hovedløp ----------
+async function main() {
+  const args = process.argv.slice(2);
+  const get = (k: string, d?: string) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
+  const only = args.includes("--only") ? args.slice(args.indexOf("--only") + 1).filter((a) => !a.startsWith("--")) : null;
+  const seeds = Number(get("--seeds", "3"));
+  const force = args.includes("--force");
+  const dryRun = args.includes("--dry-run");
+  const out = get("--out", "pipeline/candidates")!;
+
+  let exercises: any[] = JSON.parse(readFileSync(get("--exercises", "data/exercises.json")!, "utf8"));
+  if (only) exercises = exercises.filter((e) => only.includes(e.id));
+
+  // Valider før vi tar lease – ikke hold GPU-en mens vi oppdager manglende filer
+  const jobs: { id: string; pos: "0" | "1"; pose: string; prompt: string }[] = [];
+  for (const ex of exercises) for (const pos of ["0", "1"] as const) {
+    const pose = `pipeline/poses/${ex.id}/${pos}_pose.png`;
+    const prompt = ex.bildePrompt?.[pos];
+    if (!existsSync(pose)) { console.error(`MANGLER skjelett ${pose}`); continue; }
+    if (!prompt) { console.error(`MANGLER bildePrompt ${ex.id}/${pos}`); continue; }
+    const done = [...Array(seeds).keys()].every((n) => existsSync(`${out}/${ex.id}/${pos}_s${n}.webp`));
+    if (done && !force) continue;
+    jobs.push({ id: ex.id, pos, pose, prompt: STYLE_PREFIX + prompt });
+  }
+  console.log(`${jobs.length} posisjoner × ${seeds} seeds`);
+  if (dryRun || jobs.length === 0) return;
+
+  const lease = await acquire();
+  const hb = setInterval(() => heartbeat(lease).catch(() => {}), 5 * 60 * 1000);
+  try {
+    for (const j of jobs) {
+      const poseName = await uploadImage(j.pose);
+      mkdirSync(`${out}/${j.id}`, { recursive: true });
+      for (let n = 0; n < seeds; n++) {
+        const t0 = Date.now();
+        const png = await generate(j.prompt, poseName, seedFor(j.id, n), `mintrener/${j.id}_${j.pos}_s${n}`);
+        writeFileSync(`${out}/${j.id}/${j.pos}_s${n}.png`, png);
+        await saveCandidate(png, `${out}/${j.id}/${j.pos}_s${n}`);
+        console.log(`${j.id}/${j.pos} seed ${n}: ${((Date.now() - t0) / 1000).toFixed(0)} s`);
+      }
+    }
+  } finally {
+    clearInterval(hb);
+    await release(lease);
+  }
+}
+
+main().catch((e) => { console.error(e); process.exit(1); });
+```
+
+**Merk**
+- Rå PNG beholdes i `candidates/` til QA er gjort; kun godkjent kandidat kopieres til `public/exercises/{id}/{pos}.webp` (A.10).
+- ComfyUI-nodenes id-er (`NODE`) settes én gang etter at grafen er kopiert fra Kitor-skriptene.
+- Ved `SIGINT` under batch: legg til en `process.on("SIGINT")` som kaller `release` – release er idempotent.
 
 ---
 
 ## A.9 Ikoner for muskelgrupper og utstyr
 
-Disse skal ikke gjennom Stable Diffusion. Det er få (ca. 20), de skal være skarpe i små størrelser, og de skal fargelegges av appen (aktiv/inaktiv). Derfor: **SVG, generert som kode av Claude Code/Antigravity**, etter denne guiden:
-
+Uendret fra v1. SVG generert som kode av kodeagenten, ikke diffusjon:
 - ViewBox `0 0 24 24`, strek 1,75 px, `stroke="currentColor"`, ingen fyll
-- Samme visuelle vekt som Lucide-ikonene appen ellers bruker
-- Muskelgrupper: forenklet kroppssilhuett der aktuell gruppe er fylt (`fill="currentColor"`, `opacity="0.35"`)
+- Samme visuelle vekt som Lucide-ikonene appen bruker
+- Muskelgrupper: forenklet kroppssilhuett med aktuell gruppe fylt (`opacity="0.35"`)
 - Utstyr: kettlebell, manual, stang, strikk, matte, hopptau, benk, ingen utstyr
 
-Lagres i `src/assets/icons/`, importeres som React-komponenter.
+Lagres i `src/assets/icons/`.
 
 ---
 
 ## A.10 Kvalitetssikring
 
-Hver øvelse gjennomgås manuelt før den godkjennes. Skriptet kan lage en kontaktkopi (`contact_sheet.py`, ikke skrevet ennå) med kildefoto, skjelett og ferdig bilde side om side per øvelse – det gjør gjennomgangen til en 20-minutters jobb i stedet for 200 filåpninger.
+**Seed-utvalg er hovedgrepet.** Tre seeds per posisjon, beste velges. Ved 30–60 s per bilde koster et 3× overshoot på 100 illustrasjoner under to timer GPU-tid – det billigste kvalitetstiltaket som finnes.
 
-**Sjekkliste per bilde**
-- [ ] Kroppsstillingen viser riktig øvelse, og en som ikke kjenner øvelsen ville forstått den
-- [ ] Start og slutt er tydelig forskjellige
+**Kontaktkopi:** `scripts/contactSheet.ts` lager én PNG per øvelse med skjelettet og de tre kandidatene per posisjon side om side. Gjennomgangen blir da ett bilde per øvelse.
+
+**Valg registreres** i `pipeline/selection.json`: `{ "kettlebell-swing": { "0": 2, "1": 0 } }`. `scripts/promoteSelected.ts` kopierer valgte kandidater til `public/exercises/` og setter `bildeStatus: "godkjent"` i biblioteket.
+
+**Sjekkliste per posisjon**
+- [ ] Kroppsstillingen viser riktig øvelse; en som ikke kjenner øvelsen ville forstått den
+- [ ] Start og slutt er tydelig forskjellige, fra samme kameraposisjon
 - [ ] Riktig utstyr, holdt riktig
-- [ ] Ingen ekstra lemmer, feil antall fingre er akseptabelt om hendene er små
-- [ ] Ingen rester av bakgrunn etter rembg (sjekk mot mørk bakgrunn)
-- [ ] Figuren er sentrert og fyller rammen omtrent likt som de andre
+- [ ] **Hender:** riktig antall fingre der de er synlige, naturlig grep. Sjekk spesielt hender på korsrygg, hofter og rundt håndtak
+- [ ] Antrekk og farger som i de andre bildene (ingen drift)
+- [ ] Hele kroppen synlig, ikke beskåret ved føttene
 - [ ] Filstørrelse innenfor grensen
 
+**Hender og fingre – mekanikken**
+
+Negativ prompt er inaktiv ved cfg 1,0, og telleinstruksjoner i positiv prompt følges svakt. Tiltak i prioritert rekkefølge:
+
+1. Design posene så hendene er opptatt eller nøytrale (A.6)
+2. Beskriv hva hendene gjør i prompten, ikke antall (A.5)
+3. `detect_hand: enable` i DWPose når skjelett lages fra foto
+4. Seed-utvalg
+5. Inpaint-reparasjon i ComfyUI (maske + samme modell) for enkeltbilder som ellers er perfekte – siste utvei
+
 **Vanlige feil og tiltak**
+
 | Problem | Tiltak |
 |---|---|
-| Feil stilling | Sjekk skjelettet først. Er skjelettet riktig: øk ControlNet strength til 0,95. Er skjelettet feil: nytt kildefoto med bedre lys og kontrast |
-| Ansiktstrekk dukker opp | Legg «faceless» tidligere i prompten, øk vekten: `(faceless:1.3)` |
-| Skygge/gulv | Legg `(no shadow:1.2)` i positiv prompt, eller beskjær |
-| Ulik stil mellom bilder | Fast seed hjelper, stil-LoRA hjelper mer |
-| rembg spiser deler av figuren | Prøv modell `u2net` i stedet, eller generer med lysegrå bakgrunn (`#F3F4F6`) og maskér på farge |
+| Feil stilling | Sjekk skjelettet først. Er skjelettet riktig: øk ControlNet strength til 0,95–1,0. Er skjelettet feil: nytt foto eller juster koordinatene |
+| Riktig stilling, men stiv eller unaturlig | Senk end_percent til 0,5 – slipper kontrollen tidligere |
+| Antrekk eller farger drifter | Stram fargespesifikasjonen i stilprefiksen, legg antrekk før scenebeskrivelse |
+| Fingerartefakter | Se listen over; ny seed er billigere enn ny prompt |
+| Beskåret ved føttene | «space above head and below feet» står i prefiksen; hvis det ikke holder, skaler skjelettet ned 10 % på lerretet |
+| Bakgrunn ikke jevn | Legg «uniform» foran «light gray seamless studio backdrop» |
 
-Underkjente bilder: sett `"bildeStatus": "regenerer"` i JSON med en merknad, juster prompt eller kildefoto, kjør `--only <id> --force`.
+Underkjente posisjoner: sett `bildeStatus: "regenerer"` med merknad, juster skjelett eller prompt, kjør `--only <id> --force`.
 
 ---
 
 ## A.11 Integrasjon i appen
 
-**Lagring:** Bildene pakkes som statiske filer i Firebase Hosting under `/exercises/{id}/0.webp`, `1.webp`, `0_thumb.webp`, `1_thumb.webp`. Ikke Firebase Storage – statisk hosting er gratis, cachebart av service worker og krever ingen tilgangsregler.
+**Lagring:** statiske filer i Firebase Hosting under `/exercises/{id}/0.webp`, `1.webp`, `0_thumb.webp`, `1_thumb.webp`. Ikke Storage.
 
-**Offline:** Service worker forhåndslaster alle miniatyrer (< 1 MB). Fullstørrelse lastes ved behov og caches ved første visning. Da fungerer øvelseslisten offline umiddelbart, og bilder man har sett én gang forblir tilgjengelige.
+**Offline:** service worker forhåndslaster alle miniatyrer (< 3 MB ved 120 øvelser). Fullstørrelse lastes ved behov og caches ved første visning.
 
-**Visning:** `<ExerciseImage id pos size />`-komponent som velger riktig fil, viser miniatyr som plassholder mens 512 lastes, og faller tilbake til muskelgruppe-ikon hvis bildet mangler (`bildeStatus !== "godkjent"`).
+**Visning:** `<ExerciseImage id pos size />` – portrettkort 7:9 med avrundede hjørner, miniatyr som plassholder mens 448 lastes, fallback til muskelgruppe-ikon hvis `bildeStatus !== "godkjent"`. I *Led en gruppe* (Vedlegg B.0.3) veksler komponenten mellom 0 og 1 i øvelsens tempo.
 
-**Egne øvelser:** Brukerens egne bilder går til Firebase Storage som før (kapittel 5). Disse går ikke gjennom pipelinen.
+**Egne øvelser:** brukerens egne bilder går til Firebase Storage som før. Ikke gjennom pipelinen.
 
-**Felt i øvelsesskjemaet** (utvider kapittel 6 i hovedspekken):
+**Felt i øvelsesskjemaet**
 ```json
 "bildePrompt": { "0": "...", "1": "..." },
 "bildeVinkel": "side | front",
-"bildeStatus": "mangler | generert | godkjent | regenerer",
+"bildeStatus": "mangler | kandidater | godkjent | regenerer",
 "bildeMerknad": "valgfri kommentar fra gjennomgang"
 ```
 
@@ -484,28 +441,53 @@ Underkjente bilder: sett `"bildeStatus": "regenerer"` i JSON med en merknad, jus
 
 ## A.12 Lisens og opphav
 
-- SDXL 1.0: CreativeML Open RAIL++-M. Bruk av generert innhold er tillatt, også kommersielt. Modellen kan ikke brukes til visse formål listet i lisensen – ingen av dem er relevante her.
-- ControlNet-modellene fra xinsir og thibaud: Apache 2.0.
-- Eventuell stil-LoRA: sjekk lisens individuelt på Civitai. Feltet «Commercial use» skal tillate «Generated images». Noter LoRA-navn og lisens i `pipeline/LICENSES.md`.
-- Kildefoto av deg selv: ditt. Kildefoto fra free-exercise-db: offentlig eiendom. Skjelettene fra OpenPose inneholder uansett ingen gjenkjennbar informasjon.
-- rembg: MIT.
-- Ferdige bilder: ingen opphavsrettskrav fra modellleverandør. Legg en kort linje i appens «Om»-side: «Illustrasjoner generert med Stable Diffusion XL, posisjoner basert på egne referansefoto.»
+| Komponent | Lisens | Konsekvens |
+|---|---|---|
+| **Flux.1-dev** | FLUX.1 [dev] Non-Commercial License | Bruk av generert innhold er tillatt for ikke-kommersielle formål. En gratis app uten inntekt ligger innenfor. **Skal Min Trener tjene penger – betalt nivå, sponsing, salg – må øvelsesbildene regenereres** med en modell som tillater det (SDXL, eller Flux under kommersiell lisens). Pipelinen er bygget så det er et modellbytte, ikke en omskriving |
+| ControlNet Union Pro 2.0 (Shakker-Labs) | Følger Flux.1-dev-lisensen | Samme forbehold |
+| astrid_k-LoRA | Eirik / SynthIQ, eget verk | Ingen begrensning. Instruktøren er en fiktiv person |
+| Referansefoto | Egne, eller free-exercise-db (offentlig eiendom) | Skjelettene inneholder ingen gjenkjennbar informasjon |
+| sharp | Apache 2.0 | |
+
+Beslutningen om ikke-kommersiell lisens er tatt bevisst, og skal stå i `docs/DECISIONS.md` med dato. Den henger sammen med sideinntekt-vurderingen: den dagen appen skal gi inntekt, er regenerering av 200 bilder en kjent kostnad (én kveld GPU-tid pluss QA), ikke en overraskelse.
+
+«Om»-siden i appen: «Illustrasjoner generert med Flux, instruktør er en fiktiv person skapt for appen.»
 
 ---
 
 ## A.13 Oppgaveliste for kodeagent
 
-Rekkefølge for Claude Code eller Antigravity. Hver oppgave har et akseptansekriterium.
-
 | # | Oppgave | Akseptanse |
 |---|---|---|
-| 1 | Utvid øvelsesskjemaet med feltene i A.11, oppdater JSON Schema-validering | `npm run validate:exercises` passerer for tomt bibliotek |
-| 2 | Generer `bildePrompt` for alle øvelser etter reglene i A.5 | Alle øvelser har to prompter, hver under 40 ord, ingen inneholder øvelsens navn |
-| 3 | Lag `pipeline/` med `generate.py`, `workflow_api.json`, `requirements.txt`, `README.md` | `python generate.py --dry-run` lister manglende kildefoto uten å kontakte ComfyUI |
-| 4 | Lag `contact_sheet.py` | Én PNG per 20 øvelser med kildefoto, skjelett og resultat |
-| 5 | Lag SVG-ikoner etter A.9 | 20 ikoner, alle rendres korrekt i 16 og 24 px |
-| 6 | Lag `<ExerciseImage />` med miniatyr-plassholder og ikon-fallback | Storybook eller testside viser alle tre tilstander |
-| 7 | Service worker: forhåndslast `*_thumb.webp`, cache fullstørrelse ved behov | Øvelseslisten viser miniatyrer i flymodus |
-| 8 | Om-side med opphavstekst fra A.12 | Tekst synlig |
+| 1 | Utvid øvelsesskjemaet med feltene i A.11, oppdater JSON Schema-validering | `npm run validate:exercises` passerer |
+| 2 | Generer `bildePrompt` for alle øvelser etter reglene i A.5, inkludert håndsetning | Alle øvelser har to prompter, hver under 50 ord, alle nevner hendene, ingen negasjoner, ingen inneholder øvelsens navn |
+| 3 | Kopier verifisert graf fra Kitor-skriptene til `pipeline/workflow_api.json`, sett `NODE`-id-er | Grafen kjører uendret mot `/comfy-mintrener` med ett testbilde |
+| 4 | `scripts/exportComfyUiBatch.ts` etter A.8 med arbiter-flyt, heartbeat, release i finally og `--dry-run` | Dry-run lister manglende skjeletter uten å kontakte Kitor; avbrutt batch frigir lease |
+| 5 | `scripts/drawPose.ts`: tegn COCO-18-skjelett 896×1152 fra `*_pose.json` | Skjelett for stol-knebøy tegnet og godkjent visuelt |
+| 6 | `scripts/extractPose.ts`: DWPose fra referansefoto via ComfyUI, `detect_hand: enable` | Skjelett med håndpunkter for kettlebell-swing |
+| 7 | `scripts/contactSheet.ts` og `scripts/promoteSelected.ts` | Kontaktkopi per øvelse; promotering setter `bildeStatus` |
+| 8 | **Pilot:** 3 øvelser × 2 posisjoner × 3 seeds, QA inkludert hender | Alle seks posisjoner har én godkjent kandidat |
+| 9 | Full batch, deretter QA | Alle P1-øvelser `godkjent` |
+| 10 | SVG-ikoner etter A.9 | 20 ikoner, korrekte i 16 og 24 px |
+| 11 | `<ExerciseImage />` med portrettkort, plassholder og ikon-fallback | Testside viser alle tre tilstander |
+| 12 | Service worker: forhåndslast miniatyrer | Øvelseslisten viser miniatyrer i flymodus |
+| 13 | Om-side med opphavstekst, `DECISIONS.md` med lisensbeslutningen | Tekst synlig, beslutning datert |
 
-Oppgave 3 kan gjøres først for å teste pipelinen med 5 øvelser før biblioteket er ferdig.
+Oppgave 3, 4 og 8 gjøres først, så snart kitor-eier har gitt klarsignal.
+
+---
+
+## A.14 Endringslogg v1 → v2
+
+| Område | v1 | v2 | Grunn |
+|---|---|---|---|
+| Stil | Flat vektor, transparent bakgrunn | Fotorealistisk, fast instruktør, studiobakgrunn | Testbatch 2–3 ga høy kvalitet og gjenkjennbar instruktør. Person-LoRA tilfører ingenting i vektorstil. Godkjent av Eirik |
+| Modell | SDXL 1.0 | Flux.1-dev fp8 + astrid_k-LoRA | Kvalitet. Lisens er ikke-kommersiell – bevisst valg, se A.12 |
+| ControlNet | xinsir OpenPose SDXL | Shakker-Labs Union Pro 2.0, openpose-type | Verifisert på Kitor, inkludert håndtegnede skjeletter |
+| Tilgang | ComfyUI lokalt på LAN, port 8188 | HTTPS via Tailscale, bearer-token, arbiter-lease | Kitor deler GPU med andre prosjekter |
+| Negativ prompt | Brukt aktivt | Inaktiv (cfg 1,0) | Flux-egenskap. Alt sies positivt |
+| Oppløsning | 1024² kvadrat | 896×1152 portrett | Passer figur og mobil bedre |
+| Bakgrunnsfjerning | rembg | Ingen | Fotorealistisk fristilling gir artefakter |
+| Skript | Python `generate.py` | TypeScript `scripts/exportComfyUiBatch.ts` | Samme språk som appen, skript fantes allerede i repoet |
+| QA | Én seed, manuell sjekk | Tre seeds per posisjon, kontaktkopi, promoteringsskript | Billigste kvalitetstiltak |
+| Hender | Ikke omtalt | Eget regelsett i A.5, A.6, A.10 | To av 24 testbilder hadde fingerartefakter |
