@@ -15,13 +15,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   isTimerRunning,
 }) => {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/95 border-t border-zinc-800/80 backdrop-blur-lg px-4 py-2 select-none">
+    <nav className="shrink-0 w-full z-40 bg-zinc-950/95 border-t border-zinc-800/80 backdrop-blur-lg px-4 py-1.5 select-none">
       <div className="max-w-md mx-auto flex items-center justify-around">
         {/* 1. Timer Fane */}
         <button
           onClick={() => onTabChange('timer')}
           aria-label="Gå til Timer"
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-all ${
             activeTab === 'timer'
               ? 'text-emerald-400 font-bold'
               : 'text-zinc-500 hover:text-zinc-300'
@@ -40,7 +40,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         <button
           onClick={() => onTabChange('builder')}
           aria-label="Gå til Bygg økt"
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-all ${
             activeTab === 'builder'
               ? 'text-emerald-400 font-bold'
               : 'text-zinc-500 hover:text-zinc-300'
@@ -54,7 +54,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         <button
           onClick={() => onTabChange('exercises')}
           aria-label="Gå til Øvelser"
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-all ${
             activeTab === 'exercises'
               ? 'text-emerald-400 font-bold'
               : 'text-zinc-500 hover:text-zinc-300'

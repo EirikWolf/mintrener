@@ -18,6 +18,7 @@ import {
   Moon,
   Zap,
   Activity,
+  Dumbbell,
 } from 'lucide-react';
 
 interface TimerDisplayProps {
@@ -61,25 +62,25 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Bakgrunnsfarge og gradient avhengig av aktiv fase
+  // Fargetema basert på intervallfase
   const getPhaseStyles = () => {
     switch (state.phase) {
       case 'work':
         return {
-          bg: 'bg-gradient-to-b from-emerald-950 via-emerald-900 to-zinc-950',
+          bg: 'bg-gradient-to-b from-emerald-950/80 via-emerald-950/40 to-zinc-950',
           badgeBg: 'bg-emerald-500 text-zinc-950 font-black',
           badgeText: 'ARBEID',
         };
       case 'rest':
       case 'round_rest':
         return {
-          bg: 'bg-gradient-to-b from-amber-950 via-amber-900 to-zinc-950',
+          bg: 'bg-gradient-to-b from-amber-950/80 via-amber-950/40 to-zinc-950',
           badgeBg: 'bg-amber-500 text-zinc-950 font-black',
-          badgeText: state.phase === 'round_rest' ? 'PAUSE MELLOM RUNDER' : 'PAUSE / HVILE',
+          badgeText: state.phase === 'round_rest' ? 'PAUSE MELLOM RUNDER' : 'PAUSE',
         };
       case 'prepare':
         return {
-          bg: 'bg-gradient-to-b from-blue-950 via-blue-900 to-zinc-950',
+          bg: 'bg-gradient-to-b from-blue-950/80 via-blue-950/40 to-zinc-950',
           badgeBg: 'bg-blue-500 text-zinc-950 font-black',
           badgeText: 'GJØR DEG KLAR',
         };
@@ -96,26 +97,23 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
 
   return (
     <div
-      className={`relative flex flex-col justify-between w-full h-full max-h-[100dvh] max-w-md mx-auto px-4 pt-2 pb-6 sm:pb-8 select-none overflow-hidden transition-colors duration-500 ${phaseStyle.bg}`}
+      className={`relative flex flex-col justify-between w-full h-full max-w-md mx-auto px-4 pt-1.5 pb-2 select-none overflow-hidden transition-colors duration-500 ${phaseStyle.bg}`}
     >
-      {/* 1. TOPPBAR: Bruker, Tittel, sensor/lyd/dvale-ikoner og lås */}
-      <header className="flex flex-col gap-2 pt-1 z-10">
+      {/* 1. TOPPBAR */}
+      <header className="flex flex-col gap-1.5 pt-0.5 shrink-0 z-10">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+          {/* Venstre: Bruker & Tittel */}
+          <div className="flex items-center gap-2">
             <UserMenu />
-            <div>
-              <h2 className="text-xs uppercase tracking-widest text-zinc-400 font-bold line-clamp-1">
-                {workout.name}
-              </h2>
-              <span className="text-[11px] text-zinc-400 font-mono">
-                Totalt: <strong className="text-zinc-200">{formatTime(state.totalRemainingSeconds)}</strong>
-              </span>
+            <div className="flex items-center gap-1">
+              <Dumbbell className="w-4 h-4 text-emerald-400" />
+              <span className="font-black text-xs sm:text-sm tracking-tight text-white">Min Trener</span>
             </div>
           </div>
 
-          {/* Kontrollknapper for lyd, vibrasjon, dvale/skjerm og tastelås */}
-          <div className="flex items-center gap-1 bg-zinc-900/80 border border-zinc-800/80 backdrop-blur-md rounded-full p-1 shadow-md">
-            {/* Dvale / Skjermlås-bryter */}
+          {/* Høyre: Sensor- og kontrollknapper */}
+          <div className="flex items-center gap-0.5 bg-zinc-900/90 border border-zinc-800/80 backdrop-blur-md rounded-full p-1 shadow-sm">
+            {/* Dvale / Skjerm */}
             <button
               onClick={onToggleWakeLock}
               title={state.wakeLockEnabled ? 'Skjerm holdes på (dvale av)' : 'Skjerm kan gå i dvale'}
@@ -175,9 +173,9 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           </div>
         </div>
 
-        {/* Treningsøkt-velger (kun synlig når timeren ikke har startet ennå) */}
+        {/* Treningsøkt-velger (kun synlig når timeren er i hvilemodus) */}
         {state.status === 'idle' && (
-          <div className="flex gap-1.5 p-1 bg-zinc-900/90 border border-zinc-800/80 rounded-xl overflow-x-auto">
+          <div className="flex gap-1 p-1 bg-zinc-900/90 border border-zinc-800/80 rounded-xl overflow-x-auto scrollbar-none">
             {presets.map((tpl) => (
               <button
                 key={tpl.id}
@@ -194,10 +192,20 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             ))}
           </div>
         )}
+
+        {/* Info-linje med totaltid og rundeinfo */}
+        <div className="flex items-center justify-between px-1 text-[11px] text-zinc-400 font-medium">
+          <span className="truncate max-w-[200px] font-semibold text-zinc-300">
+            {workout.name}
+          </span>
+          <span className="font-mono bg-zinc-900/80 border border-zinc-800/60 rounded-md px-2 py-0.5 text-zinc-200">
+            Totalt: <strong>{formatTime(state.totalRemainingSeconds)}</strong>
+          </span>
+        </div>
       </header>
 
       {/* 2. HOVEDSEKSJON: Fase, Øvelsesnavn, Sirkulær indikator */}
-      <main className="flex flex-col items-center justify-center flex-1 my-auto space-y-2 text-center z-10 min-h-0">
+      <main className="flex flex-col items-center justify-center flex-1 my-auto space-y-1.5 text-center z-10 min-h-0">
         {/* Rundenummer / Intervall & Fase-badge */}
         <div className="flex flex-col items-center gap-1">
           <div className="flex items-center gap-2 text-[10px] sm:text-xs font-bold tracking-wider text-zinc-400 uppercase">
@@ -219,24 +227,17 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           </span>
         </div>
 
-        {/* Nåværende Øvelsesnavn */}
-        <div className="min-h-[2.25rem] sm:min-h-[2.75rem] flex flex-col justify-center items-center px-2">
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white drop-shadow-md line-clamp-1">
+        {/* Øvelsestittel (Stort og tydelig) */}
+        <div className="min-h-[2rem] flex items-center justify-center px-4">
+          <h1 className="text-xl xs:text-2xl sm:text-3xl font-black text-white tracking-tight line-clamp-1 drop-shadow-sm">
             {state.phase === 'prepare'
               ? 'Gjør deg klar'
-              : state.phase === 'round_rest'
-              ? 'Pust ut'
               : state.currentExercise?.name || workout.name}
           </h1>
-          {state.phase === 'work' && state.currentExercise?.nameEn && (
-            <span className="text-[10px] text-zinc-400 font-medium">
-              ({state.currentExercise.nameEn})
-            </span>
-          )}
         </div>
 
-        {/* Sirkulær fremdriftsvisning med stor tidsnedtelling */}
-        <div className="py-1 flex items-center justify-center w-full max-h-[200px] xs:max-h-[230px]">
+        {/* Sirkelmåler med gjenværende tid */}
+        <div className="w-full flex items-center justify-center py-1">
           <CircularProgress
             progress={state.phaseProgress}
             remainingSeconds={state.phaseRemainingSeconds}
@@ -261,8 +262,8 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
       </main>
 
       {/* 3. BUNNBAR: Tommelknapper («Én hånd, ett blikk») */}
-      <footer className="pt-2 pb-2 z-10">
-        <div className="flex items-center justify-between gap-3 max-w-sm mx-auto">
+      <footer className="pt-1 pb-1 shrink-0 z-10">
+        <div className="flex items-center justify-between gap-2.5 max-w-sm mx-auto">
           {/* Forrige-knapp */}
           <button
             onClick={onPrevious}
@@ -316,7 +317,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
 
         {/* Nullstill-knapp ved pause */}
         {state.status === 'paused' && !state.isLocked && (
-          <div className="flex justify-center mt-2 animate-in fade-in duration-200">
+          <div className="flex justify-center mt-1 animate-in fade-in duration-200">
             <button
               onClick={onReset}
               className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-400 hover:text-rose-400 py-1 px-3 rounded-lg hover:bg-zinc-900/60 transition-colors"

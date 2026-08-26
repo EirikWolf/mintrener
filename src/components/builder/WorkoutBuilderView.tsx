@@ -160,7 +160,7 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full max-h-[100dvh] max-w-md mx-auto px-4 pt-2 pb-20 select-none overflow-hidden">
+    <div className="flex flex-col h-full max-w-md mx-auto px-4 pt-2 pb-2 select-none overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between pb-1 shrink-0">
         <div>
