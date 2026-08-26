@@ -3,7 +3,7 @@ import { buildComfyPromptJob, exportAllExercisePromptJobs, ASTRID_FLUX_BASE_STYL
 import { ExerciseItem } from '../../schemas/exerciseSchema';
 
 const mockExercise: ExerciseItem = {
-  id: 'knebøy-test',
+  id: 'kneboy',
   navn: { nb: 'Knebøy', en: 'Squats' },
   type: 'reps',
   kategori: 'kroppsvekt',
@@ -16,26 +16,27 @@ const mockExercise: ExerciseItem = {
   bildeVinkel: 'side',
   bildeStatus: 'mangler',
   bildePrompt: {
-    '0': 'standing upright with athletic posture, hands clasped',
-    '1': 'in a deep squat position, thighs parallel to floor',
+    '0': 'actively locking in an athletic squat stance, feet planted wide, engaged quads and glutes, hands raised in ready position, focused breath',
+    '1': 'captured mid-rep in the lowest point of a deep powerful squat, thighs parallel to ground, intense muscular tension in legs and glutes, torso upright, powerful dynamic exertion',
   },
 };
 
 describe('ImagePromptService (Flux + Astrid LoRA)', () => {
-  it('genererer gyldig ComfyUI prompt med kanonisk Astrid-stil', () => {
+  it('genererer gyldig ComfyUI prompt med dynamisk bevegelse og svetteglans', () => {
     const job = buildComfyPromptJob(mockExercise, 0);
 
-    expect(job.exerciseId).toBe('knebøy-test');
+    expect(job.exerciseId).toBe('kneboy');
     expect(job.phaseIndex).toBe(0);
     expect(job.positivePrompt).toContain(ASTRID_FLUX_BASE_STYLE);
-    expect(job.positivePrompt).toContain('standing upright');
-    expect(job.positivePrompt).toContain('charcoal modern seamless');
+    expect(job.positivePrompt).toContain('actively locking in');
+    expect(job.positivePrompt).toContain('light sweat sheen');
+    expect(job.positivePrompt).toContain('tense flexed muscles');
   });
 
   it('eksporterer alle faser for en liste med øvelser', () => {
     const jobs = exportAllExercisePromptJobs([mockExercise]);
     expect(jobs.length).toBe(2);
-    expect(jobs[0].outputFilename).toBe('knebøy-test-0.png');
-    expect(jobs[1].outputFilename).toBe('knebøy-test-1.png');
+    expect(jobs[0].outputFilename).toBe('kneboy-0.png');
+    expect(jobs[1].outputFilename).toBe('kneboy-1.png');
   });
 });

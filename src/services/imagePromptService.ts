@@ -1,14 +1,14 @@
 import { ExerciseItem } from '../schemas/exerciseSchema';
 
 /**
- * Kanonisk stilmal for Min Trener (Flux.1 Dev + Astrid LoRA)
- * Referanse: Vedlegg A (v2) & revidert spesifikasjon 2026-08-26
+ * Kanonisk dynamisk stilmal for Min Trener (Flux.1 Dev + Astrid LoRA)
+ * Oppdatert med helkroppsfokus, aktiv bevegelse, muskelspenning og lett svetteglans
  */
 export const ASTRID_FLUX_BASE_STYLE =
-  'ASTRID, a woman, photorealistic photo of a fit, toned and visibly muscular athletic woman with sun-tanned skin, golden tan, defined shoulders and abs';
+  'ASTRID, a woman, full body shot from head to feet completely visible within frame, wide angle view, no cropping, dynamic action fitness photography of an athletic woman actively exercising with physical exertion, light sweat sheen on sun-tanned skin, golden tan, engaged core, tense flexed muscles, focused determined expression';
 
 export const ASTRID_FLUX_OUTFIT_STYLE =
-  'in a bright modern gym, wearing a charcoal modern seamless cropped racerback sports bra and matching high-waist ribbed leggings, black training shoes, natural lighting, sharp focus, full body';
+  'in a bright modern gym, wearing a charcoal modern seamless cropped racerback sports bra and matching high-waist ribbed leggings, black training shoes, natural athletic lighting, sharp focus';
 
 export interface ComfyPromptJob {
   exerciseId: string;
@@ -21,7 +21,7 @@ export interface ComfyPromptJob {
 }
 
 /**
- * Bygger en fullstendig ComfyUI prompt-jobb for en gitt øvelse og fase i henhold til Vedlegg A (v2)
+ * Bygger en fullstendig ComfyUI prompt-jobb for en gitt øvelse og fase
  */
 export function buildComfyPromptJob(
   exercise: ExerciseItem,
@@ -62,7 +62,6 @@ export function exportAllExercisePromptJobs(
         jobs.push(buildComfyPromptJob(exercise, i));
       }
     } else {
-      // Standard: 2 faser (start og slutt)
       jobs.push(buildComfyPromptJob(exercise, 0));
       jobs.push(buildComfyPromptJob(exercise, 1));
     }

@@ -7,8 +7,7 @@ const COMFY_PATH = '/comfy-mintrener';
 function getToken(): string {
   const envPath = path.resolve(process.cwd(), '.env');
   if (fs.existsSync(envPath)) {
-    const content = fs.readFileSync(envPath, 'utf-8');
-    const match = content.match(/^KITOR_TOKEN=(.+)$/m);
+    const match = fs.readFileSync(envPath, 'utf-8').match(/^KITOR_TOKEN=(.+)$/m);
     if (match && match[1]) {
       return match[1].trim();
     }
@@ -47,17 +46,15 @@ async function downloadImages() {
           const subfolder = img.subfolder as string;
           const type = img.type || 'output';
 
-          if (filename && (subfolder?.includes('mintrener') || filename.includes('kneboy') || filename.includes('kettlebell') || filename.includes('push-ups'))) {
+          if (filename && subfolder?.includes('mintrener')) {
             const url = `${KITOR_HOST}${COMFY_PATH}/view?filename=${encodeURIComponent(filename)}&subfolder=${encodeURIComponent(subfolder)}&type=${encodeURIComponent(type)}`;
             
-            // Map filnavn til rent format: f.eks. kneboy-0.png, kettlebell-swing-1.png
+            // Map {exercise_id}_step{0|1}_... til {exercise_id}-{phase}.png
             let cleanName = filename;
-            if (filename.includes('kneboy_step0')) cleanName = 'kneboy-0.png';
-            else if (filename.includes('kneboy_step1')) cleanName = 'kneboy-1.png';
-            else if (filename.includes('kettlebell-swing_step0')) cleanName = 'kettlebell-swing-0.png';
-            else if (filename.includes('kettlebell-swing_step1')) cleanName = 'kettlebell-swing-1.png';
-            else if (filename.includes('push-ups_step0')) cleanName = 'push-ups-0.png';
-            else if (filename.includes('push-ups_step1')) cleanName = 'push-ups-1.png';
+            const match = filename.match(/^([a-zA-Z0-9-]+)_step([0-9]+)/);
+            if (match) {
+              cleanName = `${match[1]}-${match[2]}.png`;
+            }
 
             console.log(`📥 Laster ned: ${filename} -> public/images/exercises/${cleanName}`);
             const imgRes = await fetch(url, {
