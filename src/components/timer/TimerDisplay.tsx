@@ -40,6 +40,7 @@ interface TimerDisplayProps {
   state: TimerState;
   presets: WorkoutTemplate[];
   onSelectWorkout: (w: WorkoutTemplate) => void;
+  onStartWorkoutDirectly?: (w: WorkoutTemplate) => void;
   onStart: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -60,6 +61,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   state,
   presets,
   onSelectWorkout,
+  onStartWorkoutDirectly,
   onStart,
   onPause,
   onResume,
@@ -507,8 +509,12 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
         <MicroWorkoutModal
           onClose={() => setIsMicroModalOpen(false)}
           onStartMicroWorkout={(microWorkout) => {
-            onSelectWorkout(microWorkout);
-            onStart();
+            if (onStartWorkoutDirectly) {
+              onStartWorkoutDirectly(microWorkout);
+            } else {
+              onSelectWorkout(microWorkout);
+              onStart();
+            }
           }}
         />
       )}
@@ -524,8 +530,12 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           workout={workout}
           onClose={() => setIsGroupModalOpen(false)}
           onStartSyncedWorkout={(roomState) => {
-            onSelectWorkout(roomState.workout);
-            onStart();
+            if (onStartWorkoutDirectly) {
+              onStartWorkoutDirectly(roomState.workout);
+            } else {
+              onSelectWorkout(roomState.workout);
+              onStart();
+            }
           }}
         />
       )}

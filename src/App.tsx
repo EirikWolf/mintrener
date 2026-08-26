@@ -67,15 +67,29 @@ export function App() {
     }
   }, [state.status, state.totalElapsedSeconds, user, selectedWorkout]);
 
+  const [autoStartPending, setAutoStartPending] = useState(false);
+
   const handleSelectWorkout = (tpl: WorkoutTemplate) => {
     setSelectedWorkout(tpl);
     resetWorkout();
   };
 
-  const handleStartCustomWorkout = (customW: WorkoutTemplate) => {
-    setSelectedWorkout(customW);
+  const handleStartWorkoutDirectly = (tpl: WorkoutTemplate) => {
+    setSelectedWorkout(tpl);
     resetWorkout();
+    setAutoStartPending(true);
     setActiveTab('timer');
+  };
+
+  useEffect(() => {
+    if (autoStartPending) {
+      setAutoStartPending(false);
+      startWorkout();
+    }
+  }, [autoStartPending, selectedWorkout, startWorkout]);
+
+  const handleStartCustomWorkout = (customW: WorkoutTemplate) => {
+    handleStartWorkoutDirectly(customW);
   };
 
   const [builderInitialWorkout, setBuilderInitialWorkout] = useState<WorkoutTemplate | null>(null);
@@ -104,6 +118,7 @@ export function App() {
             state={state}
             presets={allPresets}
             onSelectWorkout={handleSelectWorkout}
+            onStartWorkoutDirectly={handleStartWorkoutDirectly}
             onStart={startWorkout}
             onPause={pauseWorkout}
             onResume={resumeWorkout}
