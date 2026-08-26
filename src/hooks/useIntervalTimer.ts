@@ -135,7 +135,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       stateRef.current.currentItemIndex = itemIdx;
       stateRef.current.phaseDuration = duration;
       stateRef.current.phaseRemaining = duration;
-      stateRef.current.phaseStartTime = performance.now();
+      stateRef.current.phaseStartTime = Date.now();
       stateRef.current.lastCountdownBeep = -1;
 
       if (newPhase === 'complete') {
@@ -218,27 +218,20 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     }
   }, [status, setupPhase]);
 
-  // Hoved-timerloop basert på tidsstempler
+  // Hoved-timerloop basert på deterministiske tidsstempler (kjører i bakgrunn)
   useEffect(() => {
     if (status !== 'running') {
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = null;
-      }
       return;
     }
 
-    let lastTick = performance.now();
-
-    const loop = (now: number) => {
-      const deltaSec = (now - lastTick) / 1000;
-      lastTick = now;
-
+    const tick = () => {
+      const now = Date.now();
       const phaseElapsed = (now - stateRef.current.phaseStartTime) / 1000;
       const remaining = Math.max(0, stateRef.current.phaseDuration - phaseElapsed);
 
       setPhaseRemaining(remaining);
-      setTotalElapsed((prev) => prev + deltaSec);
+      const totalElapsedSec = (now - stateRef.current.workoutStartTime) / 1000;
+      setTotalElapsed(Math.max(0, totalElapsedSec));
 
       // Sjekk for 3 - 2 - 1 nedtellingspip
       const wholeSecondsLeft = Math.ceil(remaining);
@@ -257,19 +250,22 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       if (remaining <= 0) {
         advanceToNextPhase();
       }
-
-      // Fortsett timer-loopen så lenge økten ikke er fullført
-      if (stateRef.current.status !== 'completed') {
-        animFrameRef.current = requestAnimationFrame(loop);
-      }
     };
 
-    animFrameRef.current = requestAnimationFrame(loop);
+    // 100ms interval for responsiv oppdatering
+    const intervalId = window.setInterval(tick, 100);
+
+    // Visibility-opphenting når skjermen vekkes fra dvale
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && stateRef.current.status === 'running') {
+        tick();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-      }
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [status, advanceToNextPhase]);
 
@@ -281,8 +277,8 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       await wakeLockService.requestLock();
     }
 
-    stateRef.current.phaseStartTime = performance.now();
-    stateRef.current.workoutStartTime = performance.now();
+    stateRef.current.phaseStartTime = Date.now();
+    stateRef.current.workoutStartTime = Date.now();
     setStatus('running');
     if (phase === 'prepare' && phaseRemaining === workout.prepareDurationSeconds) {
       setupPhase('prepare', 1, 0);
@@ -303,7 +299,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
 
     // Juster phaseStartTime slik at resterende tid bevares nøyaktig
     const currentRemaining = stateRef.current.phaseRemaining;
-    stateRef.current.phaseStartTime = performance.now() - (stateRef.current.phaseDuration - currentRemaining) * 1000;
+    stateRef.current.phaseStartTime = Date.now() - (stateRef.current.phaseDuration - currentRemaining) * 1000;
     setStatus('running');
   }, []);
 

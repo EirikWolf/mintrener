@@ -96,15 +96,15 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
         };
       case 'work':
         return {
-          bg: 'bg-emerald-950/40',
-          badgeBg: 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/80',
+          bg: 'bg-emerald-950/80',
+          badgeBg: 'bg-emerald-950/90 text-emerald-300 border border-emerald-700/80',
           badgeText: 'Arbeid',
         };
       case 'rest':
       case 'round_rest':
         return {
-          bg: 'bg-cyan-950/40',
-          badgeBg: 'bg-cyan-950/80 text-cyan-300 border border-cyan-800/80',
+          bg: 'bg-amber-950/80',
+          badgeBg: 'bg-amber-950/90 text-amber-300 border border-amber-700/80',
           badgeText: phase === 'round_rest' ? 'Rundehvile' : 'Hvile',
         };
       case 'complete':
@@ -150,8 +150,8 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
 
           {/* Høyre: Sensor-, puls- og kontrollknapper */}
           <div className="flex items-center gap-1">
-            {/* PWA Installer-knapp */}
-            <PwaInstallPromptModal />
+            {/* PWA Installer-knapp (vises kun i hvilemodus) */}
+            {state.status === 'idle' && <PwaInstallPromptModal />}
 
             {/* Heart Rate Widget */}
             <HeartRateWidget />
@@ -408,7 +408,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
       </main>
 
       {/* 3. BUNNBAR: Tommelknapper («Én hånd, ett blikk») */}
-      <footer className="pt-1 pb-1 shrink-0 z-10">
+      <footer className="pt-1 pb-[calc(env(safe-area-inset-bottom,0px)+8px)] shrink-0 z-10">
         <div className="flex items-center justify-between gap-2.5 max-w-sm mx-auto">
           {/* Forrige-knapp */}
           <button

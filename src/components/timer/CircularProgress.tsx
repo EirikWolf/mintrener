@@ -62,7 +62,7 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
   const colors = getPhaseColors();
 
   return (
-    <div className="relative flex items-center justify-center w-full max-w-[200px] xs:max-w-[230px] sm:max-w-[270px] aspect-square mx-auto select-none">
+    <div className="relative flex items-center justify-center w-full max-w-[240px] xs:max-w-[270px] sm:max-w-[320px] aspect-square mx-auto select-none">
       <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
         {/* Bakgrunnsspor */}
         <circle
@@ -86,17 +86,17 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
           fill="transparent"
           style={{
             transition: 'stroke-dashoffset 0.1s linear, stroke 0.3s ease',
-            filter: `drop-shadow(0 0 6px ${colors.glow})`,
+            filter: `drop-shadow(0 0 8px ${colors.glow})`,
           }}
         />
       </svg>
 
-      {/* Stor tallvisning i midten – lesbar på 1 meters avstand */}
+      {/* Stor tallvisning i midten – lesbar på 1-2 meters avstand */}
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span className={`font-mono text-6xl xs:text-7xl sm:text-8xl font-black tracking-tight ${colors.text} drop-shadow-md`}>
+        <span className={`font-mono text-7xl sm:text-8xl md:text-9xl font-black tracking-tight ${colors.text} drop-shadow-lg`}>
           {remainingSeconds}
         </span>
-        <span className="text-[10px] sm:text-xs uppercase tracking-widest text-zinc-400 font-semibold mt-0.5">
+        <span className="text-xs uppercase tracking-widest text-zinc-400 font-bold mt-1">
           sekunder
         </span>
       </div>

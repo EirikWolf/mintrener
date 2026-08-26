@@ -17,7 +17,7 @@ interface StrengthLoggerModalProps {
 
 export const StrengthLoggerModal: React.FC<StrengthLoggerModalProps> = ({
   onClose,
-  initialExerciseId = 'kettlebell-goblet-squat',
+  initialExerciseId = 'goblet-squat',
 }) => {
   const { user } = useAuth();
   const [exerciseId, setExerciseId] = useState<string>(initialExerciseId);

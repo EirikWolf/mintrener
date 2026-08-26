@@ -13,9 +13,9 @@ const POPULAR_MICRO_EXERCISES = [
   'planke',
   'kneboy',
   'push-ups',
-  'skulderrotasjon',
-  'utfall',
-  'high-knees',
+  'utfall-forover',
+  'hoye-kneloft',
+  'katte-ku',
 ];
 
 const PRESET_DURATIONS = [

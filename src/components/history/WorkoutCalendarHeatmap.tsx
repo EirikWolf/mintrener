@@ -35,6 +35,14 @@ export const WorkoutCalendarHeatmap: React.FC<WorkoutCalendarHeatmapProps> = ({
     return { count, progress, isGoalReached: count >= weeklyGoal };
   }, [history, weeklyGoal]);
 
+  // Hjelpefunksjon for lokal datonøkkel (YYYY-MM-DD i lokal tidssone)
+  const getLocalDateKey = (d: Date): string => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Generer de siste 28 dagene (4 uker) for heatmap
   const days = useMemo(() => {
     const list = [];
@@ -44,14 +52,14 @@ export const WorkoutCalendarHeatmap: React.FC<WorkoutCalendarHeatmapProps> = ({
     // Lag map av datoer med antall økter
     const workoutDatesMap = new Map<string, number>();
     history.forEach((log) => {
-      const dateKey = new Date(log.completedAt).toISOString().split('T')[0];
+      const dateKey = getLocalDateKey(new Date(log.completedAt));
       workoutDatesMap.set(dateKey, (workoutDatesMap.get(dateKey) || 0) + 1);
     });
 
     for (let i = 27; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
-      const dateKey = d.toISOString().split('T')[0];
+      const dateKey = getLocalDateKey(d);
       const count = workoutDatesMap.get(dateKey) || 0;
       const isToday = i === 0;
 

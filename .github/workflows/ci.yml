@@ -23,7 +23,15 @@ jobs:
         run: npm ci
 
       - name: Run Vitest Unit Tests
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY || 'ci-test-key' }}
+          VITE_FIREBASE_AUTH_DOMAIN: 'mintrener.firebaseapp.com'
+          VITE_FIREBASE_PROJECT_ID: 'mintrener'
         run: npm test
 
       - name: TypeScript & Vite Build
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY || 'ci-test-key' }}
+          VITE_FIREBASE_AUTH_DOMAIN: 'mintrener.firebaseapp.com'
+          VITE_FIREBASE_PROJECT_ID: 'mintrener'
         run: npm run build

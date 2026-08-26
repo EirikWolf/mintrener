@@ -7,13 +7,12 @@ import {
 } from 'firebase/firestore';
 
 const firebaseConfig = {
-  projectId: "mintrener",
-  appId: "1:75260907978:web:c5f62517b0aea66a60bf33",
-  storageBucket: "mintrener.firebasestorage.app",
-  apiKey: "AIzaSyDGFE0j1GmJGCzSveCtnXOut8wdRobybM4",
-  authDomain: "mintrener.firebaseapp.com",
-  messagingSenderId: "75260907978",
-  projectNumber: "75260907978",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "mintrener.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "mintrener",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "mintrener.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "75260907978",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:75260907978:web:c5f62517b0aea66a60bf33",
 };
 
 // Initialiser Firebase App som singleton
