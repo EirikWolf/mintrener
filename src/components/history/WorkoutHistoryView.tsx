@@ -11,7 +11,6 @@ import {
   Trophy,
   Calendar,
   Sparkles,
-  Download,
   FileSpreadsheet,
   FileJson,
   Smile,

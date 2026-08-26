@@ -9,7 +9,7 @@ import {
   subscribeToGroupRoom,
   startGroupWorkout,
 } from '../../services/groupRoomService';
-import { Users, X, Play, Copy, Check, Radio, Sparkles, Shield, ArrowRight } from 'lucide-react';
+import { Users, X, Play, Copy, Check, Radio, Sparkles, ArrowRight } from 'lucide-react';
 
 interface GroupRoomModalProps {
   workout: WorkoutTemplate;

@@ -9,7 +9,7 @@ import {
 } from '../../services/gpsTrackingService';
 import { useAuth } from '../../contexts/AuthContext';
 import { saveCompletedWorkout } from '../../services/firestoreService';
-import { Navigation, Play, Pause, Square, Download, X, Footprints, Bike, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Navigation, Play, Pause, Square, Download, X, Footprints, Bike, CheckCircle2 } from 'lucide-react';
 
 interface GpsTrackerModalProps {
   onClose: () => void;

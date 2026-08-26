@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { CompletedWorkoutLog } from '../../types/models';
-import { Calendar as CalendarIcon, CheckCircle, Flame } from 'lucide-react';
+import { Calendar as CalendarIcon, Flame } from 'lucide-react';
 
 interface WorkoutCalendarHeatmapProps {
   history: CompletedWorkoutLog[];

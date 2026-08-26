@@ -8,24 +8,12 @@ import {
   saveStrengthLog,
   getLastStrengthLogForExercise,
 } from '../../services/strengthLogService';
-import { Dumbbell, X, Plus, Trash2, CheckCircle2, Play, Pause, RotateCcw, Flame, Trophy } from 'lucide-react';
+import { Dumbbell, X, Plus, Trash2, CheckCircle2, Trophy } from 'lucide-react';
 
 interface StrengthLoggerModalProps {
   onClose: () => void;
   initialExerciseId?: string;
 }
-
-const STRENGTH_EXERCISES = [
-  'kneboy',
-  'push-ups',
-  'kettlebell-swing',
-  'kettlebell-goblet-squat',
-  'kettlebell-clean-press',
-  'kettlebell-snatch',
-  'manualer-biceps-curl',
-  'manualer-skulderpress',
-  'manualer-utfall',
-];
 
 export const StrengthLoggerModal: React.FC<StrengthLoggerModalProps> = ({
   onClose,
@@ -40,7 +28,7 @@ export const StrengthLoggerModal: React.FC<StrengthLoggerModalProps> = ({
   ]);
   const [lastLog, setLastLog] = useState<string | null>(null);
   const [restSecondsRemaining, setRestSecondsRemaining] = useState<number | null>(null);
-  const [restDuration, setRestDuration] = useState<number>(60);
+  const [restDuration] = useState<number>(60);
   const [isSaved, setIsSaved] = useState<boolean>(false);
   const restTimerRef = useRef<number | null>(null);
 
