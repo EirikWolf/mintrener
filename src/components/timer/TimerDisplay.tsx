@@ -11,6 +11,8 @@ import { AboutGuideModal } from '../help/AboutGuideModal';
 import { PwaInstallPromptModal } from '../pwa/PwaInstallPromptModal';
 import { getFavoriteProgramIds } from '../../services/favoritesService';
 import { TRAINING_PROGRAMS } from '../../data/programs';
+import { getInterruptedSession, clearInterruptedSession, InterruptedSession } from '../../services/sessionRecoveryService';
+import { checkAdaptiveProgression, ProgressionSuggestion } from '../../services/adaptiveProgressionService';
 import {
   Play,
   Pause,
@@ -33,6 +35,7 @@ import {
   Zap,
   Navigation,
   Users,
+  Sparkles,
 } from 'lucide-react';
 
 interface TimerDisplayProps {
@@ -81,6 +84,19 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   const [isGpsModalOpen, setIsGpsModalOpen] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
+  const [interruptedSession, setInterruptedSession] = useState<InterruptedSession | null>(() => getInterruptedSession());
+  const [adaptiveSuggestion, setAdaptiveSuggestion] = useState<ProgressionSuggestion | null>(null);
+
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem('mintrener_local_workout_history');
+      const hist = raw ? JSON.parse(raw) : [];
+      const sug = checkAdaptiveProgression(workout, hist);
+      setAdaptiveSuggestion(sug);
+    } catch {
+      setAdaptiveSuggestion(null);
+    }
+  }, [workout]);
 
   const formatTime = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
@@ -249,7 +265,68 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           const hasScroll = displayList.length > 4;
 
           return (
-            <div className="space-y-1 pt-0.5 relative">
+            <div className="space-y-2 pt-0.5 relative">
+              {/* 1. Fortsett der du slapp Banner */}
+              {interruptedSession && (
+                <div className="bg-amber-950/90 border border-amber-500/70 rounded-2xl p-2.5 flex items-center justify-between gap-2 shadow-lg animate-in fade-in">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <RotateCcw className="w-4 h-4 text-amber-400 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-white truncate">Fortsett: {interruptedSession.workout.name}</p>
+                      <p className="text-[10px] text-amber-300">Runde {interruptedSession.currentRound} • {Math.floor(interruptedSession.totalElapsedSeconds / 60)}m gjennomført</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => {
+                        clearInterruptedSession();
+                        setInterruptedSession(null);
+                      }}
+                      className="px-2 py-1 text-[10px] font-bold text-zinc-400 hover:text-white"
+                    >
+                      Forkast
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (onStartWorkoutDirectly) {
+                          onStartWorkoutDirectly(interruptedSession.workout);
+                        }
+                        setInterruptedSession(null);
+                      }}
+                      className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-black rounded-xl shadow-sm active:scale-95"
+                    >
+                      Fortsett
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 2. Adaptiv Progresjon forslag */}
+              {adaptiveSuggestion && (
+                <div className={`p-2.5 rounded-2xl border flex items-center justify-between gap-2 shadow-md animate-in fade-in ${
+                  adaptiveSuggestion.type === 'increase'
+                    ? 'bg-emerald-950/90 border-emerald-500/70 text-emerald-300'
+                    : 'bg-blue-950/90 border-blue-500/70 text-blue-300'
+                }`}>
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="font-bold text-white text-xs truncate">{adaptiveSuggestion.title}</p>
+                      <p className="text-[10px] text-zinc-300 truncate">{adaptiveSuggestion.reason}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      onSelectWorkout(adaptiveSuggestion.adaptedWorkout);
+                      setAdaptiveSuggestion(null);
+                    }}
+                    className="px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black rounded-xl text-xs shrink-0 active:scale-95 shadow-sm"
+                  >
+                    Bruk
+                  </button>
+                </div>
+              )}
+
               <div className="flex items-center justify-between px-1 gap-2">
                 <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
                   <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider flex items-center gap-1 shrink-0">

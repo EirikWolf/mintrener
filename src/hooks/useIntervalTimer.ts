@@ -5,6 +5,7 @@ import { wakeLockService } from '../services/wakeLockService';
 import { vibrationService } from '../services/vibrationService';
 import { speechService } from '../services/speechService';
 import { motionTrackerService, MotionMetrics } from '../services/motionTrackerService';
+import { saveInterruptedSession, clearInterruptedSession, InterruptedSession } from '../services/sessionRecoveryService';
 
 interface UseIntervalTimerProps {
   workout: WorkoutTemplate;
@@ -139,6 +140,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       if (newPhase === 'complete') {
         setStatus('completed');
         stateRef.current.status = 'completed';
+        clearInterruptedSession();
       }
     },
     []
@@ -247,6 +249,14 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       // Hvis fasen er utløpt, gå automatisk videre til neste fase
       if (remaining <= 0) {
         advanceToNextPhase();
+      } else if (stateRef.current.status === 'running' && wholeSecondsLeft % 2 === 0) {
+        saveInterruptedSession({
+          workout: stateRef.current.workout,
+          phase: stateRef.current.phase,
+          currentRound: stateRef.current.currentRound,
+          currentItemIndex: stateRef.current.currentItemIndex,
+          totalElapsedSeconds: Math.floor(stateRef.current.totalElapsed),
+        });
       }
     };
 
@@ -286,6 +296,13 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
   const pauseWorkout = useCallback(() => {
     setStatus('paused');
     wakeLockService.releaseLock();
+    saveInterruptedSession({
+      workout: stateRef.current.workout,
+      phase: stateRef.current.phase,
+      currentRound: stateRef.current.currentRound,
+      currentItemIndex: stateRef.current.currentItemIndex,
+      totalElapsedSeconds: Math.floor(stateRef.current.totalElapsed),
+    });
   }, []);
 
   const resumeWorkout = useCallback(async () => {
@@ -304,11 +321,18 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
   const resetWorkout = useCallback(() => {
     setStatus('idle');
     wakeLockService.releaseLock();
+    clearInterruptedSession();
     setupPhase('prepare', 1, 0);
     setTotalElapsed(0);
     setPhaseRemaining(workout.prepareDurationSeconds);
     setPhaseDuration(workout.prepareDurationSeconds);
   }, [workout, setupPhase]);
+
+  const restoreSession = useCallback((session: InterruptedSession) => {
+    setupPhase(session.phase, session.currentRound, session.currentItemIndex);
+    setTotalElapsed(session.totalElapsedSeconds);
+    setStatus('paused');
+  }, [setupPhase]);
 
   const toggleLock = useCallback(() => {
     setIsLocked((prev) => !prev);
@@ -384,6 +408,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     pauseWorkout,
     resumeWorkout,
     resetWorkout,
+    restoreSession,
     skipNext,
     previous,
     toggleLock,
