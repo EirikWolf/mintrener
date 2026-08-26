@@ -3,6 +3,7 @@ import {
   User,
   signInWithPopup,
   signInWithRedirect,
+  getRedirectResult,
   signOut as fbSignOut,
   onAuthStateChanged,
   deleteUser,
@@ -28,6 +29,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
+    // Sjekk om vi kom tilbake fra en mobil redirect-innlogging
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result?.user) {
+          setUser(result.user);
+          const p = await syncUserProfile(result.user);
+          setProfile(p);
+        }
+      })
+      .catch((err) => {
+        console.warn('Redirect innloggingsfeil:', err);
+      });
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
@@ -50,13 +64,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err: unknown) {
-      const error = err as { code?: string };
-      // Fallback til redirect hvis popup blokkeres på mobil
-      if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
+      const error = err as { code?: string; message?: string };
+      if (error.code === 'auth/popup-blocked' || error.code === 'auth/cancelled-popup-request') {
+        // Fallback til full redirect på mobil
         await signInWithRedirect(auth, googleProvider);
+      } else if (error.code === 'auth/operation-not-allowed') {
+        alert('Google Innlogging er ikke aktivert i Firebase Console ennå.\n\nGå til Firebase Console -> Authentication -> Sign-in method -> Google -> Aktiver.');
+      } else if (error.code === 'auth/unauthorized-domain') {
+        alert('Domenet er ikke godkjent i Firebase Console.\n\nLegg til ' + window.location.hostname + ' under Authentication -> Settings -> Authorized domains.');
       } else {
         console.error('Innlogging feilet:', err);
-        throw err;
+        // Prøv redirect som fallback
+        try {
+          await signInWithRedirect(auth, googleProvider);
+        } catch (redirectErr) {
+          console.error('Redirect feilet også:', redirectErr);
+        }
       }
     }
   };
