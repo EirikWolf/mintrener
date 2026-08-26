@@ -40,6 +40,7 @@ interface TimerDisplayProps {
   onToggleVibrate: () => void;
   onToggleWakeLock: () => void;
   onToggleSpeech?: () => void;
+  onOpenCurator?: () => void;
 }
 
 export const TimerDisplay: React.FC<TimerDisplayProps> = ({
@@ -58,6 +59,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   onToggleVibrate,
   onToggleWakeLock,
   onToggleSpeech,
+  onOpenCurator,
 }) => {
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
 
@@ -67,38 +69,43 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Fargetema basert på intervallfase
-  const getPhaseStyles = () => {
-    switch (state.phase) {
+  const getPhaseStyles = (phase: IntervalPhase) => {
+    switch (phase) {
+      case 'prepare':
+        return {
+          bg: 'bg-zinc-950',
+          badgeBg: 'bg-amber-950/80 text-amber-300 border border-amber-800/80',
+          badgeText: 'Klargjøring',
+        };
       case 'work':
         return {
-          bg: 'bg-gradient-to-b from-emerald-950/80 via-emerald-950/40 to-zinc-950',
-          badgeBg: 'bg-emerald-500 text-zinc-950 font-black',
-          badgeText: 'ARBEID',
+          bg: 'bg-emerald-950/40',
+          badgeBg: 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/80',
+          badgeText: 'Arbeid',
         };
       case 'rest':
       case 'round_rest':
         return {
-          bg: 'bg-gradient-to-b from-amber-950/80 via-amber-950/40 to-zinc-950',
-          badgeBg: 'bg-amber-500 text-zinc-950 font-black',
-          badgeText: state.phase === 'round_rest' ? 'PAUSE MELLOM RUNDER' : 'PAUSE',
+          bg: 'bg-cyan-950/40',
+          badgeBg: 'bg-cyan-950/80 text-cyan-300 border border-cyan-800/80',
+          badgeText: phase === 'round_rest' ? 'Rundehvile' : 'Hvile',
         };
-      case 'prepare':
+      case 'complete':
         return {
-          bg: 'bg-gradient-to-b from-blue-950/80 via-blue-950/40 to-zinc-950',
-          badgeBg: 'bg-blue-500 text-zinc-950 font-black',
-          badgeText: 'GJØR DEG KLAR',
+          bg: 'bg-purple-950/40',
+          badgeBg: 'bg-purple-950/80 text-purple-300 border border-purple-800/80',
+          badgeText: 'Fullført',
         };
       default:
         return {
           bg: 'bg-zinc-950',
-          badgeBg: 'bg-zinc-800 text-zinc-300 font-bold',
-          badgeText: 'KLAR',
+          badgeBg: 'bg-zinc-800 text-zinc-300',
+          badgeText: 'Klar',
         };
     }
   };
 
-  const phaseStyle = getPhaseStyles();
+  const phaseStyle = getPhaseStyles(state.phase);
 
   return (
     <div
@@ -109,7 +116,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
         <div className="flex items-center justify-between">
           {/* Venstre: Bruker & Tittel */}
           <div className="flex items-center gap-2">
-            <UserMenu />
+            <UserMenu onOpenCurator={onOpenCurator} />
             <div className="flex items-center gap-1">
               <Dumbbell className="w-4 h-4 text-emerald-400" />
               <span className="font-black text-xs sm:text-sm tracking-tight text-white">Min Trener</span>

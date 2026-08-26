@@ -3,7 +3,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { PrivacyPolicyModal } from '../legal/PrivacyPolicyModal';
 import { User as UserIcon, LogOut, Trash2, X, Shield } from 'lucide-react';
 
-export const UserMenu: React.FC = () => {
+interface UserMenuProps {
+  onOpenCurator?: () => void;
+}
+
+export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
   const { user, loading, signInWithGoogle, logout, deleteAccount } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
@@ -18,7 +22,7 @@ export const UserMenu: React.FC = () => {
 
   if (!user) {
     return (
-      <>
+      <div className="flex items-center gap-1">
         <button
           onClick={() => signInWithGoogle()}
           className="flex items-center gap-1.5 py-1 px-2.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 text-[11px] font-bold text-zinc-300 transition-all shadow-sm active:scale-95"
@@ -27,10 +31,20 @@ export const UserMenu: React.FC = () => {
           <span>Logg inn</span>
         </button>
 
+        {onOpenCurator && (
+          <button
+            onClick={onOpenCurator}
+            title="Bildekurator (Kitor QA)"
+            className="p-1.5 rounded-full text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 transition-all"
+          >
+            <Shield className="w-3.5 h-3.5 text-cyan-400" />
+          </button>
+        )}
+
         {isPrivacyOpen && (
           <PrivacyPolicyModal onClose={() => setIsPrivacyOpen(false)} />
         )}
-      </>
+      </div>
     );
   }
 
@@ -113,6 +127,20 @@ export const UserMenu: React.FC = () => {
 
             {/* Handlinger */}
             <div className="space-y-2.5 pt-2">
+              {/* Bildekurator */}
+              {onOpenCurator && (
+                <button
+                  onClick={() => {
+                    onOpenCurator();
+                    setIsOpen(false);
+                  }}
+                  className="w-full py-2.5 px-4 rounded-2xl bg-zinc-950/80 hover:bg-zinc-800 text-emerald-400 hover:text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all border border-emerald-900/40"
+                >
+                  <Shield className="w-3.5 h-3.5 text-cyan-400" />
+                  Bildekurator & QA (Kitor)
+                </button>
+              )}
+
               <button
                 onClick={() => {
                   logout();
