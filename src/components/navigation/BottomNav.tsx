@@ -15,7 +15,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   isTimerRunning,
 }) => {
   return (
-    <nav className="shrink-0 w-full z-40 bg-zinc-950/95 border-t border-zinc-800/80 backdrop-blur-lg px-1.5 py-1 select-none">
+    <nav className="shrink-0 w-full z-40 bg-zinc-950/95 border-t border-zinc-800/80 backdrop-blur-lg px-1.5 pt-1.5 pb-[calc(env(safe-area-inset-bottom,0px)+6px)] select-none">
       <div className="max-w-md mx-auto flex items-center justify-around">
         {/* 1. Timer Fane */}
         <button

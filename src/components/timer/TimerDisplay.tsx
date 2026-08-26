@@ -8,6 +8,7 @@ import { MicroWorkoutModal } from '../micro/MicroWorkoutModal';
 import { GpsTrackerModal } from '../gps/GpsTrackerModal';
 import { GroupRoomModal } from '../group/GroupRoomModal';
 import { AboutGuideModal } from '../help/AboutGuideModal';
+import { PwaInstallPromptModal } from '../pwa/PwaInstallPromptModal';
 import { getFavoriteProgramIds } from '../../services/favoritesService';
 import { TRAINING_PROGRAMS } from '../../data/programs';
 import {
@@ -149,6 +150,9 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
 
           {/* Høyre: Sensor-, puls- og kontrollknapper */}
           <div className="flex items-center gap-1">
+            {/* PWA Installer-knapp */}
+            <PwaInstallPromptModal />
+
             {/* Heart Rate Widget */}
             <HeartRateWidget />
 
