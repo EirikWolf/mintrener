@@ -74,12 +74,10 @@ export const ExerciseSchema = z.object({
     en: z.array(z.string()).optional(),
   }).default({ nb: [] }),
   sensorProfil: SensorProfileSchema.default('ingen'),
-  bildePrompt: z.object({
-    '0': z.string().optional(),
-    '1': z.string().optional(),
-  }).optional(),
+  bildePrompt: z.record(z.string(), z.string()).optional(),
   bildeVinkel: ImageAngleSchema.default('side'),
   bildeStatus: ImageStatusSchema.default('mangler'),
+  bildeUrl: z.string().optional(),
 });
 
 export type ExerciseItem = z.infer<typeof ExerciseSchema>;
