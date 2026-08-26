@@ -1,5 +1,6 @@
 import React from 'react';
 import { ExerciseItem } from '../../schemas/exerciseSchema';
+import { ExerciseIllustration } from '../exercises/ExerciseIllustration';
 import { X, CheckCircle2, AlertTriangle, Dumbbell, Flame, Target } from 'lucide-react';
 
 interface ExerciseDetailModalProps {
@@ -41,6 +42,9 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
         {/* Scrollbart Innhold */}
         <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+          {/* Illustrasjon / Fasevisning */}
+          <ExerciseIllustration exercise={exercise} phaseIndex={0} className="w-full h-36" />
+
           {/* Muskelgrupper & Utstyr */}
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-3 space-y-1">
