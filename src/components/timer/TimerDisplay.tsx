@@ -5,6 +5,8 @@ import { UserMenu } from '../auth/UserMenu';
 import { SensorStatusModal } from '../sensors/SensorStatusModal';
 import { HeartRateWidget } from '../sensors/HeartRateWidget';
 import { MicroWorkoutModal } from '../micro/MicroWorkoutModal';
+import { GpsTrackerModal } from '../gps/GpsTrackerModal';
+import { GroupRoomModal } from '../group/GroupRoomModal';
 import { getFavoriteProgramIds } from '../../services/favoritesService';
 import { TRAINING_PROGRAMS } from '../../data/programs';
 import {
@@ -27,6 +29,8 @@ import {
   ChevronRight,
   Star,
   Zap,
+  Navigation,
+  Users,
 } from 'lucide-react';
 
 interface TimerDisplayProps {
@@ -70,6 +74,8 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
 }) => {
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
   const [isMicroModalOpen, setIsMicroModalOpen] = useState(false);
+  const [isGpsModalOpen, setIsGpsModalOpen] = useState(false);
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
 
   const formatTime = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
@@ -228,26 +234,43 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
 
           return (
             <div className="space-y-1 pt-0.5 relative">
-              <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider flex items-center gap-1">
+              <div className="flex items-center justify-between px-1 gap-2">
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                  <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider flex items-center gap-1 shrink-0">
                     <Star className="w-3 h-3 text-amber-400 fill-current" />
-                    Favoritt-økter {displayList.length > 0 ? `(${displayList.length})` : ''}
+                    Favoritter {displayList.length > 0 ? `(${displayList.length})` : ''}
                   </span>
                   <button
                     onClick={() => setIsMicroModalOpen(true)}
-                    className="px-2 py-0.5 rounded-md bg-amber-950/80 border border-amber-800/80 text-[10px] font-black text-amber-400 hover:bg-amber-900 transition-all flex items-center gap-1 shadow-sm active:scale-95"
+                    title="Microtrening (1 øvelse 1-5 min)"
+                    className="px-1.5 py-0.5 rounded-md bg-amber-950/80 border border-amber-800/80 text-[10px] font-black text-amber-400 hover:bg-amber-900 transition-all flex items-center gap-0.5 shadow-sm active:scale-95 shrink-0"
                   >
                     <Zap className="w-2.5 h-2.5 fill-current" />
-                    <span>Microøkt</span>
+                    <span>Micro</span>
+                  </button>
+                  <button
+                    onClick={() => setIsGpsModalOpen(true)}
+                    title="GPS Utendørsøkt (Løp, gå, sykkel)"
+                    className="px-1.5 py-0.5 rounded-md bg-emerald-950/80 border border-emerald-800/80 text-[10px] font-black text-emerald-400 hover:bg-emerald-900 transition-all flex items-center gap-0.5 shadow-sm active:scale-95 shrink-0"
+                  >
+                    <Navigation className="w-2.5 h-2.5 fill-current" />
+                    <span>GPS</span>
+                  </button>
+                  <button
+                    onClick={() => setIsGroupModalOpen(true)}
+                    title="Grupperom (Synkronisert timer)"
+                    className="px-1.5 py-0.5 rounded-md bg-purple-950/80 border border-purple-800/80 text-[10px] font-black text-purple-400 hover:bg-purple-900 transition-all flex items-center gap-0.5 shadow-sm active:scale-95 shrink-0"
+                  >
+                    <Users className="w-2.5 h-2.5" />
+                    <span>Gruppe</span>
                   </button>
                 </div>
                 {onOpenPrograms && (
                   <button
                     onClick={onOpenPrograms}
-                    className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 transition-colors"
+                    className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 transition-colors shrink-0"
                   >
-                    <span>Alle programmer</span>
+                    <span className="hidden xs:inline">Alle</span>
                     <ChevronRight className="w-3 h-3" />
                   </button>
                 )}
@@ -471,6 +494,23 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           onClose={() => setIsMicroModalOpen(false)}
           onStartMicroWorkout={(microWorkout) => {
             onSelectWorkout(microWorkout);
+            onStart();
+          }}
+        />
+      )}
+
+      {/* GPS Utendørsøkt Modal */}
+      {isGpsModalOpen && (
+        <GpsTrackerModal onClose={() => setIsGpsModalOpen(false)} />
+      )}
+
+      {/* Grupperom Modal */}
+      {isGroupModalOpen && (
+        <GroupRoomModal
+          workout={workout}
+          onClose={() => setIsGroupModalOpen(false)}
+          onStartSyncedWorkout={(roomState) => {
+            onSelectWorkout(roomState.workout);
             onStart();
           }}
         />

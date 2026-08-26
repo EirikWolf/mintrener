@@ -3,13 +3,14 @@ import { EXERCISE_LIBRARY, filterExercises } from '../../data/exercises';
 import { ExerciseItem } from '../../schemas/exerciseSchema';
 import { ExerciseDetailModal } from './ExerciseDetailModal';
 import { CreateCustomExerciseModal } from './CreateCustomExerciseModal';
+import { StrengthLoggerModal } from '../strength/StrengthLoggerModal';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   fetchCustomExercises,
   deleteCustomExercise,
   CustomExerciseItem,
 } from '../../services/customExercisesService';
-import { Search, Dumbbell, Sparkles, Plus, Trash2, Clock } from 'lucide-react';
+import { Search, Dumbbell, Sparkles, Plus, Trash2, Clock, Weight } from 'lucide-react';
 
 const CATEGORIES = [
   { id: 'alle', label: 'Alle' },
@@ -34,6 +35,7 @@ export const ExerciseLibraryView: React.FC<ExerciseLibraryViewProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedExercise, setSelectedExercise] = useState<ExerciseItem | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isStrengthModalOpen, setIsStrengthModalOpen] = useState(false);
   const [customExercises, setCustomExercises] = useState<CustomExerciseItem[]>([]);
 
   const loadCustoms = () => {
@@ -95,13 +97,23 @@ export const ExerciseLibraryView: React.FC<ExerciseLibraryViewProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="py-1.5 px-3 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-zinc-950 font-bold text-xs rounded-xl flex items-center gap-1 transition-all shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Ny øvelse</span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setIsStrengthModalOpen(true)}
+            className="py-1.5 px-2.5 bg-zinc-900 hover:bg-zinc-800 active:scale-95 text-cyan-400 font-bold text-xs rounded-xl flex items-center gap-1 transition-all border border-cyan-900/50 shadow-sm"
+          >
+            <Weight className="w-3.5 h-3.5" />
+            <span>Styrkelogg</span>
+          </button>
+
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="py-1.5 px-3 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-zinc-950 font-bold text-xs rounded-xl flex items-center gap-1 transition-all shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Ny øvelse</span>
+          </button>
+        </div>
       </div>
 
       {/* 2. Søkefelt */}
@@ -209,6 +221,12 @@ export const ExerciseLibraryView: React.FC<ExerciseLibraryViewProps> = ({
         <CreateCustomExerciseModal
           onClose={() => setIsCreateModalOpen(false)}
           onSaved={() => loadCustoms()}
+        />
+      )}
+
+      {isStrengthModalOpen && (
+        <StrengthLoggerModal
+          onClose={() => setIsStrengthModalOpen(false)}
         />
       )}
     </div>
