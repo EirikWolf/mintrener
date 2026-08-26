@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { EXERCISE_LIBRARY } from '../../data/exercises';
 import { ExerciseItem } from '../../schemas/exerciseSchema';
 import { ExerciseIllustration } from '../exercises/ExerciseIllustration';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   CheckCircle2,
   RotateCcw,
@@ -9,6 +10,7 @@ import {
   MessageSquare,
   Filter,
   Eye,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface FeedbackMap {
@@ -28,6 +30,7 @@ interface ExerciseImageCuratorViewProps {
 export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> = ({
   onNavigateToTimer,
 }) => {
+  const { user } = useAuth();
   const [exercises] = useState<ExerciseItem[]>(EXERCISE_LIBRARY);
   const [selectedCategory, setSelectedCategory] = useState<string>('alle');
   const [feedbackMap, setFeedbackMap] = useState<FeedbackMap>({});
@@ -85,6 +88,28 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
 
   const approvedCount = Object.values(feedbackMap).filter((v) => v.status === 'godkjent').length;
   const totalPhases = exercises.length * 2;
+
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full max-w-md mx-auto px-4 text-center space-y-4">
+        <div className="p-3 bg-amber-500/20 text-amber-400 rounded-2xl border border-amber-500/30">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h2 className="text-lg font-black text-white">Krever innlogging</h2>
+        <p className="text-xs text-zinc-400">
+          Bildekurator og QA-verktøyet er kun tilgjengelig for påloggede administratorer.
+        </p>
+        {onNavigateToTimer && (
+          <button
+            onClick={onNavigateToTimer}
+            className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 font-bold text-xs rounded-xl border border-zinc-800 transition-all"
+          >
+            ← Tilbake til Timer
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full max-w-4xl mx-auto px-4 pt-2 pb-6 select-none overflow-hidden">

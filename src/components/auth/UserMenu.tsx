@@ -34,16 +34,6 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
           <span>Logg inn</span>
         </button>
 
-        {onOpenCurator && (
-          <button
-            onClick={onOpenCurator}
-            title="Bildekurator (Kitor QA)"
-            className="p-1.5 rounded-full text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 transition-all"
-          >
-            <Shield className="w-3.5 h-3.5 text-cyan-400" />
-          </button>
-        )}
-
         {isPrivacyOpen && (
           <PrivacyPolicyModal onClose={() => setIsPrivacyOpen(false)} />
         )}

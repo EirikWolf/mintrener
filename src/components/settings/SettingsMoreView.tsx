@@ -432,7 +432,7 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
           <ChevronRight className="w-4 h-4 text-zinc-500" />
         </button>
 
-        {onOpenCurator && (
+        {user && onOpenCurator && (
           <button
             onClick={onOpenCurator}
             className="w-full flex items-center justify-between py-2 px-3 bg-zinc-950/50 hover:bg-zinc-800/50 rounded-xl border border-zinc-800/50 text-left text-zinc-400 hover:text-zinc-300 text-xs transition-all"

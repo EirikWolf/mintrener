@@ -160,7 +160,11 @@ export function App() {
           <WorkoutHistoryView
             onNavigateToTimer={() => setActiveTab('timer')}
           />
-        ) : activeTab === 'settings' ? (
+        ) : activeTab === 'curator' && user ? (
+          <ExerciseImageCuratorView
+            onNavigateToTimer={() => setActiveTab('timer')}
+          />
+        ) : (
           <SettingsMoreView
             soundEnabled={state.soundEnabled}
             onToggleSound={toggleSound}
@@ -170,11 +174,7 @@ export function App() {
             onToggleWakeLock={toggleWakeLock}
             speechEnabled={state.speechEnabled}
             onToggleSpeech={toggleSpeech}
-            onOpenCurator={() => setActiveTab('curator')}
-          />
-        ) : (
-          <ExerciseImageCuratorView
-            onNavigateToTimer={() => setActiveTab('timer')}
+            onOpenCurator={user ? () => setActiveTab('curator') : undefined}
           />
         )}
       </div>
