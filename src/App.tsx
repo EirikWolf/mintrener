@@ -77,6 +77,8 @@ export function App() {
     setActiveTab('timer');
   };
 
+  const [builderInitialWorkout, setBuilderInitialWorkout] = useState<WorkoutTemplate | null>(null);
+
   // Hvis økten er fullført, vis oppsummering
   if (state.status === 'completed') {
     return (
@@ -118,10 +120,15 @@ export function App() {
         ) : activeTab === 'programs' ? (
           <ProgramCatalogView
             onStartProgram={handleStartCustomWorkout}
+            onCustomizeProgram={(progWorkout) => {
+              setBuilderInitialWorkout(progWorkout);
+              setActiveTab('builder');
+            }}
             onNavigateToTimer={() => setActiveTab('timer')}
           />
         ) : activeTab === 'builder' ? (
           <WorkoutBuilderView
+            initialWorkout={builderInitialWorkout}
             onStartCustomWorkout={handleStartCustomWorkout}
             onNavigateToTimer={() => setActiveTab('timer')}
           />

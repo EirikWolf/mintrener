@@ -229,7 +229,8 @@ export const TRAINING_PROGRAMS: TrainingProgram[] = [
         { id: 's6', exercise: { id: 'dips-pa-stol', name: 'Dips på stol', category: 'bodyweight' }, workDurationSeconds: 30, restDurationSeconds: 10 },
         { id: 's7', exercise: { id: 'planke', name: 'Planke', category: 'bodyweight' }, workDurationSeconds: 30, restDurationSeconds: 10 },
         { id: 's8', exercise: { id: 'hoye-kneloft', name: 'Høye kneløft', category: 'cardio' }, workDurationSeconds: 30, restDurationSeconds: 10 },
-        { id: 's9', exercise: { id: 'sideplanke', name: 'Sideplanke', category: 'bodyweight' }, workDurationSeconds: 30, restDurationSeconds: 0 },
+        { id: 's9', exercise: { id: 'sideplanke', name: 'Sideplanke (høyre side)', category: 'bodyweight' }, workDurationSeconds: 20, restDurationSeconds: 5 },
+        { id: 's10', exercise: { id: 'sideplanke', name: 'Sideplanke (venstre side)', category: 'bodyweight' }, workDurationSeconds: 20, restDurationSeconds: 0 },
       ],
     },
   },
@@ -240,7 +241,7 @@ export const TRAINING_PROGRAMS: TrainingProgram[] = [
     category: 'styrke',
     durationMinutes: 3,
     intensity: 'middels',
-    description: 'Trinnvis kjernebygger. Start med 30s intervaller og bygg opp til 5 minutter planke.',
+    description: 'Trinnvis kjernebygger. Start med 30s planke og 20s sideplanke på hver side, og bygg opp mot 5 minutter.',
     workout: {
       id: 'plank-challenge-1',
       name: 'Planke 30 dager – Nivå 1',
@@ -251,7 +252,8 @@ export const TRAINING_PROGRAMS: TrainingProgram[] = [
       roundRestDurationSeconds: 20,
       items: [
         { id: 'pc1', exercise: { id: 'planke', name: 'Underarmsplanke', category: 'bodyweight' }, workDurationSeconds: 30, restDurationSeconds: 15 },
-        { id: 'pc2', exercise: { id: 'sideplanke', name: 'Sideplanke', category: 'bodyweight' }, workDurationSeconds: 20, restDurationSeconds: 0 },
+        { id: 'pc2', exercise: { id: 'sideplanke', name: 'Sideplanke (høyre side)', category: 'bodyweight' }, workDurationSeconds: 20, restDurationSeconds: 10 },
+        { id: 'pc3', exercise: { id: 'sideplanke', name: 'Sideplanke (venstre side)', category: 'bodyweight' }, workDurationSeconds: 20, restDurationSeconds: 0 },
       ],
     },
   },

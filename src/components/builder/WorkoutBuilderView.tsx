@@ -24,11 +24,13 @@ import {
 } from 'lucide-react';
 
 interface WorkoutBuilderViewProps {
+  initialWorkout?: WorkoutTemplate | null;
   onStartCustomWorkout: (workout: WorkoutTemplate) => void;
   onNavigateToTimer?: () => void;
 }
 
 export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
+  initialWorkout,
   onStartCustomWorkout,
   onNavigateToTimer,
 }) => {
@@ -57,6 +59,22 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
   useEffect(() => {
     fetchCustomWorkouts(user?.uid).then(setSavedWorkouts);
   }, [user]);
+
+  useEffect(() => {
+    if (initialWorkout) {
+      setName(`${initialWorkout.name} (Min variant)`);
+      setRounds(initialWorkout.rounds || 1);
+      setPrepareSeconds(initialWorkout.prepareDurationSeconds || 5);
+      if (initialWorkout.items && initialWorkout.items.length > 0) {
+        setItems(
+          initialWorkout.items.map((it, idx) => ({
+            ...it,
+            id: `custom-item-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
+          }))
+        );
+      }
+    }
+  }, [initialWorkout]);
 
   // Nåværende økt-objekt
   const currentWorkout: WorkoutTemplate = {

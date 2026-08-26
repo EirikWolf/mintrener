@@ -17,15 +17,18 @@ import {
   Trophy,
   Sparkles,
   Star,
+  Edit3,
 } from 'lucide-react';
 
 interface ProgramCatalogViewProps {
   onStartProgram: (workout: WorkoutTemplate) => void;
+  onCustomizeProgram?: (workout: WorkoutTemplate) => void;
   onNavigateToTimer?: () => void;
 }
 
 export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({
   onStartProgram,
+  onCustomizeProgram,
   onNavigateToTimer,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('alle');
@@ -212,13 +215,26 @@ export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({
                   </span>
                 </div>
 
-                <button
-                  onClick={() => onStartProgram(prog.workout)}
-                  className="py-1.5 px-3.5 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-zinc-950 font-black text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-sm"
-                >
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  Start økt
-                </button>
+                <div className="flex items-center gap-1.5">
+                  {onCustomizeProgram && (
+                    <button
+                      onClick={() => onCustomizeProgram(prog.workout)}
+                      title="Tilpass dette programmet i øktbyggeren"
+                      className="py-1.5 px-2.5 bg-zinc-800/90 hover:bg-zinc-700 active:scale-95 text-zinc-300 hover:text-white font-bold text-xs rounded-xl flex items-center gap-1 transition-all border border-zinc-700/80"
+                    >
+                      <Edit3 className="w-3 h-3 text-emerald-400" />
+                      <span>Tilpass</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => onStartProgram(prog.workout)}
+                    className="py-1.5 px-3.5 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-zinc-950 font-black text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-sm"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    Start økt
+                  </button>
+                </div>
               </div>
             </div>
           ))
