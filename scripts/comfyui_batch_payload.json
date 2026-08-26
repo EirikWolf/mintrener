@@ -1,0 +1,434 @@
+[
+  {
+    "exerciseId": "kneboy",
+    "exerciseName": "Knebøy",
+    "phaseIndex": 0,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, figure standing tall with arms extended forward",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "kneboy-0.webp"
+  },
+  {
+    "exerciseId": "kneboy",
+    "exerciseName": "Knebøy",
+    "phaseIndex": 1,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, figure in deep squat with thighs parallel to floor",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "kneboy-1.webp"
+  },
+  {
+    "exerciseId": "push-ups",
+    "exerciseName": "Armhevinger (Push-ups)",
+    "phaseIndex": 0,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, figure in top plank push-up position",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "push-ups-0.webp"
+  },
+  {
+    "exerciseId": "push-ups",
+    "exerciseName": "Armhevinger (Push-ups)",
+    "phaseIndex": 1,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, figure at bottom of push-up with chest near floor",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "push-ups-1.webp"
+  },
+  {
+    "exerciseId": "utfall-forover",
+    "exerciseName": "Utfall forover",
+    "phaseIndex": 0,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Forward Lunges execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "utfall-forover-0.webp"
+  },
+  {
+    "exerciseId": "utfall-forover",
+    "exerciseName": "Utfall forover",
+    "phaseIndex": 1,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Forward Lunges execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "utfall-forover-1.webp"
+  },
+  {
+    "exerciseId": "planke",
+    "exerciseName": "Planke",
+    "phaseIndex": 0,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Plank execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "planke-0.webp"
+  },
+  {
+    "exerciseId": "planke",
+    "exerciseName": "Planke",
+    "phaseIndex": 1,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Plank execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "planke-1.webp"
+  },
+  {
+    "exerciseId": "mountain-climbers",
+    "exerciseName": "Mountain Climbers",
+    "phaseIndex": 0,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Mountain Climbers execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "mountain-climbers-0.webp"
+  },
+  {
+    "exerciseId": "mountain-climbers",
+    "exerciseName": "Mountain Climbers",
+    "phaseIndex": 1,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Mountain Climbers execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "mountain-climbers-1.webp"
+  },
+  {
+    "exerciseId": "burpees",
+    "exerciseName": "Burpees",
+    "phaseIndex": 0,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Burpees execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "burpees-0.webp"
+  },
+  {
+    "exerciseId": "burpees",
+    "exerciseName": "Burpees",
+    "phaseIndex": 1,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Burpees execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "burpees-1.webp"
+  },
+  {
+    "exerciseId": "sideplanke",
+    "exerciseName": "Sideplanke",
+    "phaseIndex": 0,
+    "viewAngle": "front",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, front view, Side Plank execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "sideplanke-0.webp"
+  },
+  {
+    "exerciseId": "sideplanke",
+    "exerciseName": "Sideplanke",
+    "phaseIndex": 1,
+    "viewAngle": "front",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, front view, Side Plank execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "sideplanke-1.webp"
+  },
+  {
+    "exerciseId": "rygghev-superman",
+    "exerciseName": "Rygghev (Superman)",
+    "phaseIndex": 0,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Superman execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "rygghev-superman-0.webp"
+  },
+  {
+    "exerciseId": "rygghev-superman",
+    "exerciseName": "Rygghev (Superman)",
+    "phaseIndex": 1,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Superman execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "rygghev-superman-1.webp"
+  },
+  {
+    "exerciseId": "dips-pa-stol",
+    "exerciseName": "Dips på stol / benk",
+    "phaseIndex": 0,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Chair Dips execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "dips-pa-stol-0.webp"
+  },
+  {
+    "exerciseId": "dips-pa-stol",
+    "exerciseName": "Dips på stol / benk",
+    "phaseIndex": 1,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Chair Dips execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "dips-pa-stol-1.webp"
+  },
+  {
+    "exerciseId": "hulekroppshold",
+    "exerciseName": "Hulekroppshold (Hollow Body Hold)",
+    "phaseIndex": 0,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Hollow Body Hold execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "hulekroppshold-0.webp"
+  },
+  {
+    "exerciseId": "hulekroppshold",
+    "exerciseName": "Hulekroppshold (Hollow Body Hold)",
+    "phaseIndex": 1,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Hollow Body Hold execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "hulekroppshold-1.webp"
+  },
+  {
+    "exerciseId": "kettlebell-swing",
+    "exerciseName": "Kettlebell-swing",
+    "phaseIndex": 0,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Kettlebell Swing execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "kettlebell-swing-0.webp"
+  },
+  {
+    "exerciseId": "kettlebell-swing",
+    "exerciseName": "Kettlebell-swing",
+    "phaseIndex": 1,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Kettlebell Swing execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "kettlebell-swing-1.webp"
+  },
+  {
+    "exerciseId": "goblet-squat",
+    "exerciseName": "Goblet Squat med kettlebell",
+    "phaseIndex": 0,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Kettlebell Goblet Squat execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "goblet-squat-0.webp"
+  },
+  {
+    "exerciseId": "goblet-squat",
+    "exerciseName": "Goblet Squat med kettlebell",
+    "phaseIndex": 1,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Kettlebell Goblet Squat execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "goblet-squat-1.webp"
+  },
+  {
+    "exerciseId": "kettlebell-press",
+    "exerciseName": "Kettlebell skulderpress",
+    "phaseIndex": 0,
+    "viewAngle": "front",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, front view, Kettlebell Overhead Press execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "kettlebell-press-0.webp"
+  },
+  {
+    "exerciseId": "kettlebell-press",
+    "exerciseName": "Kettlebell skulderpress",
+    "phaseIndex": 1,
+    "viewAngle": "front",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, front view, Kettlebell Overhead Press execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "kettlebell-press-1.webp"
+  },
+  {
+    "exerciseId": "kettlebell-halo",
+    "exerciseName": "Kettlebell Halo (Skuldermobilitet)",
+    "phaseIndex": 0,
+    "viewAngle": "front",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, front view, Kettlebell Halo execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "kettlebell-halo-0.webp"
+  },
+  {
+    "exerciseId": "kettlebell-halo",
+    "exerciseName": "Kettlebell Halo (Skuldermobilitet)",
+    "phaseIndex": 1,
+    "viewAngle": "front",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, front view, Kettlebell Halo execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "kettlebell-halo-1.webp"
+  },
+  {
+    "exerciseId": "kettlebell-row",
+    "exerciseName": "Ettarms roing med kettlebell",
+    "phaseIndex": 0,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Single Arm Kettlebell Row execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "kettlebell-row-0.webp"
+  },
+  {
+    "exerciseId": "kettlebell-row",
+    "exerciseName": "Ettarms roing med kettlebell",
+    "phaseIndex": 1,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Single Arm Kettlebell Row execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "kettlebell-row-1.webp"
+  },
+  {
+    "exerciseId": "manualpress-bryst",
+    "exerciseName": "Brystpress med manualer",
+    "phaseIndex": 0,
+    "viewAngle": "front",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, front view, Dumbbell Chest Press execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "manualpress-bryst-0.webp"
+  },
+  {
+    "exerciseId": "manualpress-bryst",
+    "exerciseName": "Brystpress med manualer",
+    "phaseIndex": 1,
+    "viewAngle": "front",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, front view, Dumbbell Chest Press execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "manualpress-bryst-1.webp"
+  },
+  {
+    "exerciseId": "skulderpress-manualer",
+    "exerciseName": "Skulderpress med manualer",
+    "phaseIndex": 0,
+    "viewAngle": "front",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, front view, Dumbbell Shoulder Press execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "skulderpress-manualer-0.webp"
+  },
+  {
+    "exerciseId": "skulderpress-manualer",
+    "exerciseName": "Skulderpress med manualer",
+    "phaseIndex": 1,
+    "viewAngle": "front",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, front view, Dumbbell Shoulder Press execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "skulderpress-manualer-1.webp"
+  },
+  {
+    "exerciseId": "rumensk-markloft-manualer",
+    "exerciseName": "Rumensk markløft med manualer",
+    "phaseIndex": 0,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Romanian Deadlift execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "rumensk-markloft-manualer-0.webp"
+  },
+  {
+    "exerciseId": "rumensk-markloft-manualer",
+    "exerciseName": "Rumensk markløft med manualer",
+    "phaseIndex": 1,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Romanian Deadlift execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "rumensk-markloft-manualer-1.webp"
+  },
+  {
+    "exerciseId": "sprellmenn",
+    "exerciseName": "Sprellmenn (Jumping Jacks)",
+    "phaseIndex": 0,
+    "viewAngle": "front",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, front view, Jumping Jacks execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "sprellmenn-0.webp"
+  },
+  {
+    "exerciseId": "sprellmenn",
+    "exerciseName": "Sprellmenn (Jumping Jacks)",
+    "phaseIndex": 1,
+    "viewAngle": "front",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, front view, Jumping Jacks execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "sprellmenn-1.webp"
+  },
+  {
+    "exerciseId": "hoye-kneloft",
+    "exerciseName": "Høye kneløft på stedet",
+    "phaseIndex": 0,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, High Knees execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "hoye-kneloft-0.webp"
+  },
+  {
+    "exerciseId": "hoye-kneloft",
+    "exerciseName": "Høye kneløft på stedet",
+    "phaseIndex": 1,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, High Knees execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "hoye-kneloft-1.webp"
+  },
+  {
+    "exerciseId": "skoytehopp",
+    "exerciseName": "Skøytehopp (Skater Hops)",
+    "phaseIndex": 0,
+    "viewAngle": "front",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, front view, Skater Hops execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "skoytehopp-0.webp"
+  },
+  {
+    "exerciseId": "skoytehopp",
+    "exerciseName": "Skøytehopp (Skater Hops)",
+    "phaseIndex": 1,
+    "viewAngle": "front",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, front view, Skater Hops execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "skoytehopp-1.webp"
+  },
+  {
+    "exerciseId": "katte-ku",
+    "exerciseName": "Katte-ku (Ryggmobilitet)",
+    "phaseIndex": 0,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Cat-Cow Stretch execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "katte-ku-0.webp"
+  },
+  {
+    "exerciseId": "katte-ku",
+    "exerciseName": "Katte-ku (Ryggmobilitet)",
+    "phaseIndex": 1,
+    "viewAngle": "side",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, side view, Cat-Cow Stretch execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "katte-ku-1.webp"
+  },
+  {
+    "exerciseId": "verdens-beste-toyeovelse",
+    "exerciseName": "Verdens beste tøyeøvelse (World's Greatest Stretch)",
+    "phaseIndex": 0,
+    "viewAngle": "skrå",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, skrå view, World's Greatest Stretch execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "verdens-beste-toyeovelse-0.webp"
+  },
+  {
+    "exerciseId": "verdens-beste-toyeovelse",
+    "exerciseName": "Verdens beste tøyeøvelse (World's Greatest Stretch)",
+    "phaseIndex": 1,
+    "viewAngle": "skrå",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, skrå view, World's Greatest Stretch execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "verdens-beste-toyeovelse-1.webp"
+  },
+  {
+    "exerciseId": "hofteapner-90-90",
+    "exerciseName": "Hofteåpner 90/90",
+    "phaseIndex": 0,
+    "viewAngle": "front",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, front view, 90/90 Hip Mobility execution step 1",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "hofteapner-90-90-0.webp"
+  },
+  {
+    "exerciseId": "hofteapner-90-90",
+    "exerciseName": "Hofteåpner 90/90",
+    "phaseIndex": 1,
+    "viewAngle": "front",
+    "positivePrompt": "minimalist athletic fitness illustration, clean modern vector art style, dark theme slate background, emerald and cyan accents, athletic figure, precise exercise biomechanics, high contrast, clean line art, front view, 90/90 Hip Mobility execution step 2",
+    "negativePrompt": "photorealistic, messy, distorted anatomy, extra limbs, extra fingers, blurry, low quality, watermark, text, signature, bright white background, complex distracting environment",
+    "outputFilename": "hofteapner-90-90-1.webp"
+  }
+]
