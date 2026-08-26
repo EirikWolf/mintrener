@@ -37,3 +37,8 @@ Dette dokumentet loggfører arkitektoniske og tekniske beslutninger som tas unde
 ## 2026-08-26: PWA (Offline, Service Worker & Manifest) og Sensorstatus (Fase 5)
 - **PWA med Workbox:** Konfigurert `vite-plugin-pwa` med `generateSW`, precaching av statiske ressurser og Web App Manifest (`manifest.webmanifest`). Gjør appen fullt installerbar på hjemskjermen på både Android og iOS.
 - **Sensordiagnostikk (Kapittel 2):** Implementert `sensorDiagnosticsService.ts` og `SensorStatusModal.tsx` tilgjengelig via aktivitetsikonet i topplinjen. Viser sanntidsstatus for Web Audio, Screen Wake Lock, Vibrasjon, DeviceMotion (med tillatelsesknapp for iOS Safari), Web Bluetooth (med plattformforklaring) og GPS.
+
+## 2026-08-26: Bildepipeline & Kitor ComfyUI Batch-generator (Vedlegg A)
+- **Prompt Generator & Vedlegg A:** `src/services/imagePromptService.ts` implementerer standardisert SDXL prompt-syntaks med stil-prefix og negativ prompt optimalisert for minimalistisk treningsgrafikk.
+- **ComfyUI Batch-eksport:** `scripts/exportComfyUiBatch.ts` genererer `comfyui_batch_payload.json` klar for automatisk bildegenerering på lokal AI-server (Kitor).
+- **Visuell Illustrasjons-komponent:** `src/components/exercises/ExerciseIllustration.tsx` rendrer genererte `.webp`-bilder eller en stilig, minimalistisk fase-placeholder i mørkt tema med smaragdaksenter i `ExerciseDetailModal.tsx`.
