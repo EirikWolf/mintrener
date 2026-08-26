@@ -223,15 +223,16 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             .map((id) => uniqueWorkoutsMap.get(id))
             .filter((w): w is WorkoutTemplate => Boolean(w));
 
-          const displayList = matchedFavs.length > 0 ? matchedFavs.slice(0, 4) : presets.slice(0, 4);
+          const displayList = matchedFavs.length > 0 ? matchedFavs : presets;
+          const hasScroll = displayList.length > 4;
 
           return (
-            <div className="space-y-1 pt-0.5">
+            <div className="space-y-1 pt-0.5 relative">
               <div className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider flex items-center gap-1">
                     <Star className="w-3 h-3 text-amber-400 fill-current" />
-                    Favoritt-økter
+                    Favoritt-økter {displayList.length > 0 ? `(${displayList.length})` : ''}
                   </span>
                   <button
                     onClick={() => setIsMicroModalOpen(true)}
@@ -252,15 +253,21 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                 )}
               </div>
 
-              {/* 2 Rader Grid */}
-              <div className="grid grid-cols-2 gap-1.5">
+              {/* 2 Rader Grid (Horisontal swipe ved > 4 økter) */}
+              <div
+                className={`grid grid-rows-2 gap-1.5 ${
+                  hasScroll
+                    ? 'grid-flow-col auto-cols-[142px] sm:auto-cols-[165px] overflow-x-auto pb-1 no-scrollbar snap-x snap-mandatory pr-4'
+                    : 'grid-cols-2'
+                }`}
+              >
                 {displayList.map((tpl) => {
                   const isSelected = workout.id === tpl.id;
                   return (
                     <button
                       key={tpl.id}
                       onClick={() => onSelectWorkout(tpl)}
-                      className={`p-2 rounded-xl text-left border transition-all flex items-center justify-between gap-1.5 shadow-sm ${
+                      className={`p-2 rounded-xl text-left border transition-all flex items-center justify-between gap-1.5 shadow-sm snap-start shrink-0 ${
                         isSelected
                           ? 'bg-emerald-950/80 border-emerald-500 text-white shadow-emerald-950/40'
                           : 'bg-zinc-900/80 border-zinc-800/80 text-zinc-300 hover:bg-zinc-800/80 hover:border-zinc-700'
