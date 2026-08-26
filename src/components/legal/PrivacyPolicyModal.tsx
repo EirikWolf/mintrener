@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { ShieldCheck, X, Lock, Eye, Trash2, Smartphone, Award } from 'lucide-react';
 
 interface PrivacyPolicyModalProps {
@@ -6,9 +7,9 @@ interface PrivacyPolicyModalProps {
 }
 
 export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ onClose }) => {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-md max-h-[85vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4">
+  const modal = (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="w-full max-w-md max-h-[85vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4 relative z-[111]">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
           <div className="flex items-center gap-2">
@@ -40,64 +41,67 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ onClose 
             </p>
           </div>
 
-          {/* 2. Sensordata */}
+          {/* 2. Hva lagres */}
           <div className="space-y-1.5">
-            <h3 className="font-bold text-white flex items-center gap-1.5 text-xs">
-              <Smartphone className="w-4 h-4 text-emerald-400" />
-              1. Lokal behandling av sensordata
-            </h3>
-            <p className="text-[11px] text-zinc-400">
-              Alle sensordata (som bevegelse, skritt, vibrasjon og lydsignaler) behandles <strong>kun lokalt i sanntid på din egen telefon</strong>. Ingen rå sensordata overføres eller lagres eksternt.
-            </p>
-          </div>
-
-          {/* 3. Innlogging og lagring */}
-          <div className="space-y-1.5">
-            <h3 className="font-bold text-white flex items-center gap-1.5 text-xs">
+            <h3 className="font-bold text-white flex items-center gap-1.5">
               <Eye className="w-4 h-4 text-emerald-400" />
-              2. Hvilke data vi lagrer
+              1. Hvilke data vi samler inn
             </h3>
             <p className="text-[11px] text-zinc-400">
-              Hvis du velger å logge inn med Google, lagres kun følgende sikkert i Google Cloud / Firebase (europeiske servere):
+              • <strong>Brukerkonto (Google):</strong> Navn, e-postadresse og profilbilde for identifisering og innlogging.
+              <br />
+              • <strong>Treningsdata:</strong> Tidspunkt, varighet, fullførte intervaller og antall repetisjoner for historikk og statistikk.
+              <br />
+              • <strong>Sensorer:</strong> Bevegelsesdata (akselerometer/gyroskop) behandles lokalt i sanntid på din enhet for rep-telling og lagres aldri eksternt.
             </p>
-            <ul className="list-disc list-inside text-[11px] text-zinc-400 space-y-0.5 pl-1">
-              <li>Ditt navn, e-postadresse og bruker-ID.</li>
-              <li>Dine egendefinerte treningsmaler.</li>
-              <li>Historikk over fullførte økter (dato, varighet og antall runder).</li>
-            </ul>
           </div>
 
-          {/* 4. Retten til sletting (GDPR) */}
+          {/* 3. Lagring & Sikkerhet */}
           <div className="space-y-1.5">
-            <h3 className="font-bold text-rose-400 flex items-center gap-1.5 text-xs">
-              <Trash2 className="w-4 h-4 text-rose-400" />
-              3. Retten til å bli glemt (GDPR art. 17)
+            <h3 className="font-bold text-white flex items-center gap-1.5">
+              <Smartphone className="w-4 h-4 text-emerald-400" />
+              2. Lagring og sikkerhet
             </h3>
             <p className="text-[11px] text-zinc-400">
-              Du kan når som helst slette din konto og alle tilhørende data med ett enkelt klikk under <em>«Min profil → Slett min konto og alle treningsdata»</em>. Slettingen er umiddelbar og permanent.
+              Dataene dine lagres kryptert i Google Firebase Cloud Firestore (i europeiske datasentre). Tilgang er sikret gjennom strenge sikkerhetsregler (Security Rules), slik at kun du har tilgang til dine egne treningsøkter.
             </p>
           </div>
 
-          {/* 5. Brukervilkår */}
-          <div className="space-y-1.5 pt-1 border-t border-zinc-800/80">
-            <h3 className="font-bold text-white flex items-center gap-1.5 text-xs">
-              <Award className="w-4 h-4 text-amber-400" />
-              4. Ansvar og treningshelse
+          {/* 4. Dine rettigheter (GDPR) */}
+          <div className="space-y-1.5">
+            <h3 className="font-bold text-white flex items-center gap-1.5">
+              <Award className="w-4 h-4 text-emerald-400" />
+              3. Dine rettigheter (GDPR)
             </h3>
             <p className="text-[11px] text-zinc-400">
-              Trening utføres på eget ansvar. Lytt alltid til kroppen din og konsulter helsepersonell dersom du er usikker på om høyintensiv intervalltrening passer for deg.
+              Du har full rett til innsyn, retting og permanent sletting («retten til å bli glemt») av alle dine data.
+            </p>
+          </div>
+
+          {/* 5. Sletting */}
+          <div className="space-y-1.5">
+            <h3 className="font-bold text-white flex items-center gap-1.5 text-rose-400">
+              <Trash2 className="w-4 h-4" />
+              4. Sletting av konto og data
+            </h3>
+            <p className="text-[11px] text-zinc-400">
+              Du kan når som helst slette din brukerkonto og alle tilknyttede treningslogger direkte fra profilmenyen i appen. Handlingen er umiddelbar og ugjenkallelig.
             </p>
           </div>
         </div>
 
         {/* Lukk-knapp */}
-        <button
-          onClick={onClose}
-          className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-white font-bold rounded-2xl text-xs transition-all"
-        >
-          Forstått og lukk
-        </button>
+        <div className="pt-2 border-t border-zinc-800">
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black text-xs rounded-2xl transition-all"
+          >
+            Jeg forstår og godtar
+          </button>
+        </div>
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modal, document.body) : null;
 };
