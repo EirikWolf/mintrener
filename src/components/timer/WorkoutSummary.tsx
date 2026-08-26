@@ -1,18 +1,32 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { WorkoutTemplate } from '../../types/workout';
-import { Trophy, RotateCcw, Flame, CheckCircle2 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { updateWorkoutRating } from '../../services/firestoreService';
+import { Trophy, RotateCcw, Flame, CheckCircle2, ThumbsUp, Smile, Flame as FireIcon } from 'lucide-react';
 
 interface WorkoutSummaryProps {
   workout: WorkoutTemplate;
   totalElapsedSeconds: number;
+  workoutLogId?: string;
   onRestart: () => void;
 }
 
 export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
   workout,
   totalElapsedSeconds,
+  workoutLogId,
   onRestart,
 }) => {
+  const { user } = useAuth();
+  const [selectedRating, setSelectedRating] = useState<'for_lett' | 'passe' | 'for_tungt' | null>(null);
+
+  const handleRate = async (rating: 'for_lett' | 'passe' | 'for_tungt') => {
+    setSelectedRating(rating);
+    if (workoutLogId) {
+      await updateWorkoutRating(user?.uid, workoutLogId, rating);
+    }
+  };
+
   const formatTime = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
     const secs = totalSeconds % 60;
@@ -20,48 +34,100 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto h-full space-y-8 animate-in fade-in zoom-in duration-300">
+    <div className="flex flex-col items-center justify-center p-4 sm:p-6 text-center max-w-md mx-auto h-full space-y-4 sm:space-y-6 overflow-y-auto animate-in fade-in zoom-in duration-300">
       <div className="relative">
-        <div className="w-24 h-24 rounded-full bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/30">
-          <Trophy className="w-12 h-12" />
+        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/30">
+          <Trophy className="w-10 h-10 sm:w-12 sm:h-12" />
         </div>
-        <div className="absolute -bottom-2 -right-2 bg-zinc-900 border border-emerald-500 rounded-full p-1 text-emerald-400">
-          <CheckCircle2 className="w-6 h-6" />
+        <div className="absolute -bottom-1 -right-1 bg-zinc-900 border border-emerald-500 rounded-full p-1 text-emerald-400">
+          <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
         </div>
       </div>
 
-      <div className="space-y-2">
-        <h1 className="text-3xl font-black tracking-tight text-white">
+      <div className="space-y-1">
+        <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
           Bravo! Økt fullført!
         </h1>
-        <p className="text-zinc-400 text-sm">
+        <p className="text-zinc-400 text-xs sm:text-sm">
           Du gjennomførte <strong className="text-zinc-200">{workout.name}</strong> med glans.
         </p>
       </div>
 
       {/* Oppsummeringskort */}
-      <div className="grid grid-cols-2 gap-3 w-full">
-        <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 flex flex-col items-center">
-          <span className="text-xs uppercase tracking-wider text-zinc-400 font-medium">Tid brukt</span>
-          <span className="text-xl font-bold text-white mt-1">{formatTime(totalElapsedSeconds)}</span>
+      <div className="grid grid-cols-2 gap-2.5 w-full">
+        <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-3 sm:p-4 flex flex-col items-center">
+          <span className="text-[10px] sm:text-xs uppercase tracking-wider text-zinc-400 font-medium">Tid brukt</span>
+          <span className="text-lg sm:text-xl font-bold text-white mt-0.5">{formatTime(totalElapsedSeconds)}</span>
         </div>
-        <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 flex flex-col items-center">
-          <span className="text-xs uppercase tracking-wider text-zinc-400 font-medium">Runder</span>
-          <span className="text-xl font-bold text-emerald-400 mt-1">{workout.rounds} runder</span>
+        <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-3 sm:p-4 flex flex-col items-center">
+          <span className="text-[10px] sm:text-xs uppercase tracking-wider text-zinc-400 font-medium">Runder</span>
+          <span className="text-lg sm:text-xl font-bold text-emerald-400 mt-0.5">{workout.rounds} {workout.rounds === 1 ? 'runde' : 'runder'}</span>
+        </div>
+      </div>
+
+      {/* Mestringsevaluering (Oppgave 3: For lett / Passe / For tungt) */}
+      <div className="w-full bg-zinc-900/90 border border-zinc-800 rounded-2xl p-3.5 space-y-2 text-left">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] uppercase font-bold text-zinc-300 tracking-wider">
+            Hvordan føltes økten?
+          </span>
+          {selectedRating && (
+            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded-full border border-emerald-800/60">
+              Registrert!
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            onClick={() => handleRate('for_lett')}
+            className={`py-2 px-1 rounded-xl text-xs font-bold transition-all flex flex-col items-center gap-1 border ${
+              selectedRating === 'for_lett'
+                ? 'bg-blue-950/80 border-blue-500 text-blue-300 shadow-sm'
+                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800'
+            }`}
+          >
+            <Smile className="w-4 h-4 text-blue-400" />
+            <span>For lett</span>
+          </button>
+
+          <button
+            onClick={() => handleRate('passe')}
+            className={`py-2 px-1 rounded-xl text-xs font-bold transition-all flex flex-col items-center gap-1 border ${
+              selectedRating === 'passe'
+                ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 shadow-sm'
+                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800'
+            }`}
+          >
+            <ThumbsUp className="w-4 h-4 text-emerald-400" />
+            <span>Passe</span>
+          </button>
+
+          <button
+            onClick={() => handleRate('for_tungt')}
+            className={`py-2 px-1 rounded-xl text-xs font-bold transition-all flex flex-col items-center gap-1 border ${
+              selectedRating === 'for_tungt'
+                ? 'bg-amber-950/80 border-amber-500 text-amber-300 shadow-sm'
+                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800'
+            }`}
+          >
+            <FireIcon className="w-4 h-4 text-amber-400" />
+            <span>For tungt</span>
+          </button>
         </div>
       </div>
 
       {/* Øvelsesliste */}
-      <div className="w-full bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-4 text-left">
-        <h3 className="text-xs uppercase tracking-wider text-zinc-400 font-semibold mb-3 flex items-center gap-2">
-          <Flame className="w-4 h-4 text-amber-400" />
+      <div className="w-full bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-3 text-left">
+        <h3 className="text-[10px] sm:text-xs uppercase tracking-wider text-zinc-400 font-semibold mb-2 flex items-center gap-1.5">
+          <Flame className="w-3.5 h-3.5 text-amber-400" />
           Gjennomførte øvelser ({workout.items.length})
         </h3>
-        <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+        <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
           {workout.items.map((item, idx) => (
-            <div key={item.id} className="flex justify-between items-center text-sm py-1 border-b border-zinc-800/50 last:border-0">
-              <span className="text-zinc-300 font-medium">{idx + 1}. {item.exercise.name}</span>
-              <span className="text-xs text-zinc-400 font-mono">{item.workDurationSeconds}s</span>
+            <div key={item.id} className="flex justify-between items-center text-xs py-0.5 border-b border-zinc-800/40 last:border-0">
+              <span className="text-zinc-300 truncate pr-2">{idx + 1}. {item.exercise.name}</span>
+              <span className="text-zinc-400 font-mono text-[11px] shrink-0">{item.workDurationSeconds}s</span>
             </div>
           ))}
         </div>
@@ -70,10 +136,10 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
       {/* Start på nytt knapp */}
       <button
         onClick={onRestart}
-        className="w-full py-4 px-6 bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition-all text-white font-bold rounded-2xl shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-3 text-lg"
+        className="w-full py-3 sm:py-3.5 px-6 bg-emerald-500 hover:bg-emerald-400 active:scale-95 transition-all text-zinc-950 font-black rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 text-sm sm:text-base shrink-0"
       >
-        <RotateCcw className="w-6 h-6" />
-        Start ny økt
+        <RotateCcw className="w-5 h-5" />
+        Ferdig / Ny økt
       </button>
     </div>
   );

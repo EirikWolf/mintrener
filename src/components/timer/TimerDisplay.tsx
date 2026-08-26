@@ -4,6 +4,7 @@ import { CircularProgress } from './CircularProgress';
 import { UserMenu } from '../auth/UserMenu';
 import { SensorStatusModal } from '../sensors/SensorStatusModal';
 import { HeartRateWidget } from '../sensors/HeartRateWidget';
+import { MicroWorkoutModal } from '../micro/MicroWorkoutModal';
 import { getFavoriteProgramIds } from '../../services/favoritesService';
 import { TRAINING_PROGRAMS } from '../../data/programs';
 import {
@@ -25,6 +26,7 @@ import {
   MicOff,
   ChevronRight,
   Star,
+  Zap,
 } from 'lucide-react';
 
 interface TimerDisplayProps {
@@ -67,6 +69,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   onOpenPrograms,
 }) => {
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
+  const [isMicroModalOpen, setIsMicroModalOpen] = useState(false);
 
   const formatTime = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
@@ -225,10 +228,19 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           return (
             <div className="space-y-1 pt-0.5">
               <div className="flex items-center justify-between px-1">
-                <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider flex items-center gap-1">
-                  <Star className="w-3 h-3 text-amber-400 fill-current" />
-                  Favoritt-økter
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider flex items-center gap-1">
+                    <Star className="w-3 h-3 text-amber-400 fill-current" />
+                    Favoritt-økter
+                  </span>
+                  <button
+                    onClick={() => setIsMicroModalOpen(true)}
+                    className="px-2 py-0.5 rounded-md bg-amber-950/80 border border-amber-800/80 text-[10px] font-black text-amber-400 hover:bg-amber-900 transition-all flex items-center gap-1 shadow-sm active:scale-95"
+                  >
+                    <Zap className="w-2.5 h-2.5 fill-current" />
+                    <span>Microøkt</span>
+                  </button>
+                </div>
                 {onOpenPrograms && (
                   <button
                     onClick={onOpenPrograms}
@@ -444,6 +456,17 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
       {/* Sensorstatus Modal */}
       {isSensorModalOpen && (
         <SensorStatusModal onClose={() => setIsSensorModalOpen(false)} />
+      )}
+
+      {/* Microtrening Modal */}
+      {isMicroModalOpen && (
+        <MicroWorkoutModal
+          onClose={() => setIsMicroModalOpen(false)}
+          onStartMicroWorkout={(microWorkout) => {
+            onSelectWorkout(microWorkout);
+            onStart();
+          }}
+        />
       )}
     </div>
   );

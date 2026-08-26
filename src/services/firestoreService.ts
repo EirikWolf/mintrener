@@ -94,6 +94,40 @@ export async function saveCompletedWorkout(
 }
 
 /**
+ * Oppdaterer vurdering (for lett / passe / for tungt) på en fullført økt
+ */
+export async function updateWorkoutRating(
+  userId: string | undefined | null,
+  logId: string,
+  rating: 'for_lett' | 'passe' | 'for_tungt'
+): Promise<void> {
+  // 1. Oppdater lokalt
+  try {
+    const raw = localStorage.getItem(LOCAL_HISTORY_KEY);
+    if (raw) {
+      const list: CompletedWorkoutLog[] = JSON.parse(raw);
+      const idx = list.findIndex((it) => it.id === logId);
+      if (idx >= 0) {
+        list[idx].difficultyRating = rating;
+        localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(list));
+      }
+    }
+  } catch (err) {
+    console.warn('Feil ved oppdatering av lokal rating:', err);
+  }
+
+  // 2. Oppdater i Firestore hvis innlogget
+  if (userId) {
+    try {
+      const docRef = doc(db, 'users', userId, 'history', logId);
+      await setDoc(docRef, { difficultyRating: rating }, { merge: true });
+    } catch (err) {
+      console.warn('Kunne ikke oppdatere rating i Firestore:', err);
+    }
+  }
+}
+
+/**
  * Henter treningshistorikk for en bruker (fra Firestore og lokal cache)
  */
 export async function getUserWorkoutHistory(userId?: string | null): Promise<CompletedWorkoutLog[]> {

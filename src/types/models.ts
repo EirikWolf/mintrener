@@ -25,6 +25,7 @@ export interface CompletedWorkoutLog {
   roundsCompleted: number;
   totalRounds: number;
   completedAt: string; // ISO string
+  difficultyRating?: 'for_lett' | 'passe' | 'for_tungt';
 }
 
 export interface ExerciseDoc {

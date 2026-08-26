@@ -43,21 +43,26 @@ export function App() {
     toggleSpeech,
   } = useIntervalTimer({ workout: selectedWorkout });
 
-  // Automatisk lagring til Firestore når økt fullføres
+  const [latestLogId, setLatestLogId] = useState<string | undefined>(undefined);
+
+  // Automatisk lagring til Firestore og lokalhistorikk når økt fullføres
   useEffect(() => {
-    if (state.status === 'completed' && user && !hasSavedRef.current) {
+    if (state.status === 'completed' && !hasSavedRef.current) {
       hasSavedRef.current = true;
-      saveCompletedWorkout(user.uid, {
+      saveCompletedWorkout(user?.uid, {
         workoutId: selectedWorkout.id,
         workoutName: selectedWorkout.name,
         workoutType: selectedWorkout.type,
         durationSeconds: state.totalElapsedSeconds,
         roundsCompleted: selectedWorkout.rounds,
         totalRounds: selectedWorkout.rounds,
-      }).catch((err) => console.warn('Kunne ikke lagre fullført økt:', err));
+      })
+        .then((logId) => setLatestLogId(logId))
+        .catch((err) => console.warn('Kunne ikke lagre fullført økt:', err));
     }
     if (state.status === 'idle') {
       hasSavedRef.current = false;
+      setLatestLogId(undefined);
     }
   }, [state.status, state.totalElapsedSeconds, user, selectedWorkout]);
 
@@ -79,6 +84,7 @@ export function App() {
         <WorkoutSummary
           workout={selectedWorkout}
           totalElapsedSeconds={state.totalElapsedSeconds}
+          workoutLogId={latestLogId}
           onRestart={resetWorkout}
         />
       </div>
