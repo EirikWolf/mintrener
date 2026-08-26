@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { sensorDiagnosticsService, SensorStatus } from '../../services/sensorDiagnosticsService';
 import { audioService } from '../../services/audioService';
+import { speechService } from '../../services/speechService';
 import {
   Activity,
   CheckCircle2,
@@ -138,18 +139,28 @@ export const SensorStatusModal: React.FC<SensorStatusModalProps> = ({ onClose })
           )}
         </div>
 
-        {/* Lyd-test og Lukk */}
-        <div className="pt-2 border-t border-zinc-800 flex gap-2">
-          <button
-            onClick={handleTestAudio}
-            className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-zinc-200 font-bold text-xs rounded-2xl flex items-center justify-center gap-1.5 transition-all border border-zinc-700"
-          >
-            <Volume2 className={`w-4 h-4 ${testedAudio ? 'text-emerald-400 animate-bounce' : ''}`} />
-            {testedAudio ? 'Spilte lyd!' : 'Test lydsignal'}
-          </button>
+        {/* Lyd-test, Tale-test og Lukk */}
+        <div className="pt-2 border-t border-zinc-800 flex flex-col gap-2">
+          <div className="flex gap-2">
+            <button
+              onClick={handleTestAudio}
+              className="flex-1 py-2 bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-zinc-200 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all border border-zinc-700"
+            >
+              <Volume2 className={`w-3.5 h-3.5 ${testedAudio ? 'text-emerald-400 animate-bounce' : ''}`} />
+              {testedAudio ? 'Spilte pip!' : 'Test pipelyd'}
+            </button>
+            <button
+              onClick={() => speechService.testVoice()}
+              className="flex-1 py-2 bg-emerald-950/80 hover:bg-emerald-900/80 border border-emerald-800/80 active:scale-95 text-emerald-300 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+              Test norsk tale
+            </button>
+          </div>
+
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs rounded-2xl transition-all"
+            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs rounded-2xl transition-all"
           >
             Lukk
           </button>

@@ -276,6 +276,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
   // Kontrollfunksjoner
   const startWorkout = useCallback(async () => {
     await audioService.unlockAudio();
+    speechService.init();
     if (stateRef.current.wakeLockEnabled) {
       await wakeLockService.requestLock();
     }
@@ -295,6 +296,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
 
   const resumeWorkout = useCallback(async () => {
     await audioService.unlockAudio();
+    speechService.init();
     if (stateRef.current.wakeLockEnabled) {
       await wakeLockService.requestLock();
     }

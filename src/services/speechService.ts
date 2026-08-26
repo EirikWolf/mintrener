@@ -2,6 +2,7 @@ export class SpeechService {
   private synth: SpeechSynthesis | null = null;
   private voice: SpeechSynthesisVoice | null = null;
   private enabled: boolean = true;
+  private primed: boolean = false;
 
   constructor() {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -13,20 +14,74 @@ export class SpeechService {
     }
   }
 
-  private loadVoice() {
-    if (!this.synth) return;
+  public init() {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    this.synth = window.speechSynthesis;
+    this.loadVoice();
+
+    try {
+      if (this.synth.paused) {
+        this.synth.resume();
+      }
+      // Prime TTS mot mobile user-gesture restriksjoner
+      if (!this.primed) {
+        const dummy = new SpeechSynthesisUtterance('');
+        dummy.volume = 0;
+        this.synth.speak(dummy);
+        this.primed = true;
+      }
+    } catch (err) {
+      console.warn('TTS init error:', err);
+    }
+  }
+
+  public loadVoice(): SpeechSynthesisVoice | null {
+    if (!this.synth && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      this.synth = window.speechSynthesis;
+    }
+    if (!this.synth) return null;
+
     const voices = this.synth.getVoices();
-    // Prioriter norske stemmer
+    if (!voices || voices.length === 0) return null;
+
+    // 1. Prioriter norske stemmer (nb-NO, no-NO, nn-NO)
     const norwegian = voices.find(
-      (v) => v.lang.startsWith('nb') || v.lang.startsWith('no') || v.lang.startsWith('nn')
+      (v) =>
+        v.lang.toLowerCase().startsWith('nb') ||
+        v.lang.toLowerCase().startsWith('no') ||
+        v.lang.toLowerCase().startsWith('nn')
     );
-    this.voice = norwegian || voices.find((v) => v.lang.startsWith('en')) || null;
+    if (norwegian) {
+      this.voice = norwegian;
+      return norwegian;
+    }
+
+    // 2. Fallback til standardspråk
+    const fallback = voices.find((v) => v.default) || voices[0] || null;
+    this.voice = fallback;
+    return fallback;
+  }
+
+  public getVoiceInfo(): { name: string; lang: string; isNorwegian: boolean } {
+    const v = this.voice || this.loadVoice();
+    if (!v) {
+      return { name: 'Standard nettleserstemme', lang: 'nb-NO', isNorwegian: true };
+    }
+    const isNorwegian =
+      v.lang.toLowerCase().startsWith('nb') ||
+      v.lang.toLowerCase().startsWith('no') ||
+      v.lang.toLowerCase().startsWith('nn');
+    return { name: v.name, lang: v.lang, isNorwegian };
   }
 
   public setEnabled(enabled: boolean) {
     this.enabled = enabled;
     if (!enabled && this.synth) {
-      this.synth.cancel();
+      try {
+        this.synth.cancel();
+      } catch {}
+    } else if (enabled) {
+      this.init();
     }
   }
 
@@ -35,22 +90,56 @@ export class SpeechService {
   }
 
   public speak(text: string) {
-    if (!this.enabled || !this.synth || !text) return;
+    if (!this.enabled || typeof window === 'undefined' || !('speechSynthesis' in window) || !text) return;
+    this.synth = window.speechSynthesis;
 
-    // Avbryt pågående tale for lav latens
-    this.synth.cancel();
+    try {
+      this.synth.cancel();
+      if (this.synth.paused) {
+        this.synth.resume();
+      }
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    if (this.voice) {
-      utterance.voice = this.voice;
-      utterance.lang = this.voice.lang;
-    } else {
-      utterance.lang = 'nb-NO';
+      const activeVoice = this.voice || this.loadVoice();
+      const utterance = new SpeechSynthesisUtterance(text);
+
+      if (activeVoice) {
+        utterance.voice = activeVoice;
+        utterance.lang = activeVoice.lang;
+      } else {
+        utterance.lang = 'nb-NO';
+      }
+
+      utterance.volume = 1.0;
+      utterance.rate = 1.05;
+      utterance.pitch = 1.0;
+
+      // Chrome Android bugfix: resume hvis motoren henger
+      utterance.onstart = () => {
+        if (this.synth?.paused) {
+          this.synth.resume();
+        }
+      };
+
+      utterance.onerror = (e) => {
+        console.warn('TTS utterance feil:', e);
+        if (this.synth?.paused) {
+          this.synth.resume();
+        }
+      };
+
+      this.synth.speak(utterance);
+
+      if (this.synth.paused) {
+        this.synth.resume();
+      }
+    } catch (err) {
+      console.warn('Kunne ikke spille av tale:', err);
     }
-    utterance.rate = 1.1; // Litt raskere, energisk tempo
-    utterance.pitch = 1.0;
+  }
 
-    this.synth.speak(utterance);
+  public testVoice() {
+    this.init();
+    this.speak('Dette er en test av norsk stemmeveiledning. Klar til trening!');
   }
 
   public announceWork(exerciseName?: string) {
