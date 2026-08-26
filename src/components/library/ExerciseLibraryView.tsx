@@ -11,7 +11,7 @@ import {
   CustomExerciseItem,
 } from '../../services/customExercisesService';
 import { fetchGlobalStats, GlobalTelemetryStats } from '../../services/telemetryService';
-import { Search, Dumbbell, Sparkles, Plus, Trash2, Clock, Weight, Flame } from 'lucide-react';
+import { Search, Dumbbell, Sparkles, Plus, Trash2, Clock, Weight } from 'lucide-react';
 
 const CATEGORIES = [
   { id: 'alle', label: 'Alle' },
