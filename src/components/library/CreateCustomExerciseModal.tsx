@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { saveCustomExercise, CustomExerciseItem } from '../../services/customExercisesService';
-import { X, Plus, Clock, Dumbbell, Target, Sparkles } from 'lucide-react';
+import { UtstyrEnum } from '../../schemas/exerciseSchema';
+import { X, Plus, Clock, Sparkles } from 'lucide-react';
 
 interface CreateCustomExerciseModalProps {
   onClose: () => void;
@@ -17,7 +18,7 @@ export const CreateCustomExerciseModal: React.FC<CreateCustomExerciseModalProps>
   const [navn, setNavn] = useState('');
   const [kategori, setKategori] = useState<'kroppsvekt' | 'kettlebell' | 'frivekt' | 'mobilitet' | 'kondisjon'>('kroppsvekt');
   const [muskler, setMuskler] = useState('helkropp');
-  const [utstyr, setUtstyr] = useState('ingen');
+  const [utstyr, setUtstyr] = useState<string>('ingen');
   const [durationMinutes, setDurationMinutes] = useState<number>(0);
   const [durationSeconds, setDurationSeconds] = useState<number>(50);
   const [instruks, setInstruks] = useState('');
@@ -41,6 +42,8 @@ export const CreateCustomExerciseModal: React.FC<CreateCustomExerciseModalProps>
     setErrorMsg(null);
 
     try {
+      const validUtstyr = (utstyr.trim() || 'ingen') as typeof UtstyrEnum._type;
+
       const saved = await saveCustomExercise(user?.uid, {
         navn: { nb: navn.trim() },
         kategori,
@@ -49,9 +52,11 @@ export const CreateCustomExerciseModal: React.FC<CreateCustomExerciseModalProps>
           primær: [muskler.trim() || 'helkropp'],
           sekundær: [],
         },
-        utstyr: [utstyr.trim() || 'ingen'],
+        utstyr: [validUtstyr],
         nivå: 'nybegynner',
         defaultDurationSeconds: totalSeconds,
+        sensorProfil: 'ingen',
+        bildeVinkel: 'side',
         instruks: {
           nb: instruks.trim() ? [instruks.trim()] : ['Egendefinert øvelse'],
         },

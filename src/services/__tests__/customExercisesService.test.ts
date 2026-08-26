@@ -20,6 +20,8 @@ describe('CustomExercisesService', () => {
       muskler: { primær: ['rygg', 'lår'], sekundær: ['biceps'] },
       utstyr: ['annet'],
       nivå: 'middels',
+      sensorProfil: 'ingen',
+      bildeVinkel: 'side',
       instruks: { nb: ['Rask roing i høyt tempo'] },
       vanligeFeil: { nb: ['Krum rygg'] },
       defaultDurationSeconds: 900, // 15 minutter
@@ -44,6 +46,8 @@ describe('CustomExercisesService', () => {
       muskler: { primær: ['kjerne'], sekundær: [] },
       utstyr: ['ingen'],
       nivå: 'nybegynner',
+      sensorProfil: 'ingen',
+      bildeVinkel: 'side',
       instruks: { nb: [] },
       vanligeFeil: { nb: [] },
       bildeStatus: 'mangler',

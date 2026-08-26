@@ -21,7 +21,6 @@ import {
   Dumbbell,
   Zap,
   ArrowLeft,
-  Timer,
 } from 'lucide-react';
 
 interface WorkoutBuilderViewProps {
