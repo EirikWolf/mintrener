@@ -140,6 +140,30 @@ Dette dokumentet fører en kronologisk oversikt over tekniske og arkitektoniske 
 * **Valg:**
   1. Alle filer fra `docs/Ny versjon/` er flyttet direkte til rotmappen `docs/`, og `Ny versjon`-undermappen er slettet slik at dokumentasjonsstrukturen er ren og autoritativ.
 
+---
+
+## [2026-08-27] Beslutning 17: Kalendersynkronisering (.ics & Google Kalender)
+* **Kontekst:** Brukere ønsker å forhåndsplanlegge 28/30-dagers utfordringer med faste tidspunkter i jobb- og privatkalender.
+* **Valg:**
+  1. `src/services/calendarExportService.ts` genererer gyldige iCalendar `.ics`-filer for hele utfordringen og direktekoblinger til Google Kalender.
+  2. `src/components/calendar/CalendarExportModal.tsx` lar brukeren velge tidspunkt på dagen (f.eks. 11:30) og laste ned kalenderfilen.
+
+---
+
+## [2026-08-27] Beslutning 18: Live Pulsgraf under Trening
+* **Kontekst:** Under aktive økter med tilkoblet pulsmåler trenger brukeren sanntids innsikt i hjertefrekvens og sonetilhørighet.
+* **Valg:**
+  1. `src/components/sensors/HeartRateLiveGraph.tsx` tegner en jevn SVG sanntidskurve med sonespesifikk fargegradient direkte under timeren.
+
+---
+
+## [2026-08-27] Beslutning 19: Full Internasjonalisering (i18n)
+* **Kontekst:** Støtte for flere språk (Norsk Bokmål, Norsk Nynorsk og Engelsk) for bred tilgjengelighet.
+* **Valg:**
+  1. `src/services/i18nService.ts` tilbyr ordbøker og reaktiv hendelsesstyring.
+  2. Hurtigvelger integrert i innstillingene under *Mer → Språk*.
+
+
 
 
 

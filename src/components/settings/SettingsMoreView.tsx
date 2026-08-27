@@ -14,6 +14,12 @@ import { ProfileOnboardingModal } from '../profile/ProfileOnboardingModal';
 import { getActiveContextProfiles } from '../../services/profileCompositionService';
 import { ContextProfile } from '../../schemas/profileSchema';
 import {
+  getCurrentLanguage,
+  setLanguage,
+  SUPPORTED_LANGUAGES,
+  SupportedLanguage,
+} from '../../services/i18nService';
+import {
   Volume2,
   VolumeX,
   Smartphone,
@@ -75,6 +81,7 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
   const [telemetryEnabled, setTelemetryEnabledState] = useState<boolean>(() => getTelemetryConsent());
   const [globalStats, setGlobalStats] = useState<GlobalTelemetryStats | null>(null);
   const [weeklyGoal, setWeeklyGoalState] = useState<number>(() => getWeeklyGoal());
+  const [currentLang, setCurrentLang] = useState<SupportedLanguage>(() => getCurrentLanguage());
 
   React.useEffect(() => {
     const handleProfileChange = () => {
@@ -278,6 +285,38 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
               >
                 +
               </button>
+            </div>
+          </div>
+          {/* Språk / Language */}
+          <div className="flex items-center justify-between py-2 border-t border-zinc-800/80">
+            <div className="flex items-center gap-2.5">
+              <Globe2 className="w-4 h-4 text-blue-400" />
+              <div>
+                <p className="text-xs font-bold text-white">Språk / Language</p>
+                <p className="text-[10px] text-zinc-400">Bokmål, Nynorsk eller English</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800">
+              {SUPPORTED_LANGUAGES.map((lang) => {
+                const isSelected = currentLang === lang.code;
+                return (
+                  <button
+                    key={lang.code}
+                    onClick={() => {
+                      setLanguage(lang.code);
+                      setCurrentLang(lang.code);
+                    }}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${
+                      isSelected
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <span>{lang.flag}</span>
+                    <span>{lang.code.toUpperCase()}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

@@ -4,6 +4,7 @@ import { CircularProgress } from './CircularProgress';
 import { UserMenu } from '../auth/UserMenu';
 import { SensorStatusModal } from '../sensors/SensorStatusModal';
 import { HeartRateWidget } from '../sensors/HeartRateWidget';
+import { HeartRateLiveGraph } from '../sensors/HeartRateLiveGraph';
 import { MicroWorkoutModal } from '../micro/MicroWorkoutModal';
 import { MicroTimerDisplay } from '../micro/MicroTimerDisplay';
 import { ExerciseItem } from '../../schemas/exerciseSchema';
@@ -108,6 +109,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   const [isSkillTreeModalOpen, setIsSkillTreeModalOpen] = useState(false);
   const [activeMicroExercise, setActiveMicroExercise] = useState<ExerciseItem | null>(null);
   const [activeChallengeId, setActiveChallengeIdState] = useState<string | null>(() => getActiveChallengeId());
+  const [currentHeartRate, setCurrentHeartRate] = useState<number | null>(null);
   const [interruptedSession, setInterruptedSession] = useState<InterruptedSession | null>(() => getInterruptedSession());
   const [adaptiveSuggestion, setAdaptiveSuggestion] = useState<ProgressionSuggestion | null>(null);
   const [shareCopied, setShareCopied] = useState<boolean>(false);
@@ -237,7 +239,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             {state.status === 'idle' && <PwaInstallPromptModal />}
 
             {/* Heart Rate Widget */}
-            <HeartRateWidget />
+            <HeartRateWidget onHeartRateUpdate={setCurrentHeartRate} />
 
             <div className="flex items-center gap-0.5 bg-zinc-900/90 border border-zinc-800/80 backdrop-blur-md rounded-full p-1 shadow-sm">
               {/* Norsk stemmeveiledning */}
@@ -667,6 +669,16 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             phase={state.phase}
           />
         </div>
+
+        {/* Live Pulsgraf ved aktiv pulsmåling */}
+        {currentHeartRate && state.status !== 'idle' && (
+          <div className="w-full flex justify-center px-4 py-1">
+            <HeartRateLiveGraph
+              currentBpm={currentHeartRate}
+              isRestPhase={state.phase === 'rest'}
+            />
+          </div>
+        )}
 
         {/* Neste øvelse / Bevegelsesteller under timeren */}
         <div className="min-h-[1.5rem] flex items-center justify-center gap-2">

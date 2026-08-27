@@ -7,6 +7,7 @@ import {
   getActiveChallengeId,
   setActiveChallengeId,
 } from '../../services/challengeService';
+import { CalendarExportModal } from '../calendar/CalendarExportModal';
 import {
   X,
   Play,
@@ -14,6 +15,7 @@ import {
   Coffee,
   Trophy,
   Star,
+  Calendar,
 } from 'lucide-react';
 
 interface ChallengeDetailModalProps {
@@ -33,6 +35,7 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
   const [isActive, setIsActive] = useState<boolean>(
     () => getActiveChallengeId() === challenge.id
   );
+  const [isCalendarModalOpen, setIsCalendarModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     const handler = () => {
@@ -111,17 +114,27 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
                 </p>
               </div>
             </div>
-            <button
-              onClick={handleToggleActive}
-              className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                isActive
-                  ? 'bg-amber-500 text-zinc-950 font-black shadow-md'
-                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
-              }`}
-            >
-              <Star className={`w-3.5 h-3.5 ${isActive ? 'fill-current' : ''}`} />
-              {isActive ? 'Aktiv på Hjem' : 'Sett som aktiv'}
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setIsCalendarModalOpen(true)}
+                title="Legg i kalender (Google / Apple / Outlook)"
+                className="py-1.5 px-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold transition-all flex items-center gap-1"
+              >
+                <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                <span className="hidden sm:inline">Kalender</span>
+              </button>
+              <button
+                onClick={handleToggleActive}
+                className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  isActive
+                    ? 'bg-amber-500 text-zinc-950 font-black shadow-md'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                }`}
+              >
+                <Star className={`w-3.5 h-3.5 ${isActive ? 'fill-current' : ''}`} />
+                {isActive ? 'Aktiv på Hjem' : 'Sett som aktiv'}
+              </button>
+            </div>
           </div>
 
           <div className="w-full h-2 bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
@@ -219,6 +232,13 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
           )}
         </div>
       </div>
+
+      {isCalendarModalOpen && (
+        <CalendarExportModal
+          challenge={challenge}
+          onClose={() => setIsCalendarModalOpen(false)}
+        />
+      )}
     </div>
   );
 };
