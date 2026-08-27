@@ -12,6 +12,9 @@ import { GroupRoomModal } from '../group/GroupRoomModal';
 import { AboutGuideModal } from '../help/AboutGuideModal';
 import { AiCoachModal } from '../coach/AiCoachModal';
 import { PwaInstallPromptModal } from '../pwa/PwaInstallPromptModal';
+import { ChallengeCatalogModal } from '../challenges/ChallengeCatalogModal';
+import { STARTER_CHALLENGES } from '../../data/challenges';
+import { getActiveChallengeId, getChallengeProgress } from '../../services/challengeService';
 import { getFavoriteProgramIds } from '../../services/favoritesService';
 import { TRAINING_PROGRAMS } from '../../data/programs';
 import { getInterruptedSession, clearInterruptedSession, InterruptedSession } from '../../services/sessionRecoveryService';
@@ -42,6 +45,7 @@ import {
   Share2,
   Check,
   Target,
+  Trophy,
 } from 'lucide-react';
 import { shareWorkout } from '../../services/shareWorkoutService';
 import { calculateWeeklyProgress, WeeklyGoalProgress } from '../../services/weeklyGoalService';
@@ -93,10 +97,20 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isAiCoachOpen, setIsAiCoachOpen] = useState(false);
+  const [isChallengesModalOpen, setIsChallengesModalOpen] = useState(false);
   const [activeMicroExercise, setActiveMicroExercise] = useState<ExerciseItem | null>(null);
+  const [activeChallengeId, setActiveChallengeIdState] = useState<string | null>(() => getActiveChallengeId());
   const [interruptedSession, setInterruptedSession] = useState<InterruptedSession | null>(() => getInterruptedSession());
   const [adaptiveSuggestion, setAdaptiveSuggestion] = useState<ProgressionSuggestion | null>(null);
   const [shareCopied, setShareCopied] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    const handler = () => {
+      setActiveChallengeIdState(getActiveChallengeId());
+    };
+    window.addEventListener('challenge-progress-changed', handler);
+    return () => window.removeEventListener('challenge-progress-changed', handler);
+  }, []);
 
   const handleShareCurrentWorkout = async () => {
     const res = await shareWorkout(workout);
@@ -387,12 +401,73 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                 </div>
               )}
 
+              {/* 3b. Aktiv Utfordring Fremdriftskort (C.15, C.15b) */}
+              {activeChallengeId && (() => {
+                const challenge = STARTER_CHALLENGES.find((c) => c.id === activeChallengeId);
+                if (!challenge) return null;
+                const prog = getChallengeProgress(challenge.id);
+                const currentDayData = challenge.dailyWorkouts.find((d) => d.day === prog.currentDay);
+                const percent = Math.round((prog.completedDays.length / challenge.durationDays) * 100);
+
+                return (
+                  <div className="bg-amber-950/80 border border-amber-500/70 rounded-2xl p-2.5 space-y-2 shadow-lg animate-in fade-in">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">{challenge.badgeReward.icon}</span>
+                        <div>
+                          <p className="text-xs font-black text-white">
+                            {challenge.title} • Dag {prog.currentDay}/{challenge.durationDays}
+                          </p>
+                          <p className="text-[10px] text-amber-200">
+                            {currentDayData?.isRestDay
+                              ? 'I dag: Velfortjent hviledag ☕'
+                              : `I dag: ${currentDayData?.title || 'Dagens økt'}`}
+                          </p>
+                        </div>
+                      </div>
+
+                      {currentDayData && !currentDayData.isRestDay && currentDayData.workout && (
+                        <button
+                          onClick={() => {
+                            if (onStartWorkoutDirectly) {
+                              onStartWorkoutDirectly(currentDayData.workout!);
+                            } else {
+                              onSelectWorkout(currentDayData.workout!);
+                              onStart();
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 active:scale-95 text-zinc-950 text-xs font-black rounded-xl shadow-md flex items-center gap-1 shrink-0"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          Start dag {prog.currentDay}
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="w-full h-1.5 bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
+                      <div
+                        className="h-full bg-amber-400 rounded-full transition-all duration-500"
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div className="flex items-center justify-between px-1 gap-2">
                 <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
                   <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider flex items-center gap-1 shrink-0">
                     <Star className="w-3 h-3 text-amber-400 fill-current" />
                     {matchedFavs.length > 0 ? `Favoritter (${matchedFavs.length})` : 'Hurtigstart'}
                   </span>
+                  <button
+                    onClick={() => setIsChallengesModalOpen(true)}
+                    title="Utfordringer (28/30 dagers program)"
+                    className="px-1.5 py-0.5 rounded-md bg-amber-950/80 border border-amber-800/80 text-[10px] font-black text-amber-400 hover:bg-amber-900 transition-all flex items-center gap-0.5 shadow-sm active:scale-95 shrink-0"
+                  >
+                    <Trophy className="w-2.5 h-2.5" />
+                    <span>Utfordring</span>
+                  </button>
                   <button
                     onClick={() => setIsMicroModalOpen(true)}
                     title="Microtrening (1 øvelse 1-5 min)"
@@ -722,6 +797,21 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             if (found) {
               if (onStartWorkoutDirectly) onStartWorkoutDirectly(found);
               else onSelectWorkout(found);
+            }
+          }}
+        />
+      )}
+
+      {/* Utfordringer (Challenges 28/30 dager) Modal */}
+      {isChallengesModalOpen && (
+        <ChallengeCatalogModal
+          onClose={() => setIsChallengesModalOpen(false)}
+          onStartWorkout={(chalWorkout, _dayNum) => {
+            if (onStartWorkoutDirectly) {
+              onStartWorkoutDirectly(chalWorkout);
+            } else {
+              onSelectWorkout(chalWorkout);
+              onStart();
             }
           }}
         />
