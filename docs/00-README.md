@@ -8,6 +8,7 @@ Dette settet er skrevet for å tas rett inn i Claude Code eller Antigravity som 
 2. `vedlegg-b-microtrening-og-programmer.md` – microtrening (stemme, grupperom, påminnelser) og programkatalogen. Leses før noe av dette bygges; del 1 er P1-relevant.
 3. `vedlegg-c-konkurrentanalyse-og-neste-fase.md` – når MVP er i bruk og neste fase planlegges. C.8 (programmer på tvers av profiler) endrer øvelses- og profilskjemaet og bør leses før katalogen utvides.
 4. `vedlegg-a-bildepipeline.md` (v2) – kun når arbeidet gjelder øvelsesbiblioteket eller bilder. A.3 (kjøreregler mot Kitor) er obligatorisk lesning før noe skript kjøres mot Kitor. A.12.2 er en testbestilling til kitor-eier, ikke en oppgave for kodeagenten – bortsett fra `--workflow`-flagget.
+5. `backlog.md` – fremtidige initiativer, herunder AI-generert video-loop pipeline på Kitor (Wan2.1 / I2V) og nye interaktive funksjoner.
 
 ## Faste rammer som gjelder uansett oppgave
 

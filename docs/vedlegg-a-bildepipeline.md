@@ -524,3 +524,15 @@ Oppgave 3, 4 og 8 gjøres først, så snart kitor-eier har gitt klarsignal.
 | Skript | Python `generate.py` | TypeScript `scripts/exportComfyUiBatch.ts` | Samme språk som appen, skript fantes allerede i repoet |
 | QA | Én seed, manuell sjekk | Tre seeds per posisjon, kontaktkopi, promoteringsskript | Billigste kvalitetstiltak |
 | Hender | Ikke omtalt | Eget regelsett i A.5, A.6, A.10 | To av 24 testbilder hadde fingerartefakter |
+
+---
+
+## A.15 Fra statiske bilder til sømløse video-loops (Kitor I2V)
+
+Statiske fasebilder fanger ikke dynamikken i bevegelser som kettlebell swing, burpees eller katt-ku mobilitet. Derfor utvides pipelinen til å produsere **2–4 sekunders sømløse video-loops** generert direkte på Kitor:
+
+* **Modell på Kitor:** `Wan2.1-I2V` (14B fp8 / 1.3B) eller `CogVideoX-5B-I2V` via ComfyUI.
+* **Prosess:** Startbildet av instruktøren Astrid (`0.webp`) animeres med en presis bevegelsesprompt til 49–81 frames ved 24/30 fps.
+* **App-leveranse:** Komprimeres med FFmpeg/AV1 til lettvekts MP4/WebM (300–500 KB per øvelse) og spilles av med maskinvareakselerert `<video autoPlay loop muted playsInline>` under økten.
+* **Detaljert arkitektur:** Se [`docs/backlog.md`](./backlog.md).
+

@@ -187,6 +187,16 @@ Dette dokumentet fører en kronologisk oversikt over tekniske og arkitektoniske 
   1. `src/services/aiWorkoutGeneratorService.ts` velger ut en fysiologisk balansert økt fra øvelsesbiblioteket med tilpassede intervaller og runder.
   2. `src/components/ai/AiWorkoutGeneratorModal.tsx` tilbyr 1-klikks generering og umiddelbar oppstart.
 
+---
+
+## [2026-08-27] Beslutning 23: AI-generert Video-loop Pipeline på Kitor (Wan2.1 I2V)
+* **Kontekst:** Brukeren vurderte at statiske fasebilder ikke er tilstrekkelig for å fange dynamikken, tempoet og leddbanene i øvelser (som kettlebell swing, burpees, utfall og mobilitet).
+* **Valg:**
+  1. Opprettet `docs/backlog.md` med grundig arkitektur for Image-to-Video (I2V) med `Wan2.1` / `CogVideoX` på Kitor (RTX 3090 / 24 GB VRAM).
+  2. Startbilde fra Astrid-LoRA animeres til 2–4 sekunders sømløse loops (300–500 KB per øvelse i MP4/WebM) og avspilles som maskinvareakselerert `<video autoPlay loop muted playsInline>` under øktene.
+  3. Dokumentert i `docs/vedlegg-a-bildepipeline.md` (kapittel A.15).
+
+
 
 
 
