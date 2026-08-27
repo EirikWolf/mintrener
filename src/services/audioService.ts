@@ -111,6 +111,33 @@ class AudioService {
       this.playTone(freq, idx === notes.length - 1 ? 0.6 : 0.18, 'triangle', 0.8, idx * 0.18);
     });
   }
+
+  /**
+   * Autentisk metallisk boksing-klokke / gong for runder
+   */
+  public playBoxingBell(enabled = true) {
+    if (!enabled) return;
+    this.playTone(850, 0.8, 'triangle', 0.8, 0);
+    this.playTone(1280, 0.6, 'sine', 0.5, 0.02);
+  }
+
+  /**
+   * Sportsfløyte for idrettslag
+   */
+  public playWhistle(enabled = true) {
+    if (!enabled) return;
+    this.playTone(2800, 0.25, 'sine', 0.8, 0);
+    this.playTone(3200, 0.3, 'triangle', 0.9, 0.05);
+  }
+
+  /**
+   * Myk syngeskål / meditativ chime for kveldsro og kontor
+   */
+  public playSoftChime(enabled = true) {
+    if (!enabled) return;
+    this.playTone(440, 1.2, 'sine', 0.5, 0);
+    this.playTone(880, 1.0, 'sine', 0.3, 0.05);
+  }
 }
 
 export const audioService = new AudioService();

@@ -110,6 +110,37 @@ Dette dokumentet fører en kronologisk oversikt over tekniske og arkitektoniske 
   1. `src/services/mediaSessionService.ts` integrerer nettleserens `navigator.mediaSession` med tittel (øvelsesnavn + tid), artist (fase) og album (økt + runde).
   2. Koblet til `TimerDisplay.tsx` med kontinuerlig synkronisering og støtte for eksterne hodetelefonknapper.
 
+---
+
+## [2026-08-27] Beslutning 13: Sosiale Delingskort & Gruppestatistikk (C.18)
+* **Kontekst:** Vedlegg C.18 krever visuelle delingskort for sosiale medier (Teams, Slack, Instagram) og sporing av felles treningsminutter for grupper/familier/kontor.
+* **Valg:**
+  1. `src/services/shareCardService.ts` rendrer 1080x1080 canvas-grafikk med dyp mørk gradient, badgemerke og store typografiske tall.
+  2. `src/components/social/ShareCardModal.tsx` forhåndsviser kortet og tilbyr direkte deling via Web Share API eller PNG-nedlasting.
+  3. `src/services/groupStatsService.ts` akkumulerer treningsøkter og beregner felles ukestatistikk.
+
+---
+
+## [2026-08-27] Beslutning 14: Utvidede Lydeffekter via Web Audio API (B.3)
+* **Kontekst:** Vedlegg B.3 krever zero-latency lydeffekter tilpasset ulike profiler og øktfaser.
+* **Valg:**
+  1. `src/services/audioService.ts` utvidet med metallisk boksing-klokke / gong (`playBoxingBell`), sportsfløyte for idrettslag (`playWhistle`) og myk syngeskål for kveldsro (`playSoftChime`).
+
+---
+
+## [2026-08-27] Beslutning 15: Pulssone-styring & Tanaka-formel
+* **Kontekst:** Vedlegg C.18 krever presis pulssoneberegning og støtte for dynamisk restitusjonsstyring.
+* **Valg:**
+  1. `src/services/heartRateZoneService.ts` implementerer Tanakas formel (208 - 0.7 * alder) og deler inn i 5 pulssoner (Sone 1 til Sone 5) med fargekoder og restitusjonssjekk.
+
+---
+
+## [2026-08-27] Beslutning 16: Kanonisering av Spesifikasjonsdokumenter
+* **Kontekst:** Mappen `docs/Ny versjon/` inneholdt oppdaterte versjoner av spesifikasjonen og vedleggene.
+* **Valg:**
+  1. Alle filer fra `docs/Ny versjon/` er flyttet direkte til rotmappen `docs/`, og `Ny versjon`-undermappen er slettet slik at dokumentasjonsstrukturen er ren og autoritativ.
+
+
 
 
 

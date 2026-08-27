@@ -1,4 +1,4 @@
-# Min Trener – spesifikasjon (utkast v0.6)
+# Min Trener – spesifikasjon (utkast v1.2)
 
 **Arbeidsnavn:** Min Trener
 
@@ -14,6 +14,7 @@
 | `00-README.md` | Overlevering til kodeagent, leserekkefølge, første prompt |
 | `trening-app-spesifikasjon.md` | Dette dokumentet – krav, funksjoner, arkitektur, faseplan |
 | `vedlegg-a-bildepipeline.md` | Generering av øvelsesillustrasjoner på Kitor via arbiter-lease (ComfyUI, Flux.1-dev, astrid_k-LoRA, ControlNet OpenPose) – v2 etter testbatcher |
+| `vedlegg-c-konkurrentanalyse-og-neste-fase.md` | Konkurrentanalyse (Online Coach, Wakeout, MicroReps, norske apper, Sterk og stødig), posisjonering, og plan for neste fase: programmer på tvers av profiler, utvidelser for kontor og barn, innhold for kor, senior, idrettslag og møte |
 | `vedlegg-b-microtrening-og-programmer.md` | Tre modus (Alene / Sammen / Led en gruppe), kontekstprofiler (kontor og barn først; kor, senior, idrettslag, møte senere), microtrening med stemme, grupperom, påminnelser, og programbibliotek |
 
 ---
@@ -77,7 +78,7 @@ En webapp har ikke samme sensortilgang som en native app. Dette er lagt til grun
 
 Appen har tre modus etter **hvem som trener**: **Alene** (P1), **Sammen** – grupperom og grupper (P2), og **Led en gruppe** – instruktørverktøy for én som leder andre uten mobil, med storskjerm, instruks lest av stemmen og repetisjonstelling (P2). Modusene er de tre store valgene på Hjem.
 
-**Kontekstprofiler** tilpasser innhold, stemmetone, tekststørrelse og lydprofil til en setting, uten å være egne modus. Første versjon: **Kontor** og **Barn og familie**. Spesifisert for senere: Kor og musikere, Senior og sittende, Idrettslag, Møte. Profiler er JSON-objekter og programmer er merket med kontekst, slik at nye profiler kan legges til uten kodeendring.
+**Kontekstprofiler** tilpasser innhold, stemmetone, tekststørrelse og lydprofil til en setting, uten å være egne modus. Brukeren velger et **sett** profiler ved onboarding («Hvor skal du bruke Min Trener?»), og grensesnittet settes sammen av dem etter faste regler (Vedlegg B.0.4): union for innhold, per økt for tone, mest tilgjengelig for tilgjengelighet. Det som ikke er relevant for brukerens sammenhenger, ligger bak «Mer» til det er bedt om. Første versjon: **Kontor** og **Barn og familie**. Spesifisert for senere: Kor og musikere, Senior og sittende, Idrettslag, Møte. Profiler er JSON-objekter og programmer er merket med kontekst, slik at nye profiler kan legges til uten kodeendring.
 
 ### 3.1b Microtrening (P1) – se Vedlegg B, del 1
 
@@ -86,6 +87,7 @@ Korte økter på 1–10 minutter i hverdagsklær, alene eller sammen med andre �
 - **Microtimer** med hurtigvalg for varighet og «hold til du gir opp»-modus for planke (P1)
 - **Stemmemeldinger** fra forhåndsinnspilte klipp i tre toner, generert på Kitor (P1: «rolig» på bokmål)
 - **Gruppeøkt i rommet**: vert oppretter rom med QR-kode, kollegaer blir med uten konto, synkronisert nedtelling, storskjermvisning på møteromsskjermen (P2)
+- **Invitasjon dit folk er**: del romlenken via Teams, Outlook eller mobilens delingsark, med forhåndsvisning av lenken og mulighet for planlagt rom med starttid (P2, Vedlegg B.5b)
 - **Grupper med påminnelser**: faste push-varsler («Armhevinger kl. 10»), ett-trykks registrering, felles ukesteller, valgfri toppliste (P2)
 
 Detaljer, datamodell, personvernregler og oppgaveliste i Vedlegg B, del 1.
@@ -115,9 +117,11 @@ Biblioteket genereres som strukturert JSON etter et fast skjema, ikke som fritek
 4. Illustrasjoner genereres på Kitor (RTX 3090) med ComfyUI, Flux.1-dev og ControlNet OpenPose – to fotorealistiske bilder per øvelse (start/slutt) med samme fiktive instruktør (astrid_k-LoRA fra SynthIQ), portrettformat, studiobakgrunn. Tilgang via Tailscale og GPU-lease fra Kitors arbiter. Hele pipelinen er beskrevet i **Vedlegg A (v2)**. Ikoner for muskelgrupper og utstyr lages som SVG-kode.
 5. Manuell gjennomgang av hele biblioteket før lansering, både tekst og bilder. Åpen app betyr at feil instruks når andre enn deg.
 
-### 3.3 Styrkelogg (P2)
+### 3.3 Styrkelogg og styrkeprogram (P2) – se Vedlegg C.17
 
-- Logg sett × reps × vekt per øvelse, med hviletimer mellom sett
+Styrkeloggen er en del av styrkeprogrammene, ikke en egen skjerm: serier med valg av 2/3/4 økter i uken, logging inne i økten (reps, vekt, reps i reserve), og en eksplisitt progresjonsregel som foreslår neste belastning med begrunnelse. Første serie: «Sterkere 12 uker», kroppsvekt og kettlebell først. Alt bygger på dokumentert kunnskapsgrunnlag (`basis`, Vedlegg C.19) og skal gjennomgås av noen med fagbakgrunn før det åpnes for alle.
+
+- Logg sett × reps × vekt × RIR per øvelse, med hviletimer mellom sett
 - Forrige økt vises som forslag («sist: 3×8 @ 24 kg»)
 - Kettlebell-spesifikt: registrer klokkevekt fra fast liste (8/12/16/20/24/28/32 kg), støtte for tidsbaserte sett (swings i 60 s)
 - Automatisk personlig rekord og estimert 1RM (kun for stang/manual, ikke kettlebell)
@@ -197,7 +201,7 @@ Bunnmeny med fire faner:
 
 | Fane | Innhold |
 |---|---|
-| **Hjem** | Modusvalg Alene / Sammen / Led en gruppe, hurtigrad styrt av kontekstprofil, pågående serie, ukesmål-ring, siste økter |
+| **Hjem** | Modusvalg Alene / Sammen / Led en gruppe (vektet etter profiler), én hurtigrad per valgt profil, pågående serie, ukesmål-ring, siste økter |
 | **Økter** | Programmer (filter og tre-spørsmåls-inngang), mine maler, øvelsesbibliotek |
 | **Historikk** | Kalender, grafer, PR-er |
 | **Mer** | Innstillinger, sensorer, integrasjoner, eksport, konto |
@@ -301,6 +305,7 @@ series/{id}                       – programserier, kun lesing
 rooms/{code}                      – kortlevde grupperom, TTL 2 t (Vedlegg B.5)
 groups/{id}                       – varige grupper med påminnelser (Vedlegg B.6)
 challenges/{id}                   – P3
+organizations/{id}                – kommune, bedrift, instruktør, idrettslag (Vedlegg C.25) – tom til noen ber om den
 ```
 
 ### Skjema for øvelse (grunnlag for KI-generering)
@@ -343,7 +348,7 @@ Hver leverer `{ verdi, tidsstempel, kvalitet }` og kan mangle uten at appen feil
 
 **Fase 1 – MVP**
 - Intervalltimer med lyd, tale, vibrasjon og Wake Lock
-- Modusvalg på Hjem (kun Alene aktiv), kontekstprofiler kontor og barn
+- Modusvalg på Hjem (kun Alene aktiv), kontekstprofiler kontor og barn som sett, onboarding-spørsmål
 - Microtimer med stemmemeldinger («rolig» og «lek», bokmål) og diskré lydprofil
 - Programkatalog med minst 18 programmer (kontor, barn og familie, kroppsvekt HIIT)
 - Bygg og lagre egne økter
@@ -356,7 +361,7 @@ Hver leverer `{ verdi, tidsstempel, kvalitet }` og kan mangle uten at appen feil
 
 **Fase 2 – Sensorer, logg og grupper**
 - Led en gruppe: instruktørskjerm, instruks-fase, repetisjonstelling
-- Gruppeøkt i rom med QR og storskjermvisning
+- Gruppeøkt i rom med QR og storskjermvisning, invitasjon via Teams/Outlook/deling, planlagt rom
 - Grupper med påminnelser og .ics-fallback
 - Full programkatalog (40 + 3 serier), «for lett/tungt»-tilpasning
 - Stemmetoner «gira» og «tørr», engelsk
@@ -386,6 +391,13 @@ Hver leverer `{ verdi, tidsstempel, kvalitet }` og kan mangle uten at appen feil
 | 4 | Øvelsesbibliotek | KI-generert | Fast JSON-skjema, generering i bolker, åpen datakilde som kryssjekk, manuell gjennomgang |
 | 5 | Integrasjoner | Interessant | GPX i P2, Strava i P3, Google Fit avvist, Apple Health/Health Connect krever Capacitor |
 | 6 | Øvelsesbilder | Genereres på Kitor | Eget vedlegg A. v1 valgte SDXL og vektorstil av lisenshensyn |
+| 14 | Invitasjon til rom via Teams | Lenke, forhåndsvisning og planlagt rom – ikke Teams-app | Vedlegg B.5b. Web Share API på mobil, dyplenke og mailto på desktop, Open Graph via Cloud Function, `scheduledAt` på rom. Teams-app vurderes bare hvis en organisasjonskunde ber om det |
+| 16 | Utfordringer som eget konsept | Serie med `kind: challenge`, daglig rutenett, hviledager, bom uten straff, maks tre aktive, gruppeutfordringer | Vedlegg C.5b og C.15b, lært av Hjemmetrening Pro. Tolv utfordringer i katalogen. Flipbok-animasjon fra bildepipelinen for øvelser der to bilder ikke holder |
+| 15 | Kommersiell bildemodell | FLUX.2 klein 4B og Qwen-Image 2.0 er kandidatene, testbatch bestilt | Vedlegg A.12.1–A.12.2. Ikke regenerere før inntekt er aktuelt; skjelettene bærer over |
+| 13 | Flere profiler per bruker | Profiler er et sett, ikke ett valg | Vedlegg B.0.4. Bygges i P1 fordi endringen er billig nå. Tre modus uansett. Sammensetting: union for innhold, per økt for tone, mest tilgjengelig for tilgjengelighet, snitt for skjuling |
+| 12 | Inntekt | Mulig, via organisasjoner – ikke via brukere | Vedlegg C del 3. Kjernen fra P1 forblir gratis for alltid. Kommune/eldresenter, instruktørkonto og arbeidsplass uten innsyn er modellene; annonser aldri. Tom organisasjonsentitet inn i datamodellen nå. Bilder må regenereres kommersielt før første betaling |
+| 11 | Styrkeprogram, fellesskap og kunnskapsgrunnlag | Vedlegg C.17–C.19 | 2/3/4 økter via ukemaler, dobbel progresjon med bom- og reduksjonsregel, logging i økt. Fellesskap som aggregerte tellere (terskel 3) og reaksjoner, tekst kun i grupper, offentlige kommentarer utsatt. `basis` og `reviewStatus` på alt som andre følger over tid |
+| 10 | Neste fase etter MVP | Konkurrentanalyse og programplan i Vedlegg C | Øvelsesalternativer og profilregler gjør programmer gjenbrukbare på tvers; brukerens øvelsesbytter lagres for hele programmet; kosthold, trenerchat og arbeidsgivernivå holdes bevisst ute |
 | 9 | Bildestil og modell, etter testbatcher på Kitor | Fotorealistisk Flux.1-dev med fast instruktør (astrid_k), godkjent av Eirik | Vedlegg A v2. Flux.1-dev er ikke-kommersiell: gratis app er innenfor, men skal appen gi inntekt må bildene regenereres. Bevisst valg, dokumenteres i DECISIONS.md. All GPU-bruk via arbiter-lease |
 | 7 | Microtrening på kontoret og programbibliotek | Bærende bruksmåte, egen spekk | Vedlegg B. Microtimer og startkatalog inn i P1, grupperom og påminnelser i P2. Stemmeklipp genereres på Kitor. Ingen arbeidsgiver-/rapporteringsnivå i gruppene |
 | 8 | Flere modus | Tre modus etter hvem som trener (Alene / Sammen / Led en gruppe), kontekstprofiler for setting | Kontor og Barn og familie i første versjon. Kor, senior, idrettslag og møte spesifisert i Vedlegg B.0.2 med `status: planned`, slik at de ikke glemmes |

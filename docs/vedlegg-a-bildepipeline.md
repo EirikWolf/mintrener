@@ -1,6 +1,6 @@
 # Vedlegg A – Bildepipeline for øvelsesbiblioteket (v2)
 
-**Tilhører:** Min Trener – spesifikasjon v0.6, kapittel 3.2
+**Tilhører:** Min Trener – spesifikasjon v1.1, kapittel 3.2
 **Kjøres mot:** Kitor (RTX 3090) via Tailscale, med GPU-lease fra Kitors arbiter
 **Grunnlag for v2:** `kitor-bildepipeline-funn-2026-08-26.md` fra kitor-eier, som svar på bestillingen i `homelab-vault/02-Tjenester/AI/mintrener-arbiter-comfyui-bestilling.md`
 **Formål:** Generere et komplett, konsistent sett illustrasjoner for 80–120 øvelser, automatisert fra øvelsesbibliotekets JSON.
@@ -449,7 +449,40 @@ Underkjente posisjoner: sett `bildeStatus: "regenerer"` med merknad, juster skje
 | Referansefoto | Egne, eller free-exercise-db (offentlig eiendom) | Skjelettene inneholder ingen gjenkjennbar informasjon |
 | sharp | Apache 2.0 | |
 
-Beslutningen om ikke-kommersiell lisens er tatt bevisst, og skal stå i `docs/DECISIONS.md` med dato. Den henger sammen med sideinntekt-vurderingen: den dagen appen skal gi inntekt, er regenerering av 200 bilder en kjent kostnad (én kveld GPU-tid pluss QA), ikke en overraskelse.
+Beslutningen om ikke-kommersiell lisens er tatt bevisst, og skal stå i `docs/DECISIONS.md` med dato. Den henger sammen med sideinntekt-vurderingen (Vedlegg C del 3): den dagen appen skal gi inntekt, er regenerering av bildene en kjent kostnad, ikke en overraskelse.
+
+**Lisensen er mindre entydig enn den ser ut.** Black Forest Labs' modellkort sier at genererte bilder kan brukes kommersielt, mens lisensteksten definerer ikke-kommersiell bruk som bruk uten direkte eller indirekte betaling knyttet til modellen, derivater eller innholdet. To formuleringer fra samme selskap som peker hver sin vei for et statisk bildesett i en betalt tjeneste. Konklusjonen er ikke at vi er i orden, men at det ikke er noe å bygge inntekt på. Vi tolker ikke lisensen; vi bytter modell før første betaling.
+
+### A.12.1 Alternativer ved kommersialisering
+
+Undersøkt 27. august 2026 mot BFLs egne lisenssider og sammenligningsartikler fra sommeren 2026. Lisensene er sjekket mot primærkilder; kvalitet og ControlNet-støtte er andres vurderinger og må verifiseres på Kitor.
+
+| Alternativ | Lisens | På 3090 (24 GB)? | Positurkontroll og LoRA | Vurdering |
+|---|---|---|---|---|
+| **Kjøpe BFL-lisens for Flux.1-dev** | Kommersiell, fra BFL | Ja, ingen endring | Alt beholdes, inkludert astrid_k | Den selvbetjente «Builder»-lisensen dekker kun FLUX.2 klein-modellene; Flux.1-dev og Flux.2-dev krever «Platform»-nivå via salgsavdelingen, pris ikke publisert. For et engangssett på 200–600 bilder er det trolig ikke verdt det, men det koster én e-post å spørre |
+| **FLUX.2 klein 4B** | Apache 2.0 – fri kommersiell bruk | Ja, ca. 13 GB | Samme modellfamilie og ComfyUI-flyt. astrid_k må trenes på nytt (annen arkitektur, ai-toolkit eller tilsvarende, 1–2 timer på 3090). OpenPose-ControlNet for klein må sjekkes – økosystemet er fra 2026 | **Nærmest dagens pipeline. Første kandidat** |
+| **Qwen-Image / Qwen-Image 2.0** | Apache 2.0 | Originalen (20B) krever ca. 24 GB – trangt med ControlNet; 2.0 (7B, februar 2026) er lettere | Dokumentert ControlNet-styring via nøkkelpunkter, dybde og kanter. LoRA-trening støttet | **Sterkeste kandidat på positur.** Nytt økosystem |
+| **Z-Image-Turbo** | Apache 2.0 | Ja, under 16 GB | LoRA-økosystem fortsatt lite; positurkontroll uavklart | Rask og ren, men usikker på det vi trenger mest |
+| **SDXL** (v1-planen i dette vedlegget) | CreativeML OpenRAIL++-M | Ja | Det mest modne ControlNet- og LoRA-tilfanget som finnes | Trygt. Dårligere fotorealisme; testbatch 1 viste at vektorstil holder |
+| **SD 3.5** | Stability Community License – gratis under 1 MUSD årlig omsetning | Ja | Offisielle ControlNets, LoRA | Fungerer, mindre brukt enn SDXL for positur |
+| **BFL API (Flux pro)** | Kommersielle rettigheter inkludert i API-bruk | Ikke lokalt | Positurstyring begrenset til det API-et tilbyr; egen LoRA kun via deres finjustering | Billig for 600 bilder, men vi mister skjelettkontrollen som gjorde svingen riktig |
+
+**Merk:** FLUX.2 klein 9B, FLUX.2 dev og FLUX.1 Kontext dev har samme ikke-kommersielle lisens som Flux.1-dev. Bare klein 4B og Flux.1-schnell er Apache i Flux-familien.
+
+### A.12.2 Testbestilling til kitor-eier
+
+Ikke regenerere nå. Men én testbatch, slik at «regenerer med kommersiell modell» (Vedlegg C.26) er et kjent tall og et kjent utseende i stedet for et løfte.
+
+| | |
+|---|---|
+| **Bestilling** | To kandidater, samme tre øvelser og samme skjeletter som i den opprinnelige testbatchen (inkludert kettlebell-swing): (1) FLUX.2 klein 4B med nytrent astrid_k og OpenPose-kontroll, (2) Qwen-Image 2.0 med nøkkelpunkt-kontroll og nytrent LoRA. 3 seeds per posisjon |
+| **Sammenlign mot** | Dagens Flux.1-dev-bilder for de samme øvelsene |
+| **Svar vi trenger** | Finnes OpenPose/nøkkelpunkt-ControlNet i ComfyUI for hver? Treningstid for astrid_k per modell? Sekunder per bilde under lease? Får posituren riktig – særlig hip-hinge? Hender? Drift i antrekk? |
+| **Ikke nødvendig** | Full batch, etterbehandling, QA-flyt – det er uendret |
+| **Leveranse** | Kontaktkopi per øvelse med de tre variantene side om side, pluss et kort notat i samme form som `kitor-bildepipeline-funn`. Legges i `homelab-vault/02-Tjenester/AI/` |
+| **Beslutning etterpå** | Én modell velges som «kommersiell reserve» og skrives inn her og i C.26 med estimert kostnad for full regenerering |
+
+Til kodeagenten: `scripts/exportComfyUiBatch.ts` skal kunne peke på en annen `workflow_api.json` via `--workflow`, slik at en ny modell er en ny graf og ikke et nytt skript.
 
 «Om»-siden i appen: «Illustrasjoner generert med Flux, instruktør er en fiktiv person skapt for appen.»
 

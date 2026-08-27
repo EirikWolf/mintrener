@@ -1,6 +1,6 @@
 # Vedlegg B – Microtrening på kontoret og programbibliotek
 
-**Tilhører:** Min Trener – spesifikasjon v0.6, kapittel 3
+**Tilhører:** Min Trener – spesifikasjon v1.1, kapittel 3
 **Formål:** Spesifisere (0) appens tre modus og kontekstprofilene som tilpasser dem, (1) microtrening – korte økter som passer i hverdagen, alene eller sammen med andre, med stemmestøtte og gruppepåminnelser – og (2) et bibliotek av ferdige programmer med ulik varighet og vanskelighetsgrad.
 
 Delene henger sammen: modus avgjør flyten, kontekstprofilen avgjør innhold og tone, microtreningsøktene er selv programmer, og programbiblioteket er det som gjør at appen har noe å tilby uten at brukeren må bygge alt selv.
@@ -25,7 +25,15 @@ Alle tre modus bruker samme timermotor, samme programkatalog og samme stemmebank
 
 ### B.0.2 Kontekstprofiler
 
-En kontekstprofil er **ikke** en modus. Den er et sett standardvalg som gjør at appen passer i en bestemt setting: hvilke programmer som foreslås, stemmetone og taletempo, tekststørrelse, om øvelser er sittende, hvilken lydprofil som er standard. Profilen velges i innstillinger og kan overstyres per program. Programmer er merket med hvilke kontekster de passer i (`context: [...]` i B.11), og profilen filtrerer katalogen.
+En kontekstprofil er **ikke** en modus. Den er et sett standardvalg som gjør at appen passer i en bestemt setting: hvilke programmer som foreslås, stemmetone og taletempo, tekststørrelse, om øvelser er sittende, hvilken lydprofil som er standard. Programmer er merket med hvilke kontekster de passer i (`context: [...]` i B.11), og profilene filtrerer katalogen.
+
+**Brukeren velger et sett profiler, ikke én.** En bruker kan ha kontor og idrettslag samtidig, og grensesnittet settes sammen av begge. Formålet er et ryddig grensesnitt: ingenting fjernes fra appen, men det som ikke er relevant for brukerens valgte sammenhenger, vises ikke før brukeren eller en profil ber om det. Sammensettingsreglene står i B.0.4.
+
+```
+users/{uid}
+  profiles: ['kontor', 'idrettslag'],   – valgt ved onboarding, kan endres i innstillinger
+  primaryProfile: 'kontor'               – brukes bare der én må velges (f.eks. hvilken hurtigrad som står øverst)
+```
 
 **Første versjon: to profiler**
 
@@ -62,6 +70,10 @@ Nye profiler skal kunne legges til **uten kodeendring** utover innhold: profilen
 ```
 
 `status: "planned"` betyr at profilen vises i innstillinger som «kommer», ikke at den er valgbar.
+
+**Onboarding er ett spørsmål.** Første gang appen åpnes: «Hvor skal du bruke Min Trener?» med flervalg over aktive profiler, og «kommer»-profilene synlige men ikke valgbare. Svaret setter `profiles`, og er samtidig datapunktet som avgjør hvilken profil som bygges neste (Vedlegg C.20, steg 5). Hopper brukeren over, settes `profiles: ['kontor']`.
+
+**Ting som ligger bak «Mer» til de er bedt om:** GPS-økter, styrkeprogram og styrkelogg, sensorstatus, integrasjoner. En profil kan løfte dem fram (idrettslag løfter GPS, styrke-serier løfter styrkelogg), og brukeren kan slå dem på selv. Det er dette – ikke skjuling av funksjoner – som holder grensesnittet ryddig.
 
 ### B.0.3 Led en gruppe
 
@@ -102,6 +114,47 @@ Bygget for å sees på avstand og fra siden. Fungerer på mobil holdt opp eller 
 
 **Datamodell**
 Ingen nye samlinger. `sessions.type` får verdien `lead`, og `programs` får feltene `context` og `leadFriendly` (B.11).
+
+### B.0.4 Sammensetting av flere profiler
+
+Reglene er få og deterministiske, slik at kombinasjoner ikke må testes hver for seg. Hver profil testes alene, pluss to–tre vanlige par (kontor + barn, kontor + idrettslag, senior + kor).
+
+| Egenskap | Regel | Eksempel kontor + idrettslag |
+|---|---|---|
+| **Hjem – hurtigrader** | Én rad per valgt profil, `primaryProfile` øverst | Rad 1: Planke, Armhevinger, Kontor 5. Rad 2: Oppvarming 8, Forebygging, Nedjogging |
+| **Hjem – modusvalg** | Alle tre vises alltid. Rekkefølge og størrelse vektes: profiler med `preferredMode` løfter sin modus | Kontor løfter *Sammen*, idrettslag løfter *Led en gruppe*; *Alene* står fortsatt der |
+| **Katalog – standardfilter** | Union av `contextFilter` fra valgte profiler. Brukeren kan alltid utvide til alt | Viser `kontor`- og `idrettslag`-programmer, pluss generelle. Kor og senior ligger bak «Vis alle» |
+| **Stemmetone** | Følger **programmet** som startes (`voiceTone` på programmet, ellers konteksten det ble valgt fra). Aldri en global innstilling som vinner | Kontor 5 kjører «rolig», Oppvarming 8 kjører «gira», samme bruker |
+| **Taletempo** | Som stemmetone – per økt | |
+| **Lydprofil** | Per økt: kontekstens standard, brukerens siste valg for den konteksten huskes | Diskré på kontoret, full lyd på banen |
+| **Tekstskala og redusert bevegelse** | **Mest tilgjengelig vinner**, globalt. Tekstskala = maks av profilene, `reduceMotion` = sant hvis noen profil sier det | Senior + kor → 1,6 og redusert bevegelse overalt |
+| **`hide`-lister** | **Snitt**: et element skjules bare hvis alle valgte profiler skjuler det | Barn skjuler rekorder, kontor gjør det ikke → rekorder vises, men ikke i barneprogrammer (programmet selv har `context: barn`) |
+| **Funksjoner bak «Mer»** | Union: løftes fram hvis noen profil løfter dem | Idrettslag løfter GPS → GPS vises på Hjem |
+| **Påminnelser og grupper** | Uavhengig av profil – grupper har egen kontekst | |
+| **Organisasjon** (Vedlegg C.25) | `profileDefaults` fra organisasjonen legges til brukerens sett, fjernes ikke | Kommune-medlem får senior lagt til, beholder egne |
+
+**Profil-JSON utvides** med det reglene trenger:
+
+```json
+{
+  "id": "idrettslag",
+  "contextFilter": ["idrettslag"],
+  "defaultTone": "gira",
+  "speechRate": 1.0,
+  "defaultSoundProfile": "loud",
+  "textScale": 1.0,
+  "reduceMotion": false,
+  "hide": [],
+  "promote": ["gps", "lead"],
+  "preferredMode": "lead",
+  "quickRow": ["warmup-8", "football-prevention", "cooldown-6"],
+  "status": "planned"
+}
+```
+
+`promote` er listen over funksjoner profilen løfter fram fra «Mer». `quickRow` er hurtigraden på Hjem.
+
+**Hva som ikke endres:** tre modus, uansett antall profiler. Profilene endrer hva som vises og foreslås, ikke hva appen kan.
 
 ---
 
@@ -269,6 +322,38 @@ rooms/{code}                     – kortlevd, slettes automatisk etter 2 timer 
 Romkoder er tilfeldige, seks tegn uten forvekslbare bokstaver (ikke 0/O, 1/I). Dokumentet er lesbart for alle som kjenner koden, skrivbart kun av vert (hele dokumentet) og deltaker (eget felt under `participants`). Firestore-regler håndhever dette.
 
 **Deltakerbegrensning:** 30 per rom. Mer enn det er ikke microtrening.
+
+### B.5b Invitere til rom via Teams, Outlook og andre kanaler
+
+QR-koden fungerer når folk er i samme rom. På jobb er de det ofte ikke – de sitter i Teams. Invitasjonen må derfor kunne sendes dit folk allerede er, uten at Min Trener blir en Teams-app.
+
+**Tre nivåer, i stigende arbeid**
+
+| Nivå | Hva | Hvordan | Fase |
+|---|---|---|---|
+| **1. Del lenke** | «Del»-knapp i romlobbyen som sender `https://trening.web.app/r/ABC123` med en ferdig tekst | Mobil: Web Share API (`navigator.share`) åpner systemets delingsark, der Teams, Outlook, Messenger og SMS allerede ligger. Desktop: «Kopier lenke», «Åpne i Teams» og «Send e-post». Teams-knappen bruker Teams' dyplenke for ny chat med forhåndsutfylt melding; brukeren velger mottakere i Teams. E-post er `mailto:` med emne og tekst | **P2**, sammen med rom |
+| **2. Pen forhåndsvisning** | Når lenken limes inn i Teams, viser den «Planke 90 s – starter 10:15 – bli med», ikke en naken URL | Open Graph-metadata på `/r/{code}`. Siden er en PWA, må dette rendres på server: Firebase Hosting-rewrite til en Cloud Function som leverer HTML med `og:title`, `og:description`, `og:image` for rommet og deretter laster appen. Bildet kan være øvelsesbildet fra Vedlegg A | **P2** – uten dette ser invitasjonen ut som spam |
+| **3. Planlagt rom** | Rommet opprettes i forkant med starttidspunkt, slik at lenken kan sendes ti minutter før, eller legges i et møte | `scheduledAt` på rommet, TTL beregnes fra `scheduledAt + 2 t` i stedet for opprettelse. Lobbyen viser «Starter om 8 min» og teller ned; deltakere som kommer tidlig venter der. Verten kan starte når hen vil. Kalenderinvitasjon (.ics) med romlenken, samme mekanisme som påminnelsene i B.6 | **P2** |
+
+**Meldingstekst** (forhåndsutfylt, kan redigeres før sending):
+> Planke 90 sekunder kl. 10:15 – bli med her: https://trening.web.app/r/ABC123 (ingen konto, bare fornavn)
+
+**Teams-app – bevisst ikke**
+En egen Teams-app (fane, bot, møteutvidelse) ville gitt «Start planke» inne i møtet. Det krever app-registrering i Entra ID, godkjenning av tenant-administrator i hver organisasjon, og vedlikehold av enda en plattform. For Hemit-tenanten er det urealistisk for et hobbyprosjekt, og for andre organisasjoner er det en salgsjobb. Lenke + forhåndsvisning + planlagt rom gir 90 % av nytten. Vurderes på nytt bare hvis en organisasjonskunde (Vedlegg C.25) ber om det.
+
+**Teams-møter og storskjerm**
+Kombinasjonen som trolig brukes mest på hjemmekontor: verten deler storskjermvisningen av rommet i Teams-møtet (skjermdeling), og deltakerne åpner lenken på egen mobil for å bli med. Storskjermvisningen må tåle å bli delt: store flater, ingen små detaljer, ingen lydavhengighet – deltakerne hører stemmen fra vertens delte lyd eller fra egen mobil. Dette er samme krav som møte-profilen (Vedlegg C.14) stiller.
+
+**Datamodell – tillegg til rom**
+```
+rooms/{code}
+  scheduledAt?: timestamp,        – hvis satt: lobby med nedtelling, TTL fra scheduledAt
+  title: "Planke 90 s",           – brukes i forhåndsvisning og delingstekst
+  shareText: "..."                – generert, kan redigeres av vert
+```
+
+**Personvern**
+Lenken inneholder bare romkoden. Ingen navn, ingen gruppe. Den som har lenken kan bli med – det er poenget – og rommet dør etter to timer.
 
 ### B.6 Grupper og påminnelser
 
@@ -447,7 +532,7 @@ Programmer refererer øvelser fra `exercises/` via `exerciseId`. Et program med 
 
 ### B.12 Oppdagelse i appen
 
-**Hjem-fanen** har tre store valg øverst: **Alene**, **Sammen**, **Led en gruppe** (B.0.1). Under det en hurtigrad styrt av aktiv kontekstprofil – i kontor-profilen Planke, Armhevinger, Kontor 5; i barn-profilen Dyrehagen, Flyet, Speilet – deretter pågående serie hvis brukeren har én. «Sammen» og «Led en gruppe» vises fra P1 som «kommer» inntil de er bygget, slik at strukturen er kjent for brukeren.
+**Hjem-fanen** har tre store valg øverst: **Alene**, **Sammen**, **Led en gruppe** (B.0.1), vektet etter profilene. Under det én hurtigrad per valgt profil (B.0.4) – kontor: Planke, Armhevinger, Kontor 5; barn: Dyrehagen, Flyet, Speilet – deretter pågående serie hvis brukeren har én, og funksjoner en profil har løftet fram. «Sammen» og «Led en gruppe» vises fra P1 som «kommer» inntil de er bygget, slik at strukturen er kjent for brukeren.
 
 **Økter-fanen** får «Programmer» med to innganger:
 - **Filter**: varighet (slider eller knapper), nivå, kategori, utstyr, kontorvennlig
@@ -474,12 +559,13 @@ Regler for genereringen:
 | Funksjon | Fase | Kommentar |
 |---|---|---|
 | Modusvalg Alene / Sammen / Led en gruppe på Hjem (B.0.1) | **P1** | Kun *Alene* er aktiv i P1, de to andre vises som «kommer» |
-| Kontekstprofiler kontor og barn (B.0.2) | **P1** | Profil som JSON, øvrige profiler ligger inne med `status: planned` |
+| Kontekstprofiler kontor og barn (B.0.2) som **sett**, med sammensettingsregler (B.0.4) og onboarding-spørsmål | **P1** | Profil som JSON, øvrige profiler ligger inne med `status: planned`. Sett fremfor én profil bygges nå fordi det er billig nå og dyrt senere |
 | Microtimer med stemmemeldinger (B.2–B.4) | **P1** | Samme motor som intervalltimeren. Stemmeklipp for «rolig» og «lek» på bokmål i P1, øvrige toner og engelsk i P2 |
 | Startkatalog, minst 18 programmer (B.10) | **P1** | Microtrening kontor, barn og familie, og Kroppsvekt HIIT først |
 | Led en gruppe (B.0.3) med instruks-fase og repetisjonstelling | **P2** | Bygges før grupperom hvis barn-profilen brukes mye – forelder som leder er den enkleste varianten |
 | Profiler kor, senior, idrettslag, møte med tilhørende programmer og øvelser | **P3** | Senior krever sittende øvelser med egne skjeletter og bilder (Vedlegg A). Rekkefølge avgjøres av hvem som faktisk spør |
 | Gruppeøkt i rom med QR og storskjermvisning (B.5) | **P2** | Krever Firestore-synk, men ingen konto for deltakere – lav terskel for å teste på jobb |
+| Invitasjon via Teams/Outlook/deling, forhåndsvisning av lenke, planlagt rom (B.5b) | **P2** | Bygges sammen med rom – uten det brukes rom bare av folk som står i samme rom |
 | Full katalog 40 + 3 serier, «for lett/tungt»-tilpasning (B.10–B.12) | **P2** | |
 | Grupper med påminnelser (B.6) | **P2** | Push på iPhone krever installasjon – .ics-fallback er viktig |
 | Egne stemmelinjer, gruppelinjer | **P3** | |
@@ -491,7 +577,7 @@ Regler for genereringen:
 |---|---|---|
 | 1 | Microtimer-skjerm på intervallmotoren, med hurtigvalg og hold-modus | Planke 90 s kjører med korrekt tidsplan for stemme, testet på S21 og iPhone |
 | 2 | `voice-lines.json` med tonene «rolig» og «lek», bokmål, 8 varianter per fase, pluss repetisjonstelling 1–20 | Ingen kollisjon mellom motivasjon og nedtelling for varigheter 30 s–10 min (automatisk test) |
-| 2b | Kontekstprofiler som JSON (`data/profiles.json`) med kontor og barn aktive, øvrige `planned`; profilvelger i innstillinger; Hjem viser modusvalg og profilstyrt hurtigrad | Bytte profil endrer hurtigrad, standardtone og katalogfilter uten omlasting |
+| 2b | Kontekstprofiler som JSON (`data/profiles.json`) med kontor og barn aktive, øvrige `planned`; `profiles`/`primaryProfile` på bruker; onboarding med flervalg; sammensetting etter B.0.4; profilvelger i innstillinger | Kontor + barn gir to hurtigrader, rekorder synlige utenfor barneprogrammer, tone per økt. Enhetstester for hver regel i B.0.4 |
 | 3 | Lydmotor: forhåndsinnspilte klipp med talesyntese-fallback, diskré/lydløs/hodetelefon-profil | 5–4–3–2–1 treffer innen 100 ms av sekundet |
 | 4 | TTS-pipeline på Kitor (Piper eller XTTS) som genererer klipp fra `voice-lines.json` | Skript i `pipeline/voice/`, Opus + MP3 ut |
 | 5 | `programs`-skjema, validering med varighetskontroll og eksistenskontroll av øvelser | `npm run validate:programs` |
@@ -499,6 +585,7 @@ Regler for genereringen:
 | 6b | Led en gruppe: skjerm med bildeveksling, instruks-fase, manuelt/automatisk tempo, repetisjonstelling, lagring som `lead` | Dyrehagen kan ledes fra mobil på stativ uten at instruktøren ser på skjermen mellom øvelsene |
 | 7 | Programmer-visning med filter og tre-spørsmåls-inngang | |
 | 8 | Rom: opprett, QR, bli med uten konto, synkronisert start, storskjermvisning | To mobiler og én laptop starter innen 300 ms av hverandre |
-| 9 | Firestore-regler og TTL for rom | Regeltester i Emulator |
+| 8b | Del-knapp med Web Share API og desktop-fallback (Teams-dyplenke, mailto, kopier); Cloud Function for Open Graph på `/r/{code}`; `scheduledAt` med lobby-nedtelling og .ics | Lenke limt i Teams viser tittel, tid og bilde; rom opprettet 10 min i forkant har ventende deltakere i lobby |
+| 9 | Firestore-regler og TTL for rom (inkludert `scheduledAt`) | Regeltester i Emulator |
 | 10 | Grupper, påminnelser, Cloud Function for utsending, .ics-eksport | Påminnelse mottatt på Android og på installert iPhone-PWA |
 | 11 | Serier med progresjon og `seriesProgress` | Planke 30 dager gjennomførbar |
