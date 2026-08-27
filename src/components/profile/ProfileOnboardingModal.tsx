@@ -129,28 +129,30 @@ export const ProfileOnboardingModal: React.FC<ProfileOnboardingModalProps> = ({
           </div>
         </div>
 
-        {/* Planlagte profiler (synlige, men 'kommer') */}
-        <div className="space-y-2 pt-1">
-          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-            Kommende kontekster
-          </span>
-          <div className="grid grid-cols-2 gap-2">
-            {plannedProfiles.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center gap-2 p-2.5 rounded-xl bg-zinc-900/30 border border-zinc-850/60 text-zinc-500 opacity-70 cursor-not-allowed"
-              >
-                <div className="p-1.5 rounded-lg bg-zinc-800/60 text-zinc-500">
-                  {PROFILE_ICONS[p.id]}
+        {/* Planlagte profiler (hvis noen) */}
+        {plannedProfiles.length > 0 && (
+          <div className="space-y-2 pt-1">
+            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+              Kommende kontekster
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              {plannedProfiles.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-2 p-2.5 rounded-xl bg-zinc-900/30 border border-zinc-850/60 text-zinc-500 opacity-70 cursor-not-allowed"
+                >
+                  <div className="p-1.5 rounded-lg bg-zinc-800/60 text-zinc-500">
+                    {PROFILE_ICONS[p.id]}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-medium truncate">{p.name.nb}</div>
+                    <span className="text-[9px] text-zinc-600 font-bold uppercase">Kommer</span>
+                  </div>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-medium truncate">{p.name.nb}</div>
-                  <span className="text-[9px] text-zinc-600 font-bold uppercase">Kommer</span>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Handlingsknapper */}
         <div className="space-y-2 pt-2 border-t border-zinc-900">

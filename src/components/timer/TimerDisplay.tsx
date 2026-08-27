@@ -15,6 +15,8 @@ import { PwaInstallPromptModal } from '../pwa/PwaInstallPromptModal';
 import { ChallengeCatalogModal } from '../challenges/ChallengeCatalogModal';
 import { StrengthWorkoutModal } from '../strength/StrengthWorkoutModal';
 import { TvBigScreenDisplay } from '../instructor/TvBigScreenDisplay';
+import { SkillTreeModal } from '../skills/SkillTreeModal';
+import { updateMediaSession, clearMediaSession } from '../../services/mediaSessionService';
 import { STARTER_CHALLENGES } from '../../data/challenges';
 import { getActiveChallengeId, getChallengeProgress } from '../../services/challengeService';
 import { getFavoriteProgramIds } from '../../services/favoritesService';
@@ -103,6 +105,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   const [isChallengesModalOpen, setIsChallengesModalOpen] = useState(false);
   const [isStrengthModalOpen, setIsStrengthModalOpen] = useState(false);
   const [isTvModeOpen, setIsTvModeOpen] = useState(false);
+  const [isSkillTreeModalOpen, setIsSkillTreeModalOpen] = useState(false);
   const [activeMicroExercise, setActiveMicroExercise] = useState<ExerciseItem | null>(null);
   const [activeChallengeId, setActiveChallengeIdState] = useState<string | null>(() => getActiveChallengeId());
   const [interruptedSession, setInterruptedSession] = useState<InterruptedSession | null>(() => getInterruptedSession());
@@ -139,6 +142,26 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
       setWeeklyProgress(null);
     }
   }, [workout, state.status]);
+
+  // MediaSession PWA Låseskjerm-kontroller (Steg 3)
+  React.useEffect(() => {
+    if (state.status === 'running' || state.status === 'paused') {
+      const exerciseTitle = state.currentExercise?.name || workout.name;
+      const phaseName = state.phase === 'work' ? 'Jobb' : state.phase === 'rest' ? 'Pause' : 'Klargjøring';
+      updateMediaSession({
+        title: `${exerciseTitle} (${formatTime(state.phaseRemainingSeconds)})`,
+        artist: `Min Trener • ${phaseName}`,
+        album: `${workout.name} • Runde ${state.currentRound}/${state.totalRounds}`,
+        artworkUrl: state.currentExercise ? `/exercises/${state.currentExercise.id}-0.webp` : undefined,
+        onPlay: onResume,
+        onPause: onPause,
+        onNext: onSkipNext,
+        onPrevious: onPrevious,
+      });
+    } else {
+      clearMediaSession();
+    }
+  }, [state.status, state.phase, state.phaseRemainingSeconds, state.currentExercise, workout.name, state.currentRound, state.totalRounds]);
 
   const formatTime = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
@@ -475,6 +498,14 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                     <Star className="w-3 h-3 text-amber-400 fill-current" />
                     {matchedFavs.length > 0 ? `Favoritter (${matchedFavs.length})` : 'Hurtigstart'}
                   </span>
+                  <button
+                    onClick={() => setIsSkillTreeModalOpen(true)}
+                    title="Ferdighetstrær & Mestringsstige (Kroppsvekt)"
+                    className="px-1.5 py-0.5 rounded-md bg-purple-950/80 border border-purple-800/80 text-[10px] font-black text-purple-400 hover:bg-purple-900 transition-all flex items-center gap-0.5 shadow-sm active:scale-95 shrink-0"
+                  >
+                    <Trophy className="w-2.5 h-2.5" />
+                    <span>Ferdighet</span>
+                  </button>
                   <button
                     onClick={() => setIsStrengthModalOpen(true)}
                     title="Styrketrening med Dobbel Progresjon"
@@ -859,6 +890,21 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           onPrevious={onPrevious}
           onToggleSound={onToggleSound}
           onClose={() => setIsTvModeOpen(false)}
+        />
+      )}
+
+      {/* Ferdighetstrær & Mestringsstige Modal */}
+      {isSkillTreeModalOpen && (
+        <SkillTreeModal
+          onClose={() => setIsSkillTreeModalOpen(false)}
+          onStartWorkout={(skillWorkout) => {
+            if (onStartWorkoutDirectly) {
+              onStartWorkoutDirectly(skillWorkout);
+            } else {
+              onSelectWorkout(skillWorkout);
+              onStart();
+            }
+          }}
         />
       )}
     </div>
