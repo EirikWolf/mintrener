@@ -13,6 +13,7 @@ import { AboutGuideModal } from '../help/AboutGuideModal';
 import { AiCoachModal } from '../coach/AiCoachModal';
 import { PwaInstallPromptModal } from '../pwa/PwaInstallPromptModal';
 import { ChallengeCatalogModal } from '../challenges/ChallengeCatalogModal';
+import { StrengthWorkoutModal } from '../strength/StrengthWorkoutModal';
 import { STARTER_CHALLENGES } from '../../data/challenges';
 import { getActiveChallengeId, getChallengeProgress } from '../../services/challengeService';
 import { getFavoriteProgramIds } from '../../services/favoritesService';
@@ -98,6 +99,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isAiCoachOpen, setIsAiCoachOpen] = useState(false);
   const [isChallengesModalOpen, setIsChallengesModalOpen] = useState(false);
+  const [isStrengthModalOpen, setIsStrengthModalOpen] = useState(false);
   const [activeMicroExercise, setActiveMicroExercise] = useState<ExerciseItem | null>(null);
   const [activeChallengeId, setActiveChallengeIdState] = useState<string | null>(() => getActiveChallengeId());
   const [interruptedSession, setInterruptedSession] = useState<InterruptedSession | null>(() => getInterruptedSession());
@@ -461,6 +463,14 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                     {matchedFavs.length > 0 ? `Favoritter (${matchedFavs.length})` : 'Hurtigstart'}
                   </span>
                   <button
+                    onClick={() => setIsStrengthModalOpen(true)}
+                    title="Styrketrening med Dobbel Progresjon"
+                    className="px-1.5 py-0.5 rounded-md bg-emerald-950/80 border border-emerald-800/80 text-[10px] font-black text-emerald-400 hover:bg-emerald-900 transition-all flex items-center gap-0.5 shadow-sm active:scale-95 shrink-0"
+                  >
+                    <Dumbbell className="w-2.5 h-2.5" />
+                    <span>Styrke</span>
+                  </button>
+                  <button
                     onClick={() => setIsChallengesModalOpen(true)}
                     title="Utfordringer (28/30 dagers program)"
                     className="px-1.5 py-0.5 rounded-md bg-amber-950/80 border border-amber-800/80 text-[10px] font-black text-amber-400 hover:bg-amber-900 transition-all flex items-center gap-0.5 shadow-sm active:scale-95 shrink-0"
@@ -814,6 +824,13 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
               onStart();
             }
           }}
+        />
+      )}
+
+      {/* Styrketrening med Dobbel Progresjon Modal */}
+      {isStrengthModalOpen && (
+        <StrengthWorkoutModal
+          onClose={() => setIsStrengthModalOpen(false)}
         />
       )}
     </div>
