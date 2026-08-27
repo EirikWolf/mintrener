@@ -15,9 +15,14 @@ import { getSharedWorkoutFromUrl } from './services/shareWorkoutService';
 import { useAuth } from './contexts/AuthContext';
 import { saveCompletedWorkout } from './services/firestoreService';
 import { fetchCustomWorkouts } from './services/customWorkoutsService';
+import { ProfileOnboardingModal } from './components/profile/ProfileOnboardingModal';
+import { getUserProfilesState } from './services/profileCompositionService';
+import { UserProfilesState } from './schemas/profileSchema';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('timer');
+  const [userProfiles, setUserProfiles] = useState<UserProfilesState>(() => getUserProfilesState());
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => !userProfiles.hasCompletedOnboarding);
   const [selectedWorkout, setSelectedWorkout] = useState<WorkoutTemplate>(() => {
     const shared = getSharedWorkoutFromUrl();
     return shared || TABATA_WORKOUT;
@@ -25,6 +30,16 @@ export function App() {
   const [allPresets, setAllPresets] = useState<WorkoutTemplate[]>(PRESET_WORKOUTS);
   const { user } = useAuth();
   const hasSavedRef = useRef<boolean>(false);
+
+  // Lytt til profilendringer
+  useEffect(() => {
+    const handleProfileChange = (e: Event) => {
+      const custom = e as CustomEvent<UserProfilesState>;
+      if (custom.detail) setUserProfiles(custom.detail);
+    };
+    window.addEventListener('user-profiles-changed', handleProfileChange);
+    return () => window.removeEventListener('user-profiles-changed', handleProfileChange);
+  }, []);
 
   // Last inn lagrede maler og kombiner med standardmaler
   useEffect(() => {
@@ -184,6 +199,17 @@ export function App() {
         <BottomNav
           activeTab={activeTab}
           onTabChange={setActiveTab}
+        />
+      )}
+
+      {/* 1-spørsmåls Onboarding for kontekstprofiler */}
+      {showOnboarding && (
+        <ProfileOnboardingModal
+          isOpen={showOnboarding}
+          onClose={(newState) => {
+            setUserProfiles(newState);
+            setShowOnboarding(false);
+          }}
         />
       )}
     </div>

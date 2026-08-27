@@ -79,6 +79,20 @@ export const ExerciseSchema = z.object({
   bildeVinkel: ImageAngleSchema.default('side'),
   bildeStatus: ImageStatusSchema.default('mangler'),
   bildeUrl: z.string().optional(),
+  alternatives: z.object({
+    seated: z.string().optional(),
+    easier: z.string().optional(),
+    harder: z.string().optional(),
+    quiet: z.string().optional(),
+    noFloor: z.string().optional(),
+  }).optional(),
+  basis: z.array(
+    z.object({
+      ref: z.string(),
+      note: z.string(),
+    })
+  ).optional(),
+  reviewStatus: z.enum(['draft', 'reviewed', 'public']).optional(),
 });
 
 export type ExerciseItem = z.infer<typeof ExerciseSchema>;

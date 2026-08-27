@@ -10,6 +10,9 @@ import {
 import { SensorStatusModal } from '../sensors/SensorStatusModal';
 import { AboutGuideModal } from '../help/AboutGuideModal';
 import { PrivacyPolicyModal } from '../legal/PrivacyPolicyModal';
+import { ProfileOnboardingModal } from '../profile/ProfileOnboardingModal';
+import { getActiveContextProfiles } from '../../services/profileCompositionService';
+import { ContextProfile } from '../../schemas/profileSchema';
 import {
   Volume2,
   VolumeX,
@@ -33,6 +36,7 @@ import {
   Flame,
   Globe2,
   Target,
+  Sparkles,
 } from 'lucide-react';
 import { getWeeklyGoal, setWeeklyGoal } from '../../services/weeklyGoalService';
 
@@ -63,12 +67,22 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [activeProfiles, setActiveProfiles] = useState<ContextProfile[]>(() => getActiveContextProfiles());
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [telemetryEnabled, setTelemetryEnabledState] = useState<boolean>(() => getTelemetryConsent());
   const [globalStats, setGlobalStats] = useState<GlobalTelemetryStats | null>(null);
   const [weeklyGoal, setWeeklyGoalState] = useState<number>(() => getWeeklyGoal());
+
+  React.useEffect(() => {
+    const handleProfileChange = () => {
+      setActiveProfiles(getActiveContextProfiles());
+    };
+    window.addEventListener('user-profiles-changed', handleProfileChange);
+    return () => window.removeEventListener('user-profiles-changed', handleProfileChange);
+  }, []);
 
   React.useEffect(() => {
     fetchGlobalStats().then(setGlobalStats);
@@ -269,6 +283,29 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
         </div>
       </section>
 
+      {/* 2b. KONTEKSTPROFILER (KONTOR, BARN, ETC.) */}
+      <section className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-3.5 space-y-2">
+        <h2 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Kontekstprofiler</h2>
+        <button
+          onClick={() => setIsProfileModalOpen(true)}
+          className="w-full flex items-center justify-between py-2.5 px-3 bg-zinc-950 hover:bg-zinc-800/80 rounded-xl border border-zinc-800 text-left transition-all"
+        >
+          <div className="flex items-center gap-2.5">
+            <Sparkles className="w-4 h-4 text-emerald-400" />
+            <div>
+              <p className="text-xs font-bold text-white">
+                Aktive profiler:{' '}
+                <span className="text-emerald-400 font-black capitalize">
+                  {activeProfiles.map((p) => p.name.nb).join(', ')}
+                </span>
+              </p>
+              <p className="text-[10px] text-zinc-400">Tilpass øvelser, stemmetone og hurtigvalg</p>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-zinc-500" />
+        </button>
+      </section>
+
       {/* 3. SENSORER & HARDWARE */}
       <section className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-3.5 space-y-2">
         <h2 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Sensorer & Maskinvare</h2>
@@ -451,6 +488,12 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
       {isSensorModalOpen && <SensorStatusModal onClose={() => setIsSensorModalOpen(false)} />}
       {isAboutModalOpen && <AboutGuideModal onClose={() => setIsAboutModalOpen(false)} />}
       {isPrivacyModalOpen && <PrivacyPolicyModal onClose={() => setIsPrivacyModalOpen(false)} />}
+      {isProfileModalOpen && (
+        <ProfileOnboardingModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+        />
+      )}
     </div>
   );
 };
