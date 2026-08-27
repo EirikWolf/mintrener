@@ -14,6 +14,7 @@ import { AiCoachModal } from '../coach/AiCoachModal';
 import { PwaInstallPromptModal } from '../pwa/PwaInstallPromptModal';
 import { ChallengeCatalogModal } from '../challenges/ChallengeCatalogModal';
 import { StrengthWorkoutModal } from '../strength/StrengthWorkoutModal';
+import { TvBigScreenDisplay } from '../instructor/TvBigScreenDisplay';
 import { STARTER_CHALLENGES } from '../../data/challenges';
 import { getActiveChallengeId, getChallengeProgress } from '../../services/challengeService';
 import { getFavoriteProgramIds } from '../../services/favoritesService';
@@ -47,6 +48,7 @@ import {
   Check,
   Target,
   Trophy,
+  Tv,
 } from 'lucide-react';
 import { shareWorkout } from '../../services/shareWorkoutService';
 import { calculateWeeklyProgress, WeeklyGoalProgress } from '../../services/weeklyGoalService';
@@ -100,6 +102,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   const [isAiCoachOpen, setIsAiCoachOpen] = useState(false);
   const [isChallengesModalOpen, setIsChallengesModalOpen] = useState(false);
   const [isStrengthModalOpen, setIsStrengthModalOpen] = useState(false);
+  const [isTvModeOpen, setIsTvModeOpen] = useState(false);
   const [activeMicroExercise, setActiveMicroExercise] = useState<ExerciseItem | null>(null);
   const [activeChallengeId, setActiveChallengeIdState] = useState<string | null>(() => getActiveChallengeId());
   const [interruptedSession, setInterruptedSession] = useState<InterruptedSession | null>(() => getInterruptedSession());
@@ -262,6 +265,16 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                 }`}
               >
                 <Smartphone className="w-3.5 h-3.5" />
+              </button>
+
+              {/* TV & Storskjerm / Instruktørmodus */}
+              <button
+                onClick={() => setIsTvModeOpen(true)}
+                title="Storskjerm & TV-visning for grupper"
+                aria-label="Storskjerm og TV-visning"
+                className="p-1.5 rounded-full text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 transition-all active:scale-95 flex items-center"
+              >
+                <Tv className="w-3.5 h-3.5" />
               </button>
 
               {/* Astrid AI-Trener */}
@@ -831,6 +844,21 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
       {isStrengthModalOpen && (
         <StrengthWorkoutModal
           onClose={() => setIsStrengthModalOpen(false)}
+        />
+      )}
+
+      {/* TV & Storskjerm / Instruktør Visning */}
+      {isTvModeOpen && (
+        <TvBigScreenDisplay
+          workout={workout}
+          state={state}
+          onStart={onStart}
+          onPause={onPause}
+          onResume={onResume}
+          onSkipNext={onSkipNext}
+          onPrevious={onPrevious}
+          onToggleSound={onToggleSound}
+          onClose={() => setIsTvModeOpen(false)}
         />
       )}
     </div>

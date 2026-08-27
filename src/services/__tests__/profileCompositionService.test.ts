@@ -80,33 +80,33 @@ describe('profileCompositionService', () => {
       bildeVinkel: 'side',
       bildeStatus: 'mangler',
       alternatives: {
-        noFloor: 'desk-push-up',
+        quiet: 'quiet-push-up',
         seated: 'seated-press',
       },
     };
 
-    const deskPushUp: ExerciseItem = {
-      id: 'desk-push-up',
-      navn: { nb: 'Armheving mot pult' },
+    const quietPushUp: ExerciseItem = {
+      id: 'quiet-push-up',
+      navn: { nb: 'Stille armheving' },
       type: 'reps',
       kategori: 'kroppsvekt',
       muskler: { primær: ['bryst'], sekundær: [] },
       utstyr: ['ingen'],
       nivå: 'nybegynner',
-      instruks: { nb: ['Stå foran pult', 'Press'] },
+      instruks: { nb: ['Rolig bevegelse', 'Press'] },
       vanligeFeil: { nb: [] },
       sensorProfil: 'ingen',
       bildeVinkel: 'side',
       bildeStatus: 'mangler',
     };
 
-    const library = [baseExercise, deskPushUp];
+    const library = [baseExercise, quietPushUp];
 
-    // For kontor (som har resolve: ['noFloor', 'quiet']):
+    // For kontor (som har resolve: ['quiet']):
     const resolvedKontor = resolveExerciseForProfile(baseExercise, CONTEXT_PROFILES.kontor, library);
-    expect(resolvedKontor.id).toBe('desk-push-up');
+    expect(resolvedKontor.id).toBe('quiet-push-up');
 
-    // For barn (som ikke har resolve for noFloor):
+    // For barn (som ikke har resolve for quiet):
     const resolvedBarn = resolveExerciseForProfile(baseExercise, CONTEXT_PROFILES.barn, library);
     expect(resolvedBarn.id).toBe('push-ups');
   });

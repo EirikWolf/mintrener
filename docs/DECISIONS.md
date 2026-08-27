@@ -68,5 +68,23 @@ Dette dokumentet fører en kronologisk oversikt over tekniske og arkitektoniske 
   2. `src/services/strengthProgressionService.ts` lagrer sett-historikk og beregner dobbel progresjon.
   3. `src/components/strength/StrengthWorkoutModal.tsx` gir en sanntids logg-opplevelse med vekt-/rep-steppere, automatisk 90s pause-nedtelling med lydvarsling, og oppsummeringsskjerm med progresjonsforslag.
 
+---
+
+## [2026-08-27] Beslutning 8: Instruktørmodus & TV-Storskjermvisning (B.0, B.4, C.18)
+* **Kontekst:** Vedlegg B.0, B.4 og C.18 krever en dedikert instruktøropplevelse for lærere, trenere og ledere av pausetrening, med forhåndsvarsling av neste øvelse og en TV-/prosjektor-optimalisert visning for AirPlay/Chromecast.
+* **Valg:**
+  1. `src/components/instructor/TvBigScreenDisplay.tsx` opprettet med ekstra store tall, synlig øvelsesbilde, tydelig «Neste øvelse»-instruktørteleprompter og fullskjermstøtte.
+  2. Koblet til via en dedikert TV-knapp i kontrollpanelet på Hjem og under aktive økter.
+
+---
+
+## [2026-08-27] Beslutning 9: Justering av Kontorprofil – Tillat gulvøvelser
+* **Kontekst:** Brukeren ønsket å fjerne restriksjonen "Ingen gulv" fra Kontor-profilen, slik at øvelser som planke og push-ups kan utføres i et kontormiljø.
+* **Valg:**
+  1. Oppdatert `src/data/profiles/index.ts` for profilen `kontor`:
+     - Beskrivelse endret til: *"Microtrening i hverdagsklær ved pulten. Ingen hopp, diskré lyd og god holdning."*
+     - Fjernet `noFloor` fra `resolve`-listen.
+
+
 
 
