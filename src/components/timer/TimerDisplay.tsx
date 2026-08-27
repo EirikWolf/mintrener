@@ -17,6 +17,8 @@ import { ChallengeCatalogModal } from '../challenges/ChallengeCatalogModal';
 import { StrengthWorkoutModal } from '../strength/StrengthWorkoutModal';
 import { TvBigScreenDisplay } from '../instructor/TvBigScreenDisplay';
 import { SkillTreeModal } from '../skills/SkillTreeModal';
+import { AiWorkoutGeneratorModal } from '../ai/AiWorkoutGeneratorModal';
+import { voiceCommandService, TimerVoiceCommand } from '../../services/voiceCommandService';
 import { updateMediaSession, clearMediaSession } from '../../services/mediaSessionService';
 import { STARTER_CHALLENGES } from '../../data/challenges';
 import { getActiveChallengeId, getChallengeProgress } from '../../services/challengeService';
@@ -52,6 +54,7 @@ import {
   Target,
   Trophy,
   Tv,
+  Bot,
 } from 'lucide-react';
 import { shareWorkout } from '../../services/shareWorkoutService';
 import { calculateWeeklyProgress, WeeklyGoalProgress } from '../../services/weeklyGoalService';
@@ -107,6 +110,8 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   const [isStrengthModalOpen, setIsStrengthModalOpen] = useState(false);
   const [isTvModeOpen, setIsTvModeOpen] = useState(false);
   const [isSkillTreeModalOpen, setIsSkillTreeModalOpen] = useState(false);
+  const [isAiWorkoutModalOpen, setIsAiWorkoutModalOpen] = useState(false);
+  const [isVoiceControlActive, setIsVoiceControlActive] = useState<boolean>(() => voiceCommandService.getIsListening());
   const [activeMicroExercise, setActiveMicroExercise] = useState<ExerciseItem | null>(null);
   const [activeChallengeId, setActiveChallengeIdState] = useState<string | null>(() => getActiveChallengeId());
   const [currentHeartRate, setCurrentHeartRate] = useState<number | null>(null);
@@ -164,6 +169,40 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
       clearMediaSession();
     }
   }, [state.status, state.phase, state.phaseRemainingSeconds, state.currentExercise, workout.name, state.currentRound, state.totalRounds]);
+
+  // Håndfri Stemmestyring Listener (Steg 1)
+  React.useEffect(() => {
+    const unsubscribe = voiceCommandService.onCommand((cmd: TimerVoiceCommand) => {
+      switch (cmd) {
+        case 'pause':
+          onPause();
+          break;
+        case 'resume':
+          if (state.status === 'idle') onStart();
+          else onResume();
+          break;
+        case 'next':
+          onSkipNext();
+          break;
+        case 'previous':
+          onPrevious();
+          break;
+        case 'restart':
+          onReset();
+          break;
+      }
+    });
+
+    const handleListeningChange = (e: any) => {
+      setIsVoiceControlActive(Boolean(e.detail?.isListening));
+    };
+
+    window.addEventListener('voice-command-listening', handleListeningChange);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('voice-command-listening', handleListeningChange);
+    };
+  }, [state.status, onPause, onResume, onStart, onSkipNext, onPrevious, onReset]);
 
   const formatTime = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
@@ -253,6 +292,22 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                   }`}
                 >
                   {state.speechEnabled ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
+                </button>
+              )}
+
+              {/* Håndfri Stemmestyring */}
+              {voiceCommandService.isSupported() && (
+                <button
+                  onClick={() => voiceCommandService.toggleListening()}
+                  title={isVoiceControlActive ? 'Håndfri stemmestyring på (lytter...)' : 'Slå på håndfri stemmestyring (Pause, Fortsett, Neste)'}
+                  aria-label="Håndfri stemmestyring"
+                  className={`p-1.5 rounded-full transition-all ${
+                    isVoiceControlActive
+                      ? 'text-indigo-400 bg-indigo-950/80 ring-1 ring-indigo-400/60 animate-pulse'
+                      : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  <Bot className="w-3.5 h-3.5" />
                 </button>
               )}
 
@@ -500,6 +555,14 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                     <Star className="w-3 h-3 text-amber-400 fill-current" />
                     {matchedFavs.length > 0 ? `Favoritter (${matchedFavs.length})` : 'Hurtigstart'}
                   </span>
+                  <button
+                    onClick={() => setIsAiWorkoutModalOpen(true)}
+                    title="AI Treningsgenerator (Skreddersy økt etter dagsform og tid)"
+                    className="px-1.5 py-0.5 rounded-md bg-indigo-950/80 border border-indigo-800/80 text-[10px] font-black text-indigo-300 hover:bg-indigo-900 transition-all flex items-center gap-0.5 shadow-sm active:scale-95 shrink-0"
+                  >
+                    <Sparkles className="w-2.5 h-2.5" />
+                    <span>AI Økt</span>
+                  </button>
                   <button
                     onClick={() => setIsSkillTreeModalOpen(true)}
                     title="Ferdighetstrær & Mestringsstige (Kroppsvekt)"
@@ -914,6 +977,21 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
               onStartWorkoutDirectly(skillWorkout);
             } else {
               onSelectWorkout(skillWorkout);
+              onStart();
+            }
+          }}
+        />
+      )}
+
+      {/* AI Øktgenerator Modal */}
+      {isAiWorkoutModalOpen && (
+        <AiWorkoutGeneratorModal
+          onClose={() => setIsAiWorkoutModalOpen(false)}
+          onStartWorkout={(aiWorkout) => {
+            if (onStartWorkoutDirectly) {
+              onStartWorkoutDirectly(aiWorkout);
+            } else {
+              onSelectWorkout(aiWorkout);
               onStart();
             }
           }}

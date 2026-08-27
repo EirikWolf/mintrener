@@ -163,6 +163,31 @@ Dette dokumentet fører en kronologisk oversikt over tekniske og arkitektoniske 
   1. `src/services/i18nService.ts` tilbyr ordbøker og reaktiv hendelsesstyring.
   2. Hurtigvelger integrert i innstillingene under *Mer → Språk*.
 
+---
+
+## [2026-08-27] Beslutning 20: Håndfri Stemmestyring (Web Speech Recognition)
+* **Kontekst:** Under øvelser som planke, armhevinger eller kettlebell kan ikke brukeren berøre skjermen.
+* **Valg:**
+  1. `src/services/voiceCommandService.ts` gjenkjenner norske og engelske kommandoer («Pause», «Fortsett», «Neste», «Forrige», «Start på nytt»).
+  2. Integrert med kontinuerlig lytteopplevelse og pulserende mikrofonindikator i topplinjen.
+
+---
+
+## [2026-08-27] Beslutning 21: Smart Musikk-Ducking
+* **Kontekst:** Bakgrunnsmusikk må ikke overdøve stemmetrenerens instruksjoner eller intervall-pip.
+* **Valg:**
+  1. `src/services/audioDuckingService.ts` demper automatisk tilkoblede lyd- og mediastrømmer til 25 % volum under tale og gjenoppretter jevnt til 100 % etterpå.
+  2. Koblet til `SpeechService`-livssyklusen.
+
+---
+
+## [2026-08-27] Beslutning 22: AI Øktgenerator etter Dagsform & Utstyr
+* **Kontekst:** Brukere trenger raskt skreddersydde økter basert på tilgjengelig tid (3–30 min), dagsform/energi og unngåelse av spesifikke skader (vonde knær, korsrygg, skuldre).
+* **Valg:**
+  1. `src/services/aiWorkoutGeneratorService.ts` velger ut en fysiologisk balansert økt fra øvelsesbiblioteket med tilpassede intervaller og runder.
+  2. `src/components/ai/AiWorkoutGeneratorModal.tsx` tilbyr 1-klikks generering og umiddelbar oppstart.
+
+
 
 
 

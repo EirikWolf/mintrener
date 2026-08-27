@@ -1,3 +1,5 @@
+import { audioDuckingService } from './audioDuckingService';
+
 export class SpeechService {
   private synth: SpeechSynthesis | null = null;
   private voice: SpeechSynthesisVoice | null = null;
@@ -113,14 +115,20 @@ export class SpeechService {
       utterance.rate = rate;
       utterance.pitch = 1.0;
 
-      // Chrome Android bugfix: resume hvis motoren henger
+      // Chrome Android bugfix & Audio Ducking: demper bakgrunnsmusikk mens stemmen snakker
       utterance.onstart = () => {
+        audioDuckingService.startDucking();
         if (this.synth?.paused) {
           this.synth.resume();
         }
       };
 
+      utterance.onend = () => {
+        audioDuckingService.stopDucking();
+      };
+
       utterance.onerror = (e) => {
+        audioDuckingService.stopDucking();
         console.warn('TTS utterance feil:', e);
         if (this.synth?.paused) {
           this.synth.resume();
