@@ -19,7 +19,7 @@ export const ExerciseIllustration: React.FC<ExerciseIllustrationProps> = ({
   const [isZoomed, setIsZoomed] = useState(false);
 
   // Filstier (sjekker først om det finnes generert bilde for øvelsen og fasen)
-  const imageUrl = exercise.bildeUrl || `/images/exercises/${exercise.id}-${phaseIndex}.png`;
+  const imageUrl = exercise.bildeUrl || `/images/exercises/${exercise.id}-${phaseIndex}.png?v=20260827_2`;
   const isImageReady = !imageError;
 
   // Lukk ved Escape-tast

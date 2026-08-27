@@ -48,9 +48,9 @@ export default defineConfig({
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/images/exercises/'),
-            handler: 'CacheFirst',
+            handler: 'NetworkFirst',
             options: {
-              cacheName: 'exercise-images-cache',
+              cacheName: 'exercise-images-cache-v2',
               expiration: {
                 maxEntries: 120,
                 maxAgeSeconds: 30 * 24 * 60 * 60, // 30 dager

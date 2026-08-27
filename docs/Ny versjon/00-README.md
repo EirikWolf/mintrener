@@ -6,7 +6,8 @@ Dette settet er skrevet for å tas rett inn i Claude Code eller Antigravity som 
 
 1. `trening-app-spesifikasjon.md` – hele bildet. Kapittel 2 (plattformforbehold), 5 (sikkerhet og personvern) og 7 (faseplan) er de som styrer flest beslutninger.
 2. `vedlegg-b-microtrening-og-programmer.md` – microtrening (stemme, grupperom, påminnelser) og programkatalogen. Leses før noe av dette bygges; del 1 er P1-relevant.
-3. `vedlegg-a-bildepipeline.md` (v2) – kun når arbeidet gjelder øvelsesbiblioteket eller bilder. A.3 (kjøreregler mot Kitor) er obligatorisk lesning før noe skript kjøres mot Kitor.
+3. `vedlegg-c-konkurrentanalyse-og-neste-fase.md` – når MVP er i bruk og neste fase planlegges. C.8 (programmer på tvers av profiler) endrer øvelses- og profilskjemaet og bør leses før katalogen utvides.
+4. `vedlegg-a-bildepipeline.md` (v2) – kun når arbeidet gjelder øvelsesbiblioteket eller bilder. A.3 (kjøreregler mot Kitor) er obligatorisk lesning før noe skript kjøres mot Kitor. A.12.2 er en testbestilling til kitor-eier, ikke en oppgave for kodeagenten – bortsett fra `--workflow`-flagget.
 
 ## Faste rammer som gjelder uansett oppgave
 
@@ -20,7 +21,11 @@ Dette settet er skrevet for å tas rett inn i Claude Code eller Antigravity som 
 - Stemmemeldinger er forhåndsinnspilte klipp; talesyntese er kun fallback. Nedtellingen 5–4–3–2–1 skal treffe sekundet.
 - Grupper og rom er private og opt-in. Det finnes ikke, og skal ikke lages, noe administratornivå som ser andre brukeres data.
 - Tre modus, ikke flere: Alene, Sammen, Led en gruppe. Målgrupper (kontor, barn, kor, senior …) er kontekstprofiler i JSON, ikke modus og ikke kode. Ny profil = nytt JSON-objekt og nye programmer.
-- Kun profilene kontor og barn er aktive i første versjon. De andre ligger inne som `planned` og skal ikke bygges før det er bestemt.
+- Brukeren har et sett profiler, ikke én. Sammensettingsreglene i Vedlegg B.0.4 er de eneste reglene; ikke legg til spesialtilfeller per kombinasjon. Stemmetone er aldri global – den følger programmet.
+- Kun profilene kontor og barn er aktive i første versjon. De andre ligger inne som `planned` og skal ikke bygges før det er bestemt. Innholdet for dem er planlagt i Vedlegg C.11–C.14.
+- Når brukeren bytter en øvelse i et program, gjelder byttet alle fremtidige økter i programmet (Vedlegg C.8). Ikke bare den økten.
+- Tellere i `stats/` skrives kun av Cloud Functions, og tall under 3 vises aldri (Vedlegg C.18). Ingen offentlige tekstkommentarer.
+- Serier med `basis` går ikke til `public` uten `reviewed` (Vedlegg C.19). Kodeagenten genererer styrkeprogrammer innenfor kildene i `basis`, ikke fra egen kunnskap.
 
 ## Forslag til første prompt til kodeagenten
 
@@ -32,7 +37,7 @@ Grunnen til å starte med timeren isolert: det er der iOS-problemene med lyd og 
 
 1. Google-innlogging, Firestore-modell fra kapittel 6, sikkerhetsregler testet i Emulator, App Check
 2. Øvelsesskjema med JSON Schema-validering, deretter generering av biblioteket i bolker (kapittel 3.2 og Vedlegg A.5)
-3. Kontekstprofiler som JSON, modusvalg på Hjem, profilvelger (Vedlegg B.0)
+3. Kontekstprofiler som JSON, `profiles`-sett på bruker med onboarding, sammensetting etter B.0.4, modusvalg på Hjem (Vedlegg B.0)
 4. Programskjema og validering, startkatalog på 18 programmer (Vedlegg B.11–B.13), Programmer-visning
 5. Stemmebank `voice-lines.json` (rolig og lek) og TTS-pipeline på Kitor (Vedlegg B.3, B.15 oppgave 2–4), bytt talesyntese mot klipp
 6. Bygg økt-skjermen og lagring av maler
@@ -46,6 +51,8 @@ Grunnen til å starte med timeren isolert: det er der iOS-problemene med lyd og 
 
 - Ikke legg til funksjoner merket P2/P3 før P1 er testet på begge plattformer.
 - Bildene genereres med Flux.1-dev under ikke-kommersiell lisens – bevisst valg (Vedlegg A.12). Ikke legg til betalingsfunksjoner eller sponsing uten at bildespørsmålet er løst først.
+- Alt som var gratis i P1 forblir gratis. Inntekt kommer fra organisasjoner (Vedlegg C del 3), aldri fra å flytte kjernen bak betaling, og aldri fra annonser. `organizations` finnes i datamodellen, men får ikke UI før noen ber om det.
 - Aldri kall ComfyUI på Kitor uten aktiv `image`-lease fra arbiteren, alltid heartbeat, alltid release i `finally`. Token ligger i `.env`, aldri i repoet.
+- Rom-invitasjoner er lenker (Vedlegg B.5b). Ingen Teams-app, ingen Entra-registrering. `/r/{code}` må ha Open Graph-metadata fra server, ellers ser lenken ut som spam i Teams.
 - Ikke lagre sensordata rått i Firestore – kun aggregater per økt.
 - Ikke eksponer ComfyUI på Kitor utenfor hjemmenettet.
