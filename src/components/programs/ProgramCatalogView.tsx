@@ -3,6 +3,7 @@ import { TRAINING_PROGRAMS } from '../../data/programs';
 import { CONTEXT_PROFILES, TrainingMode } from '../../data/contextProfiles';
 import { WorkoutTemplate } from '../../types/workout';
 import { getFavoriteProgramIds, toggleFavoriteProgramId } from '../../services/favoritesService';
+import { applyProgramOverrides } from '../../services/programOverrideService';
 import {
   Play,
   Clock,
@@ -228,7 +229,7 @@ export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({
                   )}
 
                   <button
-                    onClick={() => onStartProgram(prog.workout)}
+                    onClick={() => onStartProgram(applyProgramOverrides(prog.id, prog.workout))}
                     className="py-1.5 px-3.5 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-zinc-950 font-black text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-sm"
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />

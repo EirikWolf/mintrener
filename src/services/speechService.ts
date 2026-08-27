@@ -89,7 +89,7 @@ export class SpeechService {
     return this.enabled;
   }
 
-  public speak(text: string) {
+  public speak(text: string, rate: number = 1.05) {
     if (!this.enabled || typeof window === 'undefined' || !('speechSynthesis' in window) || !text) return;
     this.synth = window.speechSynthesis;
 
@@ -110,7 +110,7 @@ export class SpeechService {
       }
 
       utterance.volume = 1.0;
-      utterance.rate = 1.05;
+      utterance.rate = rate;
       utterance.pitch = 1.0;
 
       // Chrome Android bugfix: resume hvis motoren henger
@@ -178,3 +178,9 @@ export class SpeechService {
 }
 
 export const speechService = new SpeechService();
+
+export function speakMessage(text: string, rate: number = 1.0) {
+  speechService.speak(text, rate);
+}
+
+

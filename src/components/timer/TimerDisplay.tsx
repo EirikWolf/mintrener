@@ -5,6 +5,8 @@ import { UserMenu } from '../auth/UserMenu';
 import { SensorStatusModal } from '../sensors/SensorStatusModal';
 import { HeartRateWidget } from '../sensors/HeartRateWidget';
 import { MicroWorkoutModal } from '../micro/MicroWorkoutModal';
+import { MicroTimerDisplay } from '../micro/MicroTimerDisplay';
+import { ExerciseItem } from '../../schemas/exerciseSchema';
 import { GpsTrackerModal } from '../gps/GpsTrackerModal';
 import { GroupRoomModal } from '../group/GroupRoomModal';
 import { AboutGuideModal } from '../help/AboutGuideModal';
@@ -91,6 +93,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isAiCoachOpen, setIsAiCoachOpen] = useState(false);
+  const [activeMicroExercise, setActiveMicroExercise] = useState<ExerciseItem | null>(null);
   const [interruptedSession, setInterruptedSession] = useState<InterruptedSession | null>(() => getInterruptedSession());
   const [adaptiveSuggestion, setAdaptiveSuggestion] = useState<ProgressionSuggestion | null>(null);
   const [shareCopied, setShareCopied] = useState<boolean>(false);
@@ -658,6 +661,9 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
       {isMicroModalOpen && (
         <MicroWorkoutModal
           onClose={() => setIsMicroModalOpen(false)}
+          onStartMicroTimer={(ex) => {
+            setActiveMicroExercise(ex);
+          }}
           onStartMicroWorkout={(microWorkout) => {
             if (onStartWorkoutDirectly) {
               onStartWorkoutDirectly(microWorkout);
@@ -666,6 +672,14 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
               onStart();
             }
           }}
+        />
+      )}
+
+      {/* Dedikert Microtimer Fullskjerm */}
+      {activeMicroExercise && (
+        <MicroTimerDisplay
+          exercise={activeMicroExercise}
+          onClose={() => setActiveMicroExercise(null)}
         />
       )}
 

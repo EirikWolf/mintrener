@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { EXERCISE_LIBRARY } from '../../data/exercises';
+import { ExerciseItem } from '../../schemas/exerciseSchema';
 import { WorkoutTemplate } from '../../types/workout';
 import { Zap, X, Play } from 'lucide-react';
 
 interface MicroWorkoutModalProps {
   onClose: () => void;
   onStartMicroWorkout: (workout: WorkoutTemplate) => void;
+  onStartMicroTimer?: (exercise: ExerciseItem, duration: number, isHold: boolean) => void;
 }
 
 const POPULAR_MICRO_EXERCISES = [
@@ -31,6 +33,7 @@ const PRESET_DURATIONS = [
 export const MicroWorkoutModal: React.FC<MicroWorkoutModalProps> = ({
   onClose,
   onStartMicroWorkout,
+  onStartMicroTimer,
 }) => {
   const [selectedExerciseId, setSelectedExerciseId] = useState<string>('planke');
   const [selectedDuration, setSelectedDuration] = useState<number>(60);
@@ -40,6 +43,12 @@ export const MicroWorkoutModal: React.FC<MicroWorkoutModalProps> = ({
     EXERCISE_LIBRARY.find((e) => e.id === selectedExerciseId) || EXERCISE_LIBRARY[0];
 
   const handleStart = () => {
+    if (onStartMicroTimer) {
+      onStartMicroTimer(selectedExercise, selectedDuration, isOpenEnded);
+      onClose();
+      return;
+    }
+
     const workout: WorkoutTemplate = {
       id: `micro-${Date.now()}`,
       name: isOpenEnded

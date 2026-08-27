@@ -31,3 +31,21 @@ Dette dokumentet fører en kronologisk oversikt over tekniske og arkitektoniske 
 * **Valg:**
   1. Endret `vite.config.ts` Workbox-strategi til `NetworkFirst` med cache-navn `exercise-images-cache-v2`.
   2. Lagt til versjonsparameter `?v=...` i `ExerciseIllustration.tsx` for øyeblikkelig cache-busting ved nye utrullinger.
+
+---
+
+## [2026-08-27] Beslutning 4: Stemmebank & Kollisjonsfrie regler (B.3)
+* **Kontekst:** Vedlegg B.3 krever en dedikert stemmebank for tonene `rolig`, `lek`, `gira` og `tørr` med strenge regler mot overlapp (motivasjon faller aldri i nedtellingen, 30s-påminnelse droppes ved halvveis-kollisjon).
+* **Valg:**
+  1. `src/data/voiceLines.ts` definerer alle linjer per tone og fase.
+  2. `src/services/voiceCoachService.ts` implementerer `VoiceCoachEngine` med presis 5–1 nedtelling per sekund, undertittel-støtte for åpne kontorlandskap, og automatisk varsel når personlig rekord passeres i hold-modus.
+
+---
+
+## [2026-08-27] Beslutning 5: Microtimer & Programoverstyring (B.2, C.8)
+* **Kontekst:** Vedlegg B.2 spesifiserer Microtimer med enorm nedtelling (>30% skjermhøyde), 30s/60s/90s/2m/3m/5m hurtigknapper, "Hold til du gir opp"-modus og oppsummering. Vedlegg C.8 krever at brukerbytte av øvelser persisteres for alle fremtidige økter i det programmet.
+* **Valg:**
+  1. `src/components/micro/MicroTimerDisplay.tsx` bygget med responsiv layout, hold-modus, PR-tracking og enkel "for lett / passe / for tungt"-feedback.
+  2. `src/services/programOverrideService.ts` lagrer brukerens øvelsesbytter per program og fletter dem sømløst inn i programkatalogen og øktstarteren.
+  3. `src/data/programs.ts` utvidet til over 20 strukturerte starterprogrammer.
+
