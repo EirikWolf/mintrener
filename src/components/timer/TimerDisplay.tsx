@@ -159,7 +159,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
         title: `${exerciseTitle} (${formatTime(state.phaseRemainingSeconds)})`,
         artist: `Min Trener • ${phaseName}`,
         album: `${workout.name} • Runde ${state.currentRound}/${state.totalRounds}`,
-        artworkUrl: state.currentExercise ? `/exercises/${state.currentExercise.id}-0.webp` : undefined,
+        artworkUrl: state.currentExercise ? `/images/exercises/${state.currentExercise.id}-0.png` : undefined,
         onPlay: onResume,
         onPause: onPause,
         onNext: onSkipNext,

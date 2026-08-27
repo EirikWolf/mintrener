@@ -253,6 +253,12 @@ async function runFullBatch() {
     for (const exercise of EXERCISE_LIBRARY) {
       for (const phaseIdx of [0, 1]) {
         total++;
+        const targetPath = path.join(outputDir, `${exercise.id}-${phaseIdx}.png`);
+        if (fs.existsSync(targetPath) && fs.statSync(targetPath).size > 50000) {
+          console.log(`⏩ [${total}/${EXERCISE_LIBRARY.length * 2}] ${exercise.navn.nb} (${exercise.id}-${phaseIdx}.png) finnes allerede, hopper over.`);
+          continue;
+        }
+
         const phaseKey = phaseIdx.toString();
         const specificAction =
           exercise.bildePrompt && exercise.bildePrompt[phaseKey]
@@ -270,7 +276,6 @@ async function runFullBatch() {
         console.log(`   ComfyUI ID: ${promptId}`);
 
         const imgInfo = await waitForCompletion(token, promptId, 120);
-        const targetPath = path.join(outputDir, `${exercise.id}-${phaseIdx}.png`);
         await downloadImage(token, imgInfo, targetPath);
         console.log(`   ✨ Lagret bilde til: public/images/exercises/${exercise.id}-${phaseIdx}.png`);
       }
