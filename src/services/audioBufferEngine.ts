@@ -75,6 +75,10 @@ export class AudioBufferEngine {
   // Pågående fetch/dekoding per nøkkel – hindrer dobbel nedlasting ved samtidige preload-kall
   private inFlight = new Map<string, Promise<void>>();
   private activeChain: ActiveChain | null = null;
+  // Teller opp for hvert stop() slik at en sekvens som venter på ctx.resume()
+  // kan oppdage at et stopp (eksternt, eller fra en nyere sekvens) traff i
+  // await-vinduet – stop/skedulering er ellers ikke atomisk over den awaiten
+  private stopEpoch = 0;
 
   public has(key: string): boolean {
     return this.buffers.has(key);
@@ -142,17 +146,25 @@ export class AudioBufferEngine {
 
     const ctx = audioService.getContext();
     if (ctx.state !== 'running') {
+      const epochBeforeResume = this.stopEpoch;
       try {
         await ctx.resume();
       } catch {
         // Avgjøres av state-sjekken under
       }
+      // Skedulering på en kontekst som ikke kjører (suspended, eller WebKits
+      // 'interrupted' etter f.eks. telefonsamtale) ville skjedd på en frossen
+      // klokke: onended fyrer aldri, promiset henger og annonseringen forsvinner
+      // stille uten å nå fallback. Da er false + kallerens fallback riktig.
+      // (Assertion til full union: TS narrower ellers bort 'running' over awaiten
+      // og tror sammenligningen er umulig – resume() kan faktisk ha endret state.)
+      if ((ctx.state as AudioContextState) !== 'running') return false;
+      // Et stop() traff mens vi ventet på resume (brukeren pauset, eller en
+      // nyere sekvens tok over): den nyeste intensjonen vinner, så vi skedulerer
+      // ingenting. true = «bevisst stoppet» – samme kontrakt som stop() på en
+      // spilt kjede, slik at kallere ikke spiller fallback oppå et stopp.
+      if (this.stopEpoch !== epochBeforeResume) return true;
     }
-    // Skedulering på en kontekst som ikke kjører (suspended, eller WebKits
-    // 'interrupted' etter f.eks. telefonsamtale) ville skjedd på en frossen
-    // klokke: onended fyrer aldri, promiset henger og annonseringen forsvinner
-    // stille uten å nå fallback. Da er false + kallerens fallback riktig.
-    if (ctx.state !== 'running') return false;
 
     const crossfadeS = opts?.crossfadeS ?? DEFAULT_CROSSFADE_S;
     const schedule = computeSequenceSchedule(
@@ -228,6 +240,9 @@ export class AudioBufferEngine {
    * ikke trigge fallback-stiene sine oppå en bevisst avbrutt avspilling.
    */
   public stop(fadeOutS = DEFAULT_STOP_FADE_S): void {
+    // Teller alltid – også uten aktiv kjede – slik at en sekvens midt i
+    // resume-vinduet ser stoppet (se stopEpoch-kommentaren over)
+    this.stopEpoch++;
     const chain = this.activeChain;
     if (!chain) return;
 

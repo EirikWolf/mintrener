@@ -287,6 +287,35 @@ describe('AudioBufferEngine.playSequence / stop', () => {
     expect(duckStartSpy).not.toHaveBeenCalled();
   });
 
+  it('eksternt stop() i resume-vinduet vinner: ingenting skeduleres etterpå', async () => {
+    // stop/skedulering er ikke atomisk over await ctx.resume() – et stop() som
+    // treffer i det vinduet (f.eks. bruker pauser økten) skal hindre at kjeden
+    // skeduleres i det hele tatt
+    const mock = await preloadTwoClips();
+    let releaseResume: () => void = () => {};
+    mock.ctx.state = 'suspended';
+    mock.ctx.resume = vi.fn().mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseResume = () => {
+            mock.ctx.state = 'running';
+            resolve();
+          };
+        })
+    );
+
+    const pending = engine.playSequence(['exercise-burpees']);
+    engine.stop(); // brukeren stopper mens konteksten gjenopptas
+    releaseResume();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mock.ctx.createBufferSource).not.toHaveBeenCalled();
+    expect(duckStartSpy).not.toHaveBeenCalled();
+    // true = «bevisst stoppet» (samme kontrakt som stop() ellers) – kalleren
+    // skal ikke spille fallback oppå et brukerinitiert stopp
+    await expect(pending).resolves.toBe(true);
+  });
+
   it('kobler fra gain-nodene deterministisk når kjeden er ferdigspilt', async () => {
     const { sources, gains } = await preloadTwoClips();
 
@@ -364,6 +393,10 @@ describe('AudioBufferEngine.playSequence / stop', () => {
     });
     expect(duckStopSpy).toHaveBeenCalledTimes(1);
     await expect(pending).resolves.toBe(true);
+
+    // Nedriggingen av grafen skjer først når ended-hendelsen fyrer etter faden
+    sources[0].onended?.();
+    expect(gains[0].disconnect).toHaveBeenCalledTimes(1);
   });
 
   it('ny sekvens stopper implisitt den pågående kjeden', async () => {
