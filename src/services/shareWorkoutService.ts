@@ -1,4 +1,5 @@
 import { WorkoutTemplate } from '../types/workout';
+import { recordShareLinkOpen } from './telemetryService';
 
 /**
  * Genererer en kompakt, delbar URL med øktens data innebygd i lenken
@@ -34,6 +35,8 @@ export function generateShareUrl(workout: WorkoutTemplate): string {
 
     const url = new URL(window.location.origin + window.location.pathname);
     url.searchParams.set('w', base64);
+    // Attribusjonsparameter: gjør åpninger av delte lenker målbare (K-faktor)
+    url.searchParams.set('ref', 'share');
     return url.toString();
   } catch (err) {
     console.error('Feil ved generering av delelenke:', err);
@@ -95,9 +98,15 @@ export function getSharedWorkoutFromUrl(): WorkoutTemplate | null {
       return null;
     }
 
+    // Tell anonymt at en delt lenke faktisk ble åpnet (fire-and-forget)
+    if (params.get('ref') === 'share') {
+      recordShareLinkOpen().catch(() => {});
+    }
+
     // Rens URL uten å reloade siden
     const cleanUrl = new URL(window.location.href);
     cleanUrl.searchParams.delete('w');
+    cleanUrl.searchParams.delete('ref');
     window.history.replaceState({}, document.title, cleanUrl.toString());
 
     return workout;

@@ -157,7 +157,7 @@ export const PainFilterModal: React.FC<PainFilterModalProps> = ({
         <div className="flex-1 overflow-y-auto space-y-2 pr-1">
           <div className="flex items-center justify-between text-xs font-bold">
             <span className="text-zinc-300">Tilpasninger for «{workout.name}»:</span>
-            <span className={modifiedCount > 0 ? 'text-rose-400' : 'text-zinc-500'}>
+            <span className={modifiedCount > 0 ? 'text-rose-400' : 'text-zinc-400'}>
               {modifiedCount} øvelser byttet
             </span>
           </div>
@@ -178,7 +178,7 @@ export const PainFilterModal: React.FC<PainFilterModalProps> = ({
                 className="p-2.5 bg-zinc-900/90 border border-zinc-800 rounded-2xl space-y-1 text-xs"
               >
                 <div className="flex items-center gap-1.5 font-bold">
-                  <span className="line-through text-zinc-500 truncate max-w-[40%]">{r.original}</span>
+                  <span className="line-through text-zinc-400 truncate max-w-[40%]">{r.original}</span>
                   <ArrowRight className="w-3 h-3 text-emerald-400 shrink-0" />
                   <span className="text-emerald-300 truncate max-w-[50%]">{r.replacement}</span>
                 </div>

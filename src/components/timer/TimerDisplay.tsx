@@ -5,6 +5,7 @@ import { UserMenu } from '../auth/UserMenu';
 import { SensorStatusModal } from '../sensors/SensorStatusModal';
 import { HeartRateWidget } from '../sensors/HeartRateWidget';
 import { HeartRateLiveGraph } from '../sensors/HeartRateLiveGraph';
+import { getUserMaxHeartRate } from '../../services/heartRateZoneService';
 import { MicroWorkoutModal } from '../micro/MicroWorkoutModal';
 import { MicroTimerDisplay } from '../micro/MicroTimerDisplay';
 import { ExerciseItem } from '../../schemas/exerciseSchema';
@@ -297,7 +298,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
               className={`p-2 rounded-full border transition-all active:scale-95 ${
                 state.soundEnabled
                   ? 'bg-zinc-900 border-zinc-700 text-emerald-400 hover:bg-zinc-800'
-                  : 'bg-zinc-900/60 border-zinc-800 text-zinc-500 hover:text-zinc-300'
+                  : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-zinc-300'
               }`}
             >
               {state.soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
@@ -697,6 +698,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           <div className="w-full flex justify-center px-4 py-1">
             <HeartRateLiveGraph
               currentBpm={currentHeartRate}
+              maxHr={getUserMaxHeartRate()}
               isRestPhase={state.phase === 'rest'}
             />
           </div>

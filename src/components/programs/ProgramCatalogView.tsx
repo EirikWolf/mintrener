@@ -383,7 +383,7 @@ export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({
                       </div>
                     </div>
 
-                    <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0 mt-2" />
+                    <ChevronRight className="w-4 h-4 text-zinc-400 shrink-0 mt-2" />
                   </div>
 
                   <p className="text-xs text-zinc-300 leading-relaxed line-clamp-2">

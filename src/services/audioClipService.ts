@@ -33,6 +33,24 @@ export class AudioClipService {
     speechService.speak(fallbackText, rate);
   }
 
+  /**
+   * Forhåndslaster en liste klipp inn i cachen. Nøkler uten manifest-oppslag
+   * ignoreres stille – avspilling har egen talesyntese-fallback uansett.
+   */
+  public preloadClips(clipKeys: string[]): void {
+    clipKeys.forEach((key) => {
+      const url = AUDIO_MANIFEST[key];
+      if (!url || this.audioCache.has(url)) return;
+      try {
+        const audio = new Audio(url);
+        audio.preload = 'auto';
+        this.audioCache.set(url, audio);
+      } catch {
+        // Preload er kun en optimalisering
+      }
+    });
+  }
+
   private playAudioFile(url: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {

@@ -48,6 +48,26 @@ export function setTelemetryConsent(enabled: boolean): void {
 }
 
 /**
+ * Teller anonymt at en delt øktlenke ble åpnet av en mottaker.
+ * Grunnlaget for å måle viral K-faktor – ingen personopplysninger.
+ */
+export async function recordShareLinkOpen(): Promise<void> {
+  if (!getTelemetryConsent() || !db) {
+    return;
+  }
+  try {
+    const overviewRef = doc(db, 'global_stats', 'overview');
+    await setDoc(
+      overviewRef,
+      { shareLinkOpens: increment(1), lastUpdated: serverTimestamp() },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('Kunne ikke registrere lenkeåpning:', err);
+  }
+}
+
+/**
  * Sender anonyme aggregattellere til Firestore uten noen personopplysninger
  */
 export async function recordWorkoutTelemetry(

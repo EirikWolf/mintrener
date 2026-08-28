@@ -146,7 +146,7 @@ export const BadgeShowcaseModal: React.FC<BadgeShowcaseModalProps> = ({
                       className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shrink-0 shadow-inner border ${
                         isDone
                           ? 'bg-amber-500/20 border-amber-500/40 text-white'
-                          : 'bg-zinc-800 border-zinc-700 text-zinc-500 grayscale'
+                          : 'bg-zinc-800 border-zinc-700 text-zinc-400 grayscale'
                       }`}
                     >
                       {badge.icon}
@@ -187,7 +187,7 @@ export const BadgeShowcaseModal: React.FC<BadgeShowcaseModalProps> = ({
                 <div className="space-y-1 pt-1 border-t border-zinc-850/80">
                   <div className="flex justify-between text-[10px] text-zinc-400 font-mono">
                     <span>{badge.progressLabel || `${badge.progress}/${badge.maxProgress}`}</span>
-                    <span className={isDone ? 'font-bold text-amber-400' : 'text-zinc-500'}>
+                    <span className={isDone ? 'font-bold text-amber-400' : 'text-zinc-400'}>
                       {pct}%
                     </span>
                   </div>

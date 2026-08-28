@@ -226,7 +226,7 @@ export const AiCoachModal: React.FC<AiCoachModalProps> = ({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Spør Astrid om teknikk, råd eller økter..."
-            className="flex-1 bg-zinc-900 border border-zinc-700/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition-colors"
+            className="flex-1 bg-zinc-900 border border-zinc-700/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-400 focus:outline-none focus:border-emerald-500 transition-colors"
           />
           <button
             type="submit"

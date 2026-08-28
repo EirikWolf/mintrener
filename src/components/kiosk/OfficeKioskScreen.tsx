@@ -175,7 +175,7 @@ export const OfficeKioskScreen: React.FC<OfficeKioskScreenProps> = ({
             aria-label={soundEnabled ? 'Demp lyd' : 'Aktiver lyd'}
             className="p-3 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white transition-all shadow-md active:scale-95"
           >
-            {soundEnabled ? <Volume2 className="w-5 h-5 text-emerald-400" /> : <VolumeX className="w-5 h-5 text-zinc-500" />}
+            {soundEnabled ? <Volume2 className="w-5 h-5 text-emerald-400" /> : <VolumeX className="w-5 h-5 text-zinc-400" />}
           </button>
 
           <button
@@ -254,7 +254,7 @@ export const OfficeKioskScreen: React.FC<OfficeKioskScreenProps> = ({
       </div>
 
       {/* 3. Bunn-info */}
-      <div className="flex items-center justify-between text-xs text-zinc-500 border-t border-zinc-900 pt-3">
+      <div className="flex items-center justify-between text-xs text-zinc-400 border-t border-zinc-900 pt-3">
         <span className="font-mono">Min Trener Digital Signage • v1.3</span>
         <span>Trykk Escape for å avslutte</span>
       </div>

@@ -45,6 +45,7 @@ import {
   Flame,
   Tv,
   Mic,
+  HeartPulse,
 } from 'lucide-react';
 import { CoachPersonaModal } from './CoachPersonaModal';
 import {
@@ -53,6 +54,7 @@ import {
   CoachPersonaId,
 } from '../../services/coachPersonaService';
 import { getWeeklyGoal, setWeeklyGoal } from '../../services/weeklyGoalService';
+import { getUserBirthYear, setUserBirthYear, getUserMaxHeartRate } from '../../services/heartRateZoneService';
 
 interface SettingsMoreViewProps {
   soundEnabled: boolean;
@@ -79,6 +81,21 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
 }) => {
   const { user, signInWithGoogle, logout, deleteAccount } = useAuth();
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
+  const [birthYearInput, setBirthYearInput] = useState<string>(() => {
+    const y = getUserBirthYear();
+    return y === null ? '' : String(y);
+  });
+
+  const handleBirthYearChange = (value: string) => {
+    setBirthYearInput(value);
+    const year = parseInt(value, 10);
+    const currentYear = new Date().getFullYear();
+    if (!value) {
+      setUserBirthYear(null);
+    } else if (!isNaN(year) && year >= currentYear - 110 && year <= currentYear - 10) {
+      setUserBirthYear(year);
+    }
+  };
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -409,6 +426,32 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
           </div>
           <ChevronRight className="w-4 h-4 text-zinc-400" />
         </button>
+
+        {/* Fødselsår for aldersbasert makspuls og pulssoner (Tanaka-formelen) */}
+        <div className="flex items-center justify-between py-2.5 px-3 bg-zinc-950 rounded-xl border border-zinc-800">
+          <div className="flex items-center gap-2.5 pr-2">
+            <HeartPulse className="w-4 h-4 text-rose-400" />
+            <div>
+              <label htmlFor="birth-year-input" className="text-xs font-bold text-white">
+                Fødselsår
+              </label>
+              <p className="text-[10px] text-zinc-400">
+                Gir riktige pulssoner (estimert makspuls: {getUserMaxHeartRate()} bpm)
+              </p>
+            </div>
+          </div>
+          <input
+            id="birth-year-input"
+            type="number"
+            inputMode="numeric"
+            min={new Date().getFullYear() - 110}
+            max={new Date().getFullYear() - 10}
+            placeholder="F.eks. 1975"
+            value={birthYearInput}
+            onChange={(e) => handleBirthYearChange(e.target.value)}
+            className="w-24 bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-white text-center font-mono focus:border-emerald-500 focus:outline-none shrink-0"
+          />
+        </div>
 
         {/* Kontor-TV Kiosk */}
         <button

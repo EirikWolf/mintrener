@@ -1,3 +1,5 @@
+import { getUserMaxHeartRate } from './heartRateZoneService';
+
 export type HeartRateZone = 1 | 2 | 3 | 4 | 5;
 
 export interface HeartRateData {
@@ -75,6 +77,8 @@ export class BluetoothHeartRateService {
     }
 
     try {
+      // Bruk aldersbasert makspuls fra profilen hvis fødselsår er satt
+      this.setMaxHeartRate(getUserMaxHeartRate());
       this.onDataCallback = onData;
       this.onDisconnectCallback = onDisconnect || null;
 

@@ -13,6 +13,51 @@ export function calculateMaxHeartRate(age: number = 30): number {
   return Math.round(208 - 0.7 * age);
 }
 
+const BIRTH_YEAR_STORAGE_KEY = 'mintrener_user_birth_year';
+const DEFAULT_MAX_HR = 190;
+
+/**
+ * Henter brukerens fødselsår fra lokal lagring (null hvis ikke satt)
+ */
+export function getUserBirthYear(): number | null {
+  try {
+    const raw = localStorage.getItem(BIRTH_YEAR_STORAGE_KEY);
+    if (!raw) return null;
+    const year = parseInt(raw, 10);
+    const currentYear = new Date().getFullYear();
+    if (isNaN(year) || year < currentYear - 110 || year > currentYear - 10) return null;
+    return year;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Lagrer brukerens fødselsår (null sletter innstillingen)
+ */
+export function setUserBirthYear(year: number | null): void {
+  try {
+    if (year === null) {
+      localStorage.removeItem(BIRTH_YEAR_STORAGE_KEY);
+    } else {
+      localStorage.setItem(BIRTH_YEAR_STORAGE_KEY, String(Math.round(year)));
+    }
+  } catch (err) {
+    console.warn('Kunne ikke lagre fødselsår:', err);
+  }
+}
+
+/**
+ * Brukerens estimerte makspuls: Tanaka-formelen fra fødselsår hvis satt,
+ * ellers standardestimatet 190 (aktiv voksen)
+ */
+export function getUserMaxHeartRate(): number {
+  const birthYear = getUserBirthYear();
+  if (birthYear === null) return DEFAULT_MAX_HR;
+  const age = new Date().getFullYear() - birthYear;
+  return calculateMaxHeartRate(age);
+}
+
 export function getHeartRateZones(maxHr: number = 190): HeartRateZoneInfo[] {
   return [
     {
