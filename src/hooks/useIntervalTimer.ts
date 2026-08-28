@@ -19,6 +19,15 @@ interface UseIntervalTimerProps {
   workout: WorkoutTemplate;
 }
 
+// Terskel (sekunder) for å skille normal tick-drift (fanen synlig) fra en reell
+// oppvåkning etter dvale/lomme – under denne kjøres vanlig enkelt-avansement.
+const CATCH_UP_THRESHOLD_S = 1.5;
+// Sikkerhetsgrense på antall stille faser catchUpExpiredPhases kan spole gjennom i
+// én tick. Ved (ekstremt usannsynlig) treff på grensen droppes resten av overshoot
+// bevisst – tilstanden forblir konsistent, men timeren går da bak veggklokken til
+// neste tick fanger opp resten.
+const MAX_CATCH_UP_PHASES = 500;
+
 export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
   const [status, setStatus] = useState<TimerState['status']>('idle');
   const [phase, setPhase] = useState<IntervalPhase>('prepare');
@@ -249,9 +258,11 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       const isLastItem = idx + 1 >= w.items.length;
       const isLastRound = r >= w.rounds;
 
-      // Hvis dette var siste øvelse i siste runde, fullfør økten umiddelbart
+      // Hvis dette var siste øvelse i siste runde, fullfør økten umiddelbart.
+      // Fullføring er ALDRI stille – selv under catch-up skal sluttsignalet høres
+      // (silent-parameteren ignoreres bevisst her, se catchUpExpiredPhases).
       if (isLastItem && isLastRound) {
-        setupPhase('complete', r, idx, silent);
+        setupPhase('complete', r, idx, false);
       } else {
         const item = w.items[idx];
         if (item && item.restDurationSeconds > 0) {
@@ -279,7 +290,8 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
           setupPhase('work', r + 1, 0, silent);
         }
       } else {
-        setupPhase('complete', r, idx, silent);
+        // Fullføring er aldri stille – se kommentar i 'work'-grenen over.
+        setupPhase('complete', r, idx, false);
       }
     } else if (currentPhase === 'round_rest') {
       setupPhase('work', r + 1, 0, silent);
@@ -321,7 +333,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     const phaseElapsed = (performance.now() - stateRef.current.phaseStartTime) / 1000;
     const overshoot = Math.max(0, phaseElapsed - stateRef.current.phaseDuration);
 
-    if (overshoot < 1.5) {
+    if (overshoot < CATCH_UP_THRESHOLD_S) {
       advanceToNextPhase();
       return;
     }
@@ -330,18 +342,13 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     let skippedSilently = 0;
     let iterations = 0;
 
-    while (stateRef.current.status === 'running' && iterations < 500) {
+    // Fullføring kaller alltid setupPhase(..., false) (se advanceToNextPhase), så
+    // status blir 'completed' idet loopen når 'complete' – while-betingelsen under
+    // avslutter da loopen naturlig, uten noe eget complete-tilfelle her.
+    while (stateRef.current.status === 'running' && iterations < MAX_CATCH_UP_PHASES) {
       iterations++;
       advanceToNextPhase(true);
       skippedSilently++;
-
-      if (stateRef.current.phase === 'complete') {
-        // Fullføringssignalene skal høres nøyaktig én gang – kjør complete-oppsettet
-        // på nytt uten silent for å gjenbruke eksisterende (persona-bevisste) lydlogikk
-        // fremfor å duplisere den her.
-        setupPhase('complete', stateRef.current.currentRound, stateRef.current.currentItemIndex, false);
-        return;
-      }
 
       const newDuration = stateRef.current.phaseDuration;
       if (restOvershoot >= newDuration) {
@@ -359,7 +366,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     if (skippedSilently >= 1 && stateRef.current.status === 'running') {
       playResyncCue();
     }
-  }, [advanceToNextPhase, setupPhase, playResyncCue]);
+  }, [advanceToNextPhase, playResyncCue]);
 
   // Hopp over eller gå tilbake manuelt
   const skipNext = useCallback(() => {
@@ -406,10 +413,13 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       const phaseElapsedSec = Math.floor(phaseElapsed);
       const halfwaySec = Math.floor(stateRef.current.phaseDuration / 2);
 
-      // 3 - 2 - 1 Nedtelling fra treneren under prepare, rest og round_rest (starter 3.5s før arbeid)
+      // 3 - 2 - 1 Nedtelling fra treneren under prepare, rest og round_rest (starter 3.5s før arbeid).
+      // remaining > 0 hindrer at denne fyres på en allerede utløpt fase rett før
+      // catchUpExpiredPhases spoler stille forbi den (ellers: spurious cue ved oppvåkning).
       if (
         persona !== 'standard' &&
         (stateRef.current.phase === 'prepare' || stateRef.current.phase === 'rest' || stateRef.current.phase === 'round_rest') &&
+        remaining > 0 &&
         remaining <= 3.5 &&
         !stateRef.current.firedCues.has('start_321') &&
         stateRef.current.speechEnabled

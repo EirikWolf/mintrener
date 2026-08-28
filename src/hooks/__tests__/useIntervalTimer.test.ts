@@ -5,6 +5,7 @@ import { TABATA_WORKOUT } from '../../data/mockWorkouts';
 import { audioService } from '../../services/audioService';
 import { wakeLockService } from '../../services/wakeLockService';
 import { speechService } from '../../services/speechService';
+import * as coachPersonaService from '../../services/coachPersonaService';
 
 describe('useIntervalTimer Hook', () => {
   beforeEach(() => {
@@ -188,6 +189,9 @@ describe('useIntervalTimer Hook – catch-up ved dvale/lomme (Oppgave 2)', () =>
   afterEach(() => {
     vi.useRealTimers();
     performanceNowSpy.mockRestore();
+    // Sikkerhetsnett: nullstill persona i tilfelle en test feiler før den rekker
+    // å sette den tilbake selv (unngår lekkasje til påfølgende tester i filen).
+    coachPersonaService.setActiveCoachPersona('standard');
   });
 
   it('normal drift ved fasegrense (overshoot ~0) er uendret – ett playWorkStart-kall, ingen resync-dobbeltkall', async () => {
@@ -264,6 +268,36 @@ describe('useIntervalTimer Hook – catch-up ved dvale/lomme (Oppgave 2)', () =>
 
     // Ingen ekstra lydkall skal ha kommet fra den andre ticken
     expect(restStartSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('dvale med ikke-standard persona: ingen spurious 3-2-1-cue rett før stille catch-up', async () => {
+    // Regresjonstest for feilen der start_321-blokken kjørte FØR catchUpExpiredPhases:
+    // ved oppvåkning er den utløpte fasen fortsatt 'prepare'/'rest'/'round_rest' med
+    // remaining=0 (Math.max(0, ...)) idet denne sjekken evalueres, og uten en
+    // remaining > 0-vakt ville den feilaktig spilt en 3-2-1-cue rett før fasen ble
+    // hoppet stille over – to cuer i stedet for én.
+    coachPersonaService.setActiveCoachPersona('hardcore');
+    const playPersonaCueSpy = vi.spyOn(coachPersonaService, 'playPersonaCue');
+
+    const { result } = renderHook(() => useIntervalTimer({ workout: TABATA_WORKOUT }));
+
+    await act(async () => {
+      await result.current.startWorkout();
+    });
+    playPersonaCueSpy.mockClear();
+
+    // Samme 95s-hopp som "dvale midt i økten": prepare (10s) er fortsatt den aktive
+    // fasen idet ticken starter, med remaining=0 – nettopp scenarioet som trigget
+    // spurious-cuen tidligere.
+    nowMs = START_MS + 95_000;
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+
+    expect(result.current.state.phase).toBe('rest');
+    expect(playPersonaCueSpy).not.toHaveBeenCalledWith('start_321');
+
+    coachPersonaService.setActiveCoachPersona('standard');
   });
 
   it('dvale forbi slutten av økten: fullfører direkte med nøyaktig ett playWorkoutComplete-kall', async () => {
