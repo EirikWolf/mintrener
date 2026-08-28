@@ -90,6 +90,10 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
   stateRef.current.currentRound = currentRound;
   stateRef.current.currentItemIndex = currentItemIndex;
   stateRef.current.phaseDuration = phaseDuration;
+  // NB (A3): phaseRemaining/totalElapsed her er de GATEDE, sist COMMITTEDE render-
+  // verdiene (kan henge inntil ~1s bak faktisk forløpt tid) – bruk ALDRI disse i
+  // motorkode (catch-up, resume, lagring). Bruk stateRef.current.preciseRemainingSec /
+  // preciseTotalElapsedSec i stedet.
   stateRef.current.phaseRemaining = phaseRemaining;
   stateRef.current.totalElapsed = totalElapsed;
   stateRef.current.soundEnabled = soundEnabled;
@@ -455,29 +459,6 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     }
   }, [status, setupPhase]);
 
-  // A6: gjenoppretter riktig forløpt tid etter en dvale-periode der performance.now
-  // har frosset (mens Date.now fortsatte å telle) – se SLEEP_REANCHOR_THRESHOLD_MS.
-  // Kalles fra visibilitychange-handleren FØR den vanlige tick()-en, slik at den
-  // påfølgende catchUpExpiredPhases (performance.now-basert) ser reell forløpt tid.
-  const reanchorAfterSleep = useCallback(() => {
-    const wallNow = Date.now();
-    const perfNow = performance.now();
-    const wallDelta = wallNow - stateRef.current.lastTickWallMs;
-    const perfDelta = perfNow - stateRef.current.lastTickPerfMs;
-    const drift = wallDelta - perfDelta;
-
-    // Kun positiv drift over terskelen betyr at performance.now har "sovet" mens
-    // Date.now fortsatte – negativ/liten drift (f.eks. veggklokken justert bakover
-    // av NTP) skal IKKE flytte tidsstemplene, ellers hopper timeren feilaktig fremover.
-    if (drift > SLEEP_REANCHOR_THRESHOLD_MS) {
-      stateRef.current.phaseStartTime -= drift;
-      stateRef.current.workoutStartTime -= drift;
-    }
-
-    stateRef.current.lastTickWallMs = wallNow;
-    stateRef.current.lastTickPerfMs = perfNow;
-  }, []);
-
   // Hoved-timerloop basert på deterministiske tidsstempler (kjører i bakgrunn)
   useEffect(() => {
     if (status !== 'running') {
@@ -486,14 +467,34 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
 
     const tick = () => {
       const now = performance.now();
+      const wallNow = Date.now();
+
+      // A6: mål veggklokke/performance.now-drift FØR ankrene overskrives med denne
+      // tickens verdier – IKKE etterpå. Ved oppvåkning fra dvale er workerens
+      // ventende tick og visibilitychange-hendelsen begge makrotasks med uspesifisert
+      // rekkefølge; kjører en tick FØRST, ville et etter-ankring-mønster alt ha
+      // oppdatert ankrene til post-oppvåkning-verdier og skjult hele dvale-perioden
+      // for reanchor-sjekken (race condition som gjorde A6-fiksen virkningsløs).
+      // Derfor lever drift-sjekken inni selve tick() – både den vanlige worker-
+      // ticken OG visibilitychange-handlerens tick() (som bare kaller tick() direkte,
+      // se under) går gjennom nøyaktig samme, alltid ferske sjekk.
+      const wallDelta = wallNow - stateRef.current.lastTickWallMs;
+      const perfDelta = now - stateRef.current.lastTickPerfMs;
+      const drift = wallDelta - perfDelta;
+
+      // Kun positiv drift over terskelen betyr at performance.now har "sovet" mens
+      // Date.now fortsatte – negativ/liten drift (f.eks. veggklokken justert bakover
+      // av NTP) skal IKKE flytte tidsstemplene, ellers hopper timeren feilaktig fremover.
+      if (drift > SLEEP_REANCHOR_THRESHOLD_MS) {
+        stateRef.current.phaseStartTime -= drift;
+        stateRef.current.workoutStartTime -= drift;
+      }
+      stateRef.current.lastTickWallMs = wallNow;
+      stateRef.current.lastTickPerfMs = now;
+
       const phaseElapsed = (now - stateRef.current.phaseStartTime) / 1000;
       const remaining = Math.max(0, stateRef.current.phaseDuration - phaseElapsed);
       const totalElapsedSec = Math.max(0, (now - stateRef.current.workoutStartTime) / 1000);
-
-      // A6: fersk veggklokke/performance.now-anker ved hver tick, slik at
-      // reanchorAfterSleep alltid har et nylig referansepunkt å måle drift fra.
-      stateRef.current.lastTickWallMs = Date.now();
-      stateRef.current.lastTickPerfMs = now;
 
       // A3: motoren (catch-up, cue-timing, saveInterruptedSession) leser ALLTID disse
       // presise verdiene – kun React-state-oppdateringen under er gatet.
@@ -584,13 +585,11 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     const ticker = createTicker(tick);
     ticker.start();
 
-    // Visibility-opphenting når skjermen vekkes fra dvale. Re-ankre veggklokke/
-    // performance.now FØR tick() kjøres, slik at en eventuell dvale-periode der
-    // performance.now frøs (A6) er reflektert i phaseStartTime/workoutStartTime
-    // når tick() sin (performance.now-baserte) catchUpExpiredPhases evaluerer overshoot.
+    // Visibility-opphenting når skjermen vekkes fra dvale. tick() selv måler nå
+    // veggklokke/performance.now-drift FØR den gjør noe annet (se kommentar i tick()),
+    // så et rent kall til tick() her er nok – ingen separat re-ankringssteg lenger.
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && stateRef.current.status === 'running') {
-        reanchorAfterSleep();
         tick();
       }
     };
@@ -600,7 +599,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       ticker.stop();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [status, catchUpExpiredPhases, reanchorAfterSleep]);
+  }, [status, catchUpExpiredPhases]);
 
   // Kontrollfunksjoner
   const startWorkout = useCallback(

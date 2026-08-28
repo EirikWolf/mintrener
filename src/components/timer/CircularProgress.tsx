@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 interface CircularProgressProps {
   progress: number; // 0 to 1
@@ -14,8 +14,25 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
   const radius = 42;
   const strokeWidth = 7;
   const circumference = 2 * Math.PI * radius;
+  const clampedProgress = Math.max(0, Math.min(1, progress));
+
+  // A3-oppfølging: nedtellingens progress hopper brått tilbake mot 0 ved hvert
+  // faseskifte (ny fase starter på 0% fremdrift). Med en generell 1s-transisjon på
+  // stroke-dashoffset ville dette animert som en synlig BAKOVER-sveip av ringen –
+  // ca. 16 slike "spol tilbake til null"-sveip gjennom en Tabata-økt. Vi detekterer
+  // reset-framen ved å sammenligne med forrige renders progress (dokumentert
+  // React-mønster for "lagre info fra forrige render": oppdater state under selve
+  // rendringen, ikke i en effect – unngår en synlig ekstra frame) og slår av
+  // transisjonen KUN for den ene framen. Fremover-bevegelse innad i en fase beholder
+  // den jevne 1s-transisjonen.
+  const [prevProgress, setPrevProgress] = useState(clampedProgress);
+  const isResetFrame = clampedProgress < prevProgress;
+  if (clampedProgress !== prevProgress) {
+    setPrevProgress(clampedProgress);
+  }
+
   // Inverter progress slik at ringen tømmes / fylles ned mot 0
-  const strokeDashoffset = circumference * (1 - Math.max(0, Math.min(1, progress)));
+  const strokeDashoffset = circumference * (1 - clampedProgress);
 
   // Farger basert på fase
   const getPhaseColors = () => {
@@ -90,8 +107,11 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
             // så ringen ville "hakket" ett hakk i sekundet uten denne. 1s lineær
             // transisjon bygger bro mellom de sjeldnere render-hoppene slik at ringen
             // fortsatt oppleves som en jevnt tømmende/fyllende sirkel, ikke en klokke
-            // som hopper. prefers-reduced-motion overstyres globalt i index.css.
-            transition: 'stroke-dashoffset 1s linear, stroke 0.3s ease',
+            // som hopper – unntatt på reset-framen ved faseskifte, se isResetFrame
+            // over. index.css RESPEKTERER prefers-reduced-motion globalt (nuller
+            // transition-duration), som gjør ringen til en steppende (ikke-animert)
+            // indikator for brukere som har skrudd av bevegelseseffekter.
+            transition: isResetFrame ? 'stroke 0.3s ease' : 'stroke-dashoffset 1s linear, stroke 0.3s ease',
             filter: `drop-shadow(0 0 8px ${colors.glow})`,
           }}
         />

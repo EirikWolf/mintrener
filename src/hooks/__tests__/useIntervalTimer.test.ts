@@ -631,6 +631,57 @@ describe('useIntervalTimer Hook – veggklokke-re-anker ved dvale (Oppgave A6)',
     expect(announceRestSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('race-regresjon: en vanlig tick som kjører FØR visibilitychange etter frosset performance.now fanger driften likevel', async () => {
+    // Ved ekte oppvåkning er workerens/setInterval-fallbackens ventende tick og selve
+    // visibilitychange-hendelsen begge makrotasks med USPESIFISERT rekkefølge. Før
+    // fiksen målte kun visibilitychange-handleren drift, mens tick() ubetinget
+    // overskrev lastTickWallMs/lastTickPerfMs FØR noen drift-sjekk – kjørte en vanlig
+    // tick først, ville ankrene alt vært ferske (post-oppvåkning) når
+    // visibilitychange-handleren omsider målte drift, og dvale-perioden ville vært
+    // stille tapt (nøyaktig A6-buggen, nå re-introdusert som en race). Fiksen flytter
+    // drift-sjekken INN i tick() selv, FØR ankrene overskrives – så selv en "vanlig"
+    // tick som vinner racet fanger driften.
+    const workStartSpy = vi.spyOn(audioService, 'playWorkStart');
+    const restStartSpy = vi.spyOn(audioService, 'playRestStart');
+    const announceWorkSpy = vi.spyOn(speechService, 'announceWork');
+    const announceRestSpy = vi.spyOn(speechService, 'announceRest');
+
+    const { result } = renderHook(() => useIntervalTimer({ workout: TABATA_WORKOUT }));
+    await act(async () => {
+      await result.current.startWorkout();
+    });
+    workStartSpy.mockClear();
+    restStartSpy.mockClear();
+    announceWorkSpy.mockClear();
+    announceRestSpy.mockClear();
+
+    // Samme dvale-simulering som testen over: Date.now hopper 95s, performance.now fryser.
+    dateNowMs = START_MS + 95_000;
+
+    // Racet: den vanlige 100ms-tickeren (setInterval-fallback i testmiljøet) rekker å
+    // kjøre FØR visibilitychange-hendelsen dispatches under.
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+
+    // visibilitychange kommer i etterkant – skal være ufarlig (ankrene er allerede
+    // ferske fra ticken over, så drift ≈ 0 her og ingen dobbel re-ankring skjer).
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    // Samme forventede landing som forrige test – catch-up skal ha fanget hele
+    // 95s-driften selv om det var en «vanlig» tick, ikke visibilitychange, som først
+    // observerte den.
+    expect(result.current.state.status).toBe('running');
+    expect(result.current.state.phase).toBe('rest');
+    expect(result.current.state.currentItemIndex).toBe(2);
+    expect(workStartSpy).toHaveBeenCalledTimes(0);
+    expect(restStartSpy).toHaveBeenCalledTimes(1);
+    expect(announceWorkSpy).toHaveBeenCalledTimes(0);
+    expect(announceRestSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('drift under terskelen (500ms) re-ankrer IKKE og påvirker ikke gjenværende tid', async () => {
     const { result } = renderHook(() => useIntervalTimer({ workout: TABATA_WORKOUT }));
     await act(async () => {
