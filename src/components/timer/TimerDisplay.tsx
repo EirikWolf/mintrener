@@ -201,6 +201,10 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
     }
   };
 
+  // Delt mellom mikrofon-knappen i toppraden og fokusmodus-stripen, slik at
+  // av/på-lytting for håndfri stemmestyring ikke er duplisert to steder.
+  const handleToggleVoiceControl = () => voiceCommandService.toggleListening();
+
   const [weeklyProgress, setWeeklyProgress] = useState<WeeklyGoalProgress | null>(null);
 
   React.useEffect(() => {
@@ -332,7 +336,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           isLocked={state.isLocked}
           onToggleLock={onToggleLock}
           isVoiceControlActive={isVoiceControlActive}
-          onToggleVoiceControl={() => voiceCommandService.toggleListening()}
+          onToggleVoiceControl={handleToggleVoiceControl}
         />
       )}
 
@@ -359,7 +363,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             {/* Aktiv lytter-indikator for håndfri stemmestyring (kun når aktiv) */}
             {isVoiceControlActive && (
               <button
-                onClick={() => voiceCommandService.toggleListening()}
+                onClick={handleToggleVoiceControl}
                 aria-label="Håndfri stemmestyring aktiv (trykk for å pause)"
                 className="p-2 rounded-full text-indigo-400 bg-indigo-950/80 ring-1 ring-indigo-400/60 animate-pulse transition-all active:scale-95"
               >
