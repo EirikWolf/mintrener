@@ -146,7 +146,9 @@ describe('global_stats', () => {
         {
           totalWorkouts: increment(1),
           totalSecondsTrained: increment(600),
-          'types.hiit': increment(1),
+          // Nøstet map-form — setDoc med merge splitter ikke punktum-nøkler,
+          // så dette speiler telemetryService sitt faktiske payload
+          types: { hiit: increment(1) },
           lastUpdated: serverTimestamp(),
         },
         { merge: true }
@@ -176,7 +178,21 @@ describe('global_stats', () => {
         {
           totalWorkouts: increment(1),
           totalSecondsTrained: increment(900),
-          'types.custom': increment(1),
+          types: { custom: increment(1) },
+          lastUpdated: serverTimestamp(),
+        },
+        { merge: true }
+      )
+    );
+  });
+
+  it('POSITIV: øvelsesaggregat i nøstet form går gjennom (recordWorkoutTelemetry-formen)', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertSucceeds(
+      setDoc(
+        doc(db, 'global_stats', 'exercises'),
+        {
+          kneboy: { count: increment(1), seconds: increment(20), name: 'Knebøy' },
           lastUpdated: serverTimestamp(),
         },
         { merge: true }

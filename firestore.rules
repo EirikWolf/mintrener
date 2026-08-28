@@ -159,7 +159,13 @@ service cloud.firestore {
     // RESTRISIKO (bevisst): verdiene i de enkelte øvelses-kartene kan settes
     // vilkårlig — men skaden er avgrenset til pynte-statistikk («topp 5
     // øvelser» i UI), ikke brukerdata, og dokumentet kan ikke lenger slettes
-    // eller vokse ubegrenset.
+    // eller vokse ubegrenset. Grensene er kalibrert for klientens nøstede
+    // form (én toppnivå-nøkkel per øvelse + lastUpdated): ≤41 berørte nøkler
+    // per skriv = maks 40 øvelser i én økt, ≤500 nøkler totalt i dokumentet.
+    // Historiske FLATE punktum-nøkler («ovelse.count» som bokstavelig nøkkel,
+    // fra før klienten gikk over til nøstede maps) kan ligge igjen i prod som
+    // døde nøkler — de ignoreres både av regel-validerte skrivinger og av
+    // fetchGlobalStats, og migreres ikke (kun kosmetisk statistikk).
     match /global_stats/exercises {
       allow create: if request.resource.data.lastUpdated == request.time
         && request.resource.data.size() <= 41;
