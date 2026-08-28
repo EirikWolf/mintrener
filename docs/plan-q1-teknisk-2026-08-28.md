@@ -7,6 +7,13 @@
 
 **Oppfølging til lyd-batchen (funnet i review av Oppgave 2):** Resync-cuen i `catchUpExpiredPhases` bruker alltid standard-stien (`audioService`/`speechService`) — brukere med aktiv trenerpersona får standard pip + talesyntese ved oppvåkning. Persona-bevisst cue-utvalg hører hjemme i AudioDirector (som sentraliserer nettopp denne prioriteringen); også `round_rest`-grenen i `playResyncCue` mangler testdekning (krever flerrunde-workout i test).
 
+**Oppfølging fra review av Oppgave 3 (klokkesync) — ikke-blokkerende:**
+- Målebracket: ta `t1` rett etter `await setDoc` (ack-en bracketer stemplingen; `getDoc` henter verdien utenfor bracketen) — halverer feilgrensen; dokumentér to-rundtur-forbeholdet i JSDoc.
+- `getServerNow`-testen asserterer bare «noe ble lagt til» — mock Date.now under estimering og assert eksakt verdi.
+- Utestede feilstier i clockSyncService: manglende `ts`-kast, og «feil etter tidligere suksess returnerer gammel cache, ikke 0».
+- Offset-cachen utløper aldri — vurder `force: true` (fire-and-forget) i `startGroupWorkout`; vurder `crypto.randomUUID()` som klient-id.
+- Infra: aktiver Firestore TTL-policy på `ts`-feltet i `clock_sync` (konsoll/gcloud) så dokumentene ryddes automatisk.
+
 **Felles krav for alle oppgaver:**
 - TypeScript strict mode, ingen `any` uten god grunn, funksjonell stil
 - Vitest for tester; `npm test` og `npx tsc -p tsconfig.app.json --noEmit` skal være grønne før commit
