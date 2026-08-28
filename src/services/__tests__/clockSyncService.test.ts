@@ -41,8 +41,11 @@ describe('computeClockOffset', () => {
     expect(computeClockOffset(10_000, 10_200, 1_000)).toBe(-9100);
   });
 
-  it('gir eksakt svar ved symmetrisk rundtur', () => {
-    expect(computeClockOffset(1000, 1200, 5100)).toBe(4000);
+  it('gir eksakt svar ved symmetrisk rundtur (speilvendte ± offset rundt samme midtpunkt)', () => {
+    // Midtpunktet er likt (2000) i begge tilfeller, men serverstempelet ligger
+    // like langt før/etter — offsettene skal da bli nøyaktig speilvendte (±500).
+    expect(computeClockOffset(1900, 2100, 2500)).toBe(500);
+    expect(computeClockOffset(1900, 2100, 1500)).toBe(-500);
   });
 });
 
