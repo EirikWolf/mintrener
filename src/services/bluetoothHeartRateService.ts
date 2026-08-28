@@ -239,6 +239,11 @@ export class BluetoothHeartRateService {
 
   /** Planlegger neste reconnect-forsøk basert på backoff-skjemaet, eller gir opp. */
   private scheduleReconnect() {
+    // Enkelte Web Bluetooth-implementasjoner fyrer gattserverdisconnected to ganger for
+    // samme frakobling; uten denne rydder vi bort en evt. allerede ventende timer først
+    // slik at vi aldri får to parallelle backoff/reconnect-kjeder (og dupliserte listeners).
+    this.clearReconnectTimer();
+
     const delay = getReconnectDelayMs(this.reconnectAttempt);
     if (delay === null) {
       this.giveUpReconnecting();
