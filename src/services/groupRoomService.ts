@@ -34,11 +34,18 @@ const ROOM_CODE_CHARS = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 
 /**
  * Genererer en 6-tegns alfanumerisk romkode (f.eks. "K7M9P2")
+ *
+ * Bruker crypto.getRandomValues i stedet for Math.random() (revisjon §5.1):
+ * romkoden er eneste adgangskontroll til rommet, så den må være
+ * uforutsigbar. Alfabetet har 32 tegn og 256 % 32 == 0, så en enkel
+ * modulo over tilfeldige bytes er uniform uten forkastningssampling.
  */
 export function generateRoomCode(): string {
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
   let result = '';
-  for (let i = 0; i < 6; i++) {
-    result += ROOM_CODE_CHARS.charAt(Math.floor(Math.random() * ROOM_CODE_CHARS.length));
+  for (const byte of bytes) {
+    result += ROOM_CODE_CHARS.charAt(byte % ROOM_CODE_CHARS.length);
   }
   return result;
 }
@@ -94,6 +101,14 @@ export async function createGroupRoom(
  * Bli med i et eksisterende grupperom
  */
 export async function joinGroupRoom(roomId: string): Promise<GroupRoomState | null> {
+  // Sikkerhetsreglene krever nå auth for å øke participantCount, så gi
+  // deltakeren samme anonyme innloggingsgaranti som createGroupRoom gir
+  // verten. Feiler innloggingen (f.eks. offline) leser vi likevel rommet —
+  // deltakeren kan følge økten selv om telleren ikke ble oppdatert.
+  if (!auth.currentUser) {
+    await signInAnonymously(auth).catch(() => {});
+  }
+
   const cleanCode = roomId.trim().toUpperCase();
   const roomRef = doc(db, 'rooms', cleanCode);
   const snap = await getDoc(roomRef);
