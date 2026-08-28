@@ -312,7 +312,9 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
   // Persona-variant av resync-cuen: samme annonsering som setupPhase ville gitt
   // for landingsfasen (øvelsesklipp i personaens verden), slik at brukere med
   // aktiv trenerpersona ikke plutselig får standard pip + talesyntese ved
-  // oppvåkning. Nøyaktig én cue, som i standard-stien.
+  // oppvåkning. NB: avviket fra setupPhase (ingen playRestStart/playWorkStart-
+  // tone her) er BEVISST – resync-kontrakten er nøyaktig ÉN cue, så ikke
+  // "fiks" dette i noen retning.
   const playPersonaResyncCue = useCallback(() => {
     const items = stateRef.current.workout?.items || [];
     const idx = stateRef.current.currentItemIndex;

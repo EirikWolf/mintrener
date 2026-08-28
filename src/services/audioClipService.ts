@@ -23,6 +23,10 @@ export class AudioClipService {
     // Ved false (ikke dekodet ennå / ukjent nøkkel) beholdes den gamle kjeden
     // HTMLAudio → talesyntese uendret som fallback.
     try {
+      // Ny annonsering erstatter en pågående: pause HTMLAudio-sporet før
+      // motoren spiller, ellers kan to stemmer overlappe i oppvarmingsvinduet
+      // der bare noen klipp rakk å bli dekodet
+      this.stopActiveAudioElement();
       if (await audioBufferEngine.playSequence([clipKey])) {
         return;
       }
@@ -65,13 +69,25 @@ export class AudioClipService {
     });
   }
 
+  /** Pauser og nullstiller et aktivt HTMLAudio-spor (ny annonsering erstatter pågående). */
+  private stopActiveAudioElement(): void {
+    if (!this.activeAudio) return;
+    try {
+      this.activeAudio.pause();
+      this.activeAudio.currentTime = 0;
+    } catch {
+      // Allerede stoppet / ikke støttet i miljøet
+    }
+    this.activeAudio = null;
+  }
+
   private playAudioFile(url: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        if (this.activeAudio) {
-          this.activeAudio.pause();
-          this.activeAudio.currentTime = 0;
-        }
+        this.stopActiveAudioElement();
+        // Symmetrisk med motor-stien over: stopp en eventuell bufferkjede før
+        // HTMLAudio spiller, så de to lydstiene aldri overlapper
+        audioBufferEngine.stop();
 
         let audio = this.audioCache.get(url);
         if (!audio) {

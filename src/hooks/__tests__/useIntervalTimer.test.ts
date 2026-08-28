@@ -8,9 +8,17 @@ import { speechService } from '../../services/speechService';
 import { audioClipService } from '../../services/audioClipService';
 import * as coachPersonaService from '../../services/coachPersonaService';
 
+// jsdom kan ikke fetche relative lyd-URL-er – demp preload-varslene fra
+// buffer-motoren i alle hook-testene (preload er fyr-og-glem-optimalisering)
+function silenceAudioPreloads(): void {
+  vi.spyOn(audioClipService, 'preloadClips').mockImplementation(() => {});
+  vi.spyOn(coachPersonaService, 'preloadPersonaAudio').mockImplementation(() => {});
+}
+
 describe('useIntervalTimer Hook', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    silenceAudioPreloads();
   });
 
   it('initialiserer Tabata-økt med riktige verdier (4:00 totaltid, 10s klargjøring)', () => {
@@ -185,6 +193,7 @@ describe('useIntervalTimer Hook – catch-up ved dvale/lomme (Oppgave 2)', () =>
     // implementasjoner (fra src/test/setup.ts) på tvers av testene i denne filen,
     // og en global restore ville fjernet dem permanent etter første test.
     performanceNowSpy = vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+    silenceAudioPreloads();
   });
 
   afterEach(() => {
@@ -344,6 +353,7 @@ describe('useIntervalTimer Hook – persona-sekvensering og persona-bevisst resy
     nowMs = START_MS;
     vi.useFakeTimers();
     performanceNowSpy = vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+    silenceAudioPreloads();
   });
 
   afterEach(() => {

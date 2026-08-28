@@ -125,24 +125,34 @@ export class AudioBufferEngine {
   /**
    * Spiller 1..n cachede klipp som ÉN sample-nøyaktig kjede med equal-power
    * crossfade i skjøtene. Returnerer false (uten å spille noe) hvis noen nøkkel
-   * mangler i cachen, slik at kalleren kan bruke sin eksisterende fallback-sti.
-   * Promiset løses når siste kilde er ferdig (eller kjeden stoppes).
+   * mangler i cachen ELLER konteksten ikke lar seg kjøre, slik at kalleren kan
+   * bruke sin eksisterende fallback-sti. Promiset løses når siste kilde er
+   * ferdig (eller kjeden stoppes) – det rejecter aldri.
    */
-  public playSequence(keys: string[], opts?: { crossfadeS?: number }): Promise<boolean> {
+  public async playSequence(keys: string[], opts?: { crossfadeS?: number }): Promise<boolean> {
     const buffers: AudioBuffer[] = [];
     for (const key of keys) {
       const buffer = this.buffers.get(key);
-      if (!buffer) return Promise.resolve(false);
+      if (!buffer) return false;
       buffers.push(buffer);
     }
-    if (buffers.length === 0) return Promise.resolve(false);
+    if (buffers.length === 0) return false;
 
     this.stop();
 
     const ctx = audioService.getContext();
-    if (ctx.state === 'suspended') {
-      void ctx.resume().catch(() => {});
+    if (ctx.state !== 'running') {
+      try {
+        await ctx.resume();
+      } catch {
+        // Avgjøres av state-sjekken under
+      }
     }
+    // Skedulering på en kontekst som ikke kjører (suspended, eller WebKits
+    // 'interrupted' etter f.eks. telefonsamtale) ville skjedd på en frossen
+    // klokke: onended fyrer aldri, promiset henger og annonseringen forsvinner
+    // stille uten å nå fallback. Da er false + kallerens fallback riktig.
+    if (ctx.state !== 'running') return false;
 
     const crossfadeS = opts?.crossfadeS ?? DEFAULT_CROSSFADE_S;
     const schedule = computeSequenceSchedule(
@@ -156,7 +166,21 @@ export class AudioBufferEngine {
     return new Promise<boolean>((resolve) => {
       const chain: ActiveChain = { nodes, resolve };
       this.activeChain = chain;
-      nodes[nodes.length - 1].source.onended = () => this.finishChain(chain, true);
+      nodes[nodes.length - 1].source.onended = () => {
+        this.disconnectNodes(nodes);
+        this.finishChain(chain, true);
+      };
+    });
+  }
+
+  // Deterministisk nedrigging av grafen (i stedet for GC-styrt opprydding)
+  private disconnectNodes(nodes: ChainNode[]): void {
+    nodes.forEach(({ gain }) => {
+      try {
+        gain.disconnect();
+      } catch {
+        // Allerede frakoblet
+      }
     });
   }
 
@@ -210,7 +234,15 @@ export class AudioBufferEngine {
     const now = audioService.getContext().currentTime;
     chain.nodes.forEach(({ source, gain }) => {
       try {
-        source.onended = null;
+        // Riv ned grafen først når fade-perioden er over (ended-hendelsen etter
+        // source.stop) – umiddelbar disconnect ville kuttet faden hardt
+        source.onended = () => {
+          try {
+            gain.disconnect();
+          } catch {
+            // Allerede frakoblet
+          }
+        };
         gain.gain.cancelScheduledValues(now);
         gain.gain.setValueAtTime(gain.gain.value, now);
         gain.gain.linearRampToValueAtTime(0.0001, now + fadeOutS);

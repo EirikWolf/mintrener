@@ -24,6 +24,7 @@ interface MockGain {
     cancelScheduledValues: Mock;
   };
   connect: Mock;
+  disconnect: Mock;
 }
 
 function createMockContext(durationsByUrl: Record<string, number>, currentTime = 10) {
@@ -64,6 +65,7 @@ function createMockContext(durationsByUrl: Record<string, number>, currentTime =
           cancelScheduledValues: vi.fn(),
         },
         connect: vi.fn(),
+        disconnect: vi.fn(),
       };
       gains.push(gain);
       return gain;
@@ -260,6 +262,39 @@ describe('AudioBufferEngine.playSequence / stop', () => {
   it('returnerer false for tom sekvens', async () => {
     await preloadTwoClips();
     await expect(engine.playSequence([])).resolves.toBe(false);
+  });
+
+  it('returnerer false uten å skedulere når konteksten ikke kan gjenopptas (WebKit interrupted)', async () => {
+    // Skedulering på en frossen klokke ville gitt en kjede som aldri fullfører
+    // og en annonsering som stille forsvinner uten å nå fallback-stiene
+    const mock = await preloadTwoClips();
+    mock.ctx.state = 'interrupted';
+    mock.ctx.resume = vi.fn().mockRejectedValue(new Error('krever brukergest'));
+
+    await expect(engine.playSequence(['exercise-burpees'])).resolves.toBe(false);
+
+    expect(mock.ctx.createBufferSource).not.toHaveBeenCalled();
+    expect(duckStartSpy).not.toHaveBeenCalled();
+  });
+
+  it('returnerer false når resume lykkes men konteksten fortsatt ikke kjører', async () => {
+    const mock = await preloadTwoClips();
+    mock.ctx.state = 'suspended';
+    mock.ctx.resume = vi.fn().mockResolvedValue(undefined); // state forblir 'suspended'
+
+    await expect(engine.playSequence(['exercise-burpees'])).resolves.toBe(false);
+    expect(mock.ctx.createBufferSource).not.toHaveBeenCalled();
+    expect(duckStartSpy).not.toHaveBeenCalled();
+  });
+
+  it('kobler fra gain-nodene deterministisk når kjeden er ferdigspilt', async () => {
+    const { sources, gains } = await preloadTwoClips();
+
+    const pending = engine.playSequence(['exercise-burpees', 'exercise-planke']);
+    sources[1].onended?.();
+    await expect(pending).resolves.toBe(true);
+
+    gains.forEach((gain) => expect(gain.disconnect).toHaveBeenCalledTimes(1));
   });
 
   it('skedulerer kildene på beregnede tidspunkter med safety-lead', async () => {
