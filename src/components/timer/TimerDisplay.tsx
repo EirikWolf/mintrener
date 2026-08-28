@@ -57,6 +57,73 @@ import {
 import { shareWorkout } from '../../services/shareWorkoutService';
 import { calculateWeeklyProgress, WeeklyGoalProgress } from '../../services/weeklyGoalService';
 
+interface FocusModeQuickControlsProps {
+  soundEnabled: boolean;
+  onToggleSound: () => void;
+  isLocked: boolean;
+  onToggleLock: () => void;
+  isVoiceControlActive: boolean;
+  onToggleVoiceControl: () => void;
+}
+
+/**
+ * Fokusmodus (Oppgave 8, revisjon §3.1/§4.1): minimal flytende kontrollstripe som
+ * erstatter hele toppraden mens en økt kjører. Kun lås og lyd overlever hit — de to
+ * kontrollene brukeren faktisk trenger midt i en økt i HR-sone 4/5, når blikkfeltet
+ * er tunnelsyn og arbeidsminnet knapt rommer ett element. Stemmestyring-indikatoren
+ * vises kun når den faktisk lytter, slik at stripen ikke tar plass unødvendig.
+ */
+const FocusModeQuickControls: React.FC<FocusModeQuickControlsProps> = ({
+  soundEnabled,
+  onToggleSound,
+  isLocked,
+  onToggleLock,
+  isVoiceControlActive,
+  onToggleVoiceControl,
+}) => (
+  <div className="absolute top-2 right-2 z-20 flex items-center gap-2">
+    {isVoiceControlActive && (
+      <button
+        onClick={onToggleVoiceControl}
+        aria-label="Håndfri stemmestyring aktiv (trykk for å pause)"
+        className="w-11 h-11 flex items-center justify-center rounded-full text-indigo-400 bg-indigo-950/90 ring-1 ring-indigo-400/60 animate-pulse transition-all active:scale-95 shadow-lg"
+      >
+        <Mic className="w-5 h-5" />
+      </button>
+    )}
+
+    {/* Lyd av/på (44x44px touch target) */}
+    <button
+      onClick={onToggleSound}
+      role="switch"
+      aria-checked={soundEnabled}
+      aria-label="Lydvarsler"
+      className={`w-11 h-11 flex items-center justify-center rounded-full border transition-all active:scale-95 shadow-lg backdrop-blur-sm ${
+        soundEnabled
+          ? 'bg-zinc-900/90 border-zinc-700 text-emerald-400 hover:bg-zinc-800'
+          : 'bg-zinc-900/80 border-zinc-800 text-zinc-400 hover:text-zinc-300'
+      }`}
+    >
+      {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+    </button>
+
+    {/* Skjermlås mot feiltrykk (44x44px touch target) */}
+    <button
+      onClick={onToggleLock}
+      role="switch"
+      aria-checked={isLocked}
+      aria-label="Skjermlås"
+      className={`w-11 h-11 flex items-center justify-center rounded-full border transition-all active:scale-95 shadow-lg backdrop-blur-sm ${
+        isLocked
+          ? 'bg-rose-950/90 border-rose-800 text-rose-400'
+          : 'bg-zinc-900/90 border-zinc-700 text-zinc-400 hover:text-white'
+      }`}
+    >
+      {isLocked ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
+    </button>
+  </div>
+);
+
 interface TimerDisplayProps {
   workout: WorkoutTemplate;
   state: TimerState;
@@ -247,12 +314,33 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
 
   const phaseStyle = getPhaseStyles(state.phase);
 
+  // Fokusmodus (Oppgave 8): distillert visning under aktiv økt. Idle-visningen skal
+  // være uendret — kun running/paused trigger den forenklede, forstørrede skjermen
+  // (revisjon §3.1: tunnelsyn og lavt arbeidsminne i HR-sone 4/5).
+  const isFocusMode = state.status === 'running' || state.status === 'paused';
+
   return (
     <div
       className={`relative flex flex-col justify-between w-full h-full max-w-md mx-auto px-4 pt-1.5 pb-2 select-none overflow-hidden transition-colors duration-500 ${phaseStyle.bg}`}
     >
+      {/* Fokusmodus: minimal flytende stripe (lås + lyd + evt. stemmestyring) erstatter
+          hele toppraden under aktiv økt, se FocusModeQuickControls over. */}
+      {isFocusMode && (
+        <FocusModeQuickControls
+          soundEnabled={state.soundEnabled}
+          onToggleSound={onToggleSound}
+          isLocked={state.isLocked}
+          onToggleLock={onToggleLock}
+          isVoiceControlActive={isVoiceControlActive}
+          onToggleVoiceControl={() => voiceCommandService.toggleListening()}
+        />
+      )}
+
       {/* 1. TOPPBAR */}
       <header className="flex flex-col gap-1.5 pt-0.5 shrink-0 z-10">
+        {/* Hele toppraden (bruker, logo, puls-pille, storskjerm, lyd/lås-pillen) skjules
+            i fokusmodus — lås og lyd lever videre i FocusModeQuickControls i stedet. */}
+        {!isFocusMode && (
         <div className="flex items-center justify-between">
           {/* Venstre: Bruker & Tittel */}
           <div className="flex items-center gap-2">
@@ -320,6 +408,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             </button>
           </div>
         </div>
+        )}
 
         {/* 2. FAVORITT-PROGRAMMER (2 rader grid på fremsiden når timeren er i hvilemodus) */}
         {state.status === 'idle' && (() => {
@@ -623,7 +712,9 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           );
         })()}
 
-        {/* Info-linje med totaltid, deleknapp og tittel */}
+        {/* Info-linje med totaltid, deleknapp og tittel — skjules i fokusmodus,
+            øvelsesnavnet vises allerede stort i hovedseksjonen under */}
+        {!isFocusMode && (
         <div className="flex items-center justify-between px-1 text-[11px] text-zinc-400 font-medium">
           <div className="flex items-center gap-1.5 truncate max-w-[210px]">
             <span className="truncate font-semibold text-zinc-300">
@@ -648,13 +739,19 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             Totalt: <strong>{formatTime(state.totalRemainingSeconds)}</strong>
           </span>
         </div>
+        )}
       </header>
 
       {/* 2. HOVEDSEKSJON: Fase, Øvelsesnavn, Sirkulær indikator */}
       <main className="flex flex-col items-center justify-center flex-1 my-auto space-y-1.5 text-center z-10 min-h-0">
-        {/* Rundenummer / Intervall & Fase-badge */}
+        {/* Rundenummer / Intervall & Fase-badge — forstørres i fokusmodus for lesbarhet
+            på 1,5 m avstand under aktiv økt (revisjon §3.1) */}
         <div className="flex flex-col items-center gap-1">
-          <div className="flex items-center gap-2 text-[10px] sm:text-xs font-bold tracking-wider text-zinc-400 uppercase">
+          <div
+            className={`flex items-center gap-2 font-bold tracking-wider text-zinc-400 uppercase ${
+              isFocusMode ? 'text-sm sm:text-base' : 'text-[10px] sm:text-xs'
+            }`}
+          >
             {state.totalRounds > 1 ? (
               <>
                 <span>RUNDE {state.currentRound} AV {state.totalRounds}</span>
@@ -666,18 +763,26 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             )}
           </div>
 
+          {/* Fase-badge beholdes alltid (aldri kun farge, jf. WCAG 1.4.1) og
+              forstørres i fokusmodus sammen med resten av visningen */}
           <span
             aria-live="assertive"
             aria-atomic="true"
-            className={`px-3 py-0.5 rounded-full text-[10px] sm:text-xs tracking-widest uppercase shadow-md transition-all ${phaseStyle.badgeBg}`}
+            className={`rounded-full tracking-widest uppercase shadow-md transition-all ${phaseStyle.badgeBg} ${
+              isFocusMode ? 'px-4 py-1 text-sm' : 'px-3 py-0.5 text-[10px] sm:text-xs'
+            }`}
           >
             {phaseStyle.badgeText}
           </span>
         </div>
 
-        {/* Øvelsestittel (Stort og tydelig) */}
+        {/* Øvelsestittel (Stort og tydelig, enda større i fokusmodus) */}
         <div className="min-h-[2rem] flex items-center justify-center px-4" aria-live="polite" aria-atomic="true">
-          <h1 className="text-xl xs:text-2xl sm:text-3xl font-black text-white tracking-tight line-clamp-1 drop-shadow-sm">
+          <h1
+            className={`font-black text-white tracking-tight drop-shadow-sm ${
+              isFocusMode ? 'text-3xl sm:text-4xl line-clamp-2' : 'text-xl xs:text-2xl sm:text-3xl line-clamp-1'
+            }`}
+          >
             {state.phase === 'prepare'
               ? 'Gjør deg klar'
               : state.currentExercise?.name || workout.name}
@@ -713,14 +818,24 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             </div>
           )}
 
+          {/* «Neste»/«Først»-pillen forstørres i fokusmodus — dette er en av de
+              få tekstene brukeren fortsatt trenger å lese midt i en økt */}
           {state.nextExercise && state.phase !== 'prepare' ? (
-            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-zinc-900/60 border border-zinc-800/60 text-[11px] text-zinc-300 backdrop-blur-sm">
-              <span className="text-zinc-400 font-semibold uppercase text-[10px]">Neste:</span>
+            <div
+              className={`flex items-center gap-1.5 rounded-lg bg-zinc-900/60 border border-zinc-800/60 text-zinc-300 backdrop-blur-sm ${
+                isFocusMode ? 'px-3 py-1 text-base sm:text-lg' : 'px-2.5 py-0.5 text-[11px]'
+              }`}
+            >
+              <span className={`text-zinc-400 font-semibold uppercase ${isFocusMode ? 'text-xs sm:text-sm' : 'text-[10px]'}`}>Neste:</span>
               <span className="font-bold text-white line-clamp-1">{state.nextExercise.name}</span>
             </div>
           ) : state.phase === 'prepare' && state.currentExercise ? (
-            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-zinc-900/60 border border-zinc-800/60 text-[11px] text-zinc-300 backdrop-blur-sm">
-              <span className="text-zinc-400 font-semibold uppercase text-[10px]">Først:</span>
+            <div
+              className={`flex items-center gap-1.5 rounded-lg bg-zinc-900/60 border border-zinc-800/60 text-zinc-300 backdrop-blur-sm ${
+                isFocusMode ? 'px-3 py-1 text-base sm:text-lg' : 'px-2.5 py-0.5 text-[11px]'
+              }`}
+            >
+              <span className={`text-zinc-400 font-semibold uppercase ${isFocusMode ? 'text-xs sm:text-sm' : 'text-[10px]'}`}>Først:</span>
               <span className="font-bold text-white line-clamp-1">{state.currentExercise.name}</span>
             </div>
           ) : null}
