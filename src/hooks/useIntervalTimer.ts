@@ -7,6 +7,7 @@ import { speechService } from '../services/speechService';
 import { audioClipService } from '../services/audioClipService';
 import { motionTrackerService, MotionMetrics } from '../services/motionTrackerService';
 import { saveInterruptedSession, clearInterruptedSession, InterruptedSession } from '../services/sessionRecoveryService';
+import { createTicker } from '../services/tickerService';
 import {
   playPersonaCue,
   getActiveCoachPersona,
@@ -387,8 +388,10 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       }
     };
 
-    // 100ms interval for responsiv oppdatering
-    const intervalId = window.setInterval(tick, 100);
+    // Tick leveres fra en Web Worker (metronom) i stedet for window.setInterval,
+    // slik at ticken overlever bakgrunns-throttling av hovedtrådens timere i skjulte faner
+    const ticker = createTicker(tick);
+    ticker.start();
 
     // Visibility-opphenting når skjermen vekkes fra dvale
     const handleVisibilityChange = () => {
@@ -399,7 +402,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      clearInterval(intervalId);
+      ticker.stop();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [status, advanceToNextPhase]);
