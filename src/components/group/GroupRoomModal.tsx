@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { WorkoutTemplate } from '../../types/workout';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,6 +9,7 @@ import {
   subscribeToGroupRoom,
   startGroupWorkout,
 } from '../../services/groupRoomService';
+import { estimateServerClockOffset, getServerNow } from '../../services/clockSyncService';
 import { Users, X, Play, Copy, Check, Radio, Sparkles, ArrowRight } from 'lucide-react';
 
 interface GroupRoomModalProps {
@@ -31,6 +32,10 @@ export const GroupRoomModal: React.FC<GroupRoomModalProps> = ({
   const [isJoining, setIsJoining] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Hindrer at felles-starten trigges flere ganger (onSnapshot kan fyre igjen mens vi venter)
+  const hasStartedRef = useRef(false);
+  const startTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Vert oppretter rom
   const handleCreateRoom = async () => {
     setErrorMsg(null);
@@ -41,6 +46,9 @@ export const GroupRoomModal: React.FC<GroupRoomModalProps> = ({
         workout
       );
       setRoomCode(code);
+      // Varm opp klokkeoffset-cachen mens vi venter på deltakere, så selve starten
+      // ikke må vente på en fersk måling. Fire-and-forget: funksjonen kaster aldri.
+      void estimateServerClockOffset();
     } catch (err: any) {
       setErrorMsg('Kunne ikke opprette rom. Prøv igjen.');
     }
@@ -60,6 +68,8 @@ export const GroupRoomModal: React.FC<GroupRoomModalProps> = ({
       if (room) {
         setRoomState(room);
         setRoomCode(room.roomId);
+        // Samme oppvarming som verten gjør, se handleCreateRoom.
+        void estimateServerClockOffset();
       } else {
         setErrorMsg('Fant ikke noe aktivt rom med den koden.');
       }
@@ -77,24 +87,41 @@ export const GroupRoomModal: React.FC<GroupRoomModalProps> = ({
     const unsubscribe = subscribeToGroupRoom(roomCode, (state) => {
       if (state) {
         setRoomState(state);
-        // Hvis verten har startet økten, start timeren for deltakeren!
-        if (state.status === 'running') {
-          onStartSyncedWorkout(state);
-          onClose();
+        // Hvis verten har startet økten, start timeren for deltakeren (og verten selv)!
+        if (state.status === 'running' && !hasStartedRef.current) {
+          hasStartedRef.current = true;
+
+          const beginSyncedWorkout = () => {
+            onStartSyncedWorkout(state);
+            onClose();
+          };
+
+          if (typeof state.startAtServerMs === 'number') {
+            // Klokkesynkronisert start: alle klienter venter til samme serverklokke-tidspunkt,
+            // uavhengig av avvik mellom enhetenes egne veggklokker. Se clockSyncService.
+            const delayMs = Math.max(0, state.startAtServerMs - getServerNow());
+            startTimeoutRef.current = setTimeout(beginSyncedWorkout, delayMs);
+          } else {
+            // Fallback for eldre rom/klienter uten startAtServerMs: uendret gammel oppførsel.
+            beginSyncedWorkout();
+          }
         }
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (startTimeoutRef.current) {
+        clearTimeout(startTimeoutRef.current);
+      }
+    };
   }, [roomCode, onStartSyncedWorkout, onClose]);
 
   const handleStartAsHost = async () => {
     if (!roomCode) return;
     await startGroupWorkout(roomCode);
-    if (roomState) {
-      onStartSyncedWorkout({ ...roomState, status: 'running' });
-    }
-    onClose();
+    // Selve overgangen til økten skjer i onSnapshot-lytteren over (klokkesynkronisert),
+    // slik at verten starter i takt med deltakerne i stedet for øyeblikkelig.
   };
 
   const handleCopyCode = () => {

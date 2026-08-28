@@ -63,5 +63,12 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true;
     }
+
+    // Klokkesynkronisering (NTP-forenklet): hver klient skriver/leser sitt eget
+    // clock_sync/{clientId}-dokument for å måle offset mot serverklokken før
+    // felles start i grupperom. Ingen personopplysninger, samme åpne mønster som rooms.
+    match /clock_sync/{clientId} {
+      allow read, write: if true;
+    }
   }
 }
