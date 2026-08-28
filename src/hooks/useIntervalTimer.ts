@@ -29,6 +29,13 @@ const CATCH_UP_THRESHOLD_S = 1.5;
 // neste tick fanger opp resten.
 const MAX_CATCH_UP_PHASES = 500;
 
+// Terskel (ms) for å skille normalt veggklokke/performance.now-avvik (NTP-korrigering,
+// GC-pause, liten klokkedrift) fra en reell dvale-periode der performance.now har
+// frosset mens Date.now fortsatte – kjent oppførsel på iOS/macOS Safari og enkelte
+// Android-nettlesere (audit § 2.1). Under denne terskelen er avviket "støy" og
+// performance.now-basert catch-up (CATCH_UP_THRESHOLD_S) håndterer det som normalt.
+const SLEEP_REANCHOR_THRESHOLD_MS = 2000;
+
 export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
   const [status, setStatus] = useState<TimerState['status']>('idle');
   const [phase, setPhase] = useState<IntervalPhase>('prepare');
@@ -67,6 +74,15 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     lastSessionSaveSecond: -1,
     firedCues: new Set<string>(),
     workout: activeWorkout,
+    // A3: presise (ugatede) speil av phaseRemaining/totalElapsed, oppdatert hver tick.
+    // Motoren (resumeWorkout, saveInterruptedSession) skal ALDRI lese de gatede
+    // React-state-verdiene direkte – de kan henge inntil ~1s bak faktisk forløpt tid.
+    preciseRemainingSec: workout.prepareDurationSeconds,
+    preciseTotalElapsedSec: 0,
+    // A6: veggklokke/performance.now-anker for å oppdage dvale der performance.now
+    // fryser mens Date.now fortsetter – se SLEEP_REANCHOR_THRESHOLD_MS.
+    lastTickWallMs: 0,
+    lastTickPerfMs: 0,
   });
 
   stateRef.current.status = status;
@@ -122,6 +138,8 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
         setCurrentItemIndex(0);
         setPhase('prepare');
         setTotalElapsed(0);
+        stateRef.current.preciseRemainingSec = workout.prepareDurationSeconds;
+        stateRef.current.preciseTotalElapsedSec = 0;
       }
     }
   }, [workout, status]);
@@ -245,6 +263,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       stateRef.current.currentItemIndex = itemIdx;
       stateRef.current.phaseDuration = duration;
       stateRef.current.phaseRemaining = duration;
+      stateRef.current.preciseRemainingSec = duration;
       stateRef.current.phaseStartTime = performance.now();
       stateRef.current.lastCountdownBeep = -1;
       stateRef.current.lastSessionSaveSecond = -1;
@@ -436,6 +455,29 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     }
   }, [status, setupPhase]);
 
+  // A6: gjenoppretter riktig forløpt tid etter en dvale-periode der performance.now
+  // har frosset (mens Date.now fortsatte å telle) – se SLEEP_REANCHOR_THRESHOLD_MS.
+  // Kalles fra visibilitychange-handleren FØR den vanlige tick()-en, slik at den
+  // påfølgende catchUpExpiredPhases (performance.now-basert) ser reell forløpt tid.
+  const reanchorAfterSleep = useCallback(() => {
+    const wallNow = Date.now();
+    const perfNow = performance.now();
+    const wallDelta = wallNow - stateRef.current.lastTickWallMs;
+    const perfDelta = perfNow - stateRef.current.lastTickPerfMs;
+    const drift = wallDelta - perfDelta;
+
+    // Kun positiv drift over terskelen betyr at performance.now har "sovet" mens
+    // Date.now fortsatte – negativ/liten drift (f.eks. veggklokken justert bakover
+    // av NTP) skal IKKE flytte tidsstemplene, ellers hopper timeren feilaktig fremover.
+    if (drift > SLEEP_REANCHOR_THRESHOLD_MS) {
+      stateRef.current.phaseStartTime -= drift;
+      stateRef.current.workoutStartTime -= drift;
+    }
+
+    stateRef.current.lastTickWallMs = wallNow;
+    stateRef.current.lastTickPerfMs = perfNow;
+  }, []);
+
   // Hoved-timerloop basert på deterministiske tidsstempler (kjører i bakgrunn)
   useEffect(() => {
     if (status !== 'running') {
@@ -446,10 +488,29 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       const now = performance.now();
       const phaseElapsed = (now - stateRef.current.phaseStartTime) / 1000;
       const remaining = Math.max(0, stateRef.current.phaseDuration - phaseElapsed);
+      const totalElapsedSec = Math.max(0, (now - stateRef.current.workoutStartTime) / 1000);
 
-      setPhaseRemaining(remaining);
-      const totalElapsedSec = (now - stateRef.current.workoutStartTime) / 1000;
-      setTotalElapsed(Math.max(0, totalElapsedSec));
+      // A6: fersk veggklokke/performance.now-anker ved hver tick, slik at
+      // reanchorAfterSleep alltid har et nylig referansepunkt å måle drift fra.
+      stateRef.current.lastTickWallMs = Date.now();
+      stateRef.current.lastTickPerfMs = now;
+
+      // A3: motoren (catch-up, cue-timing, saveInterruptedSession) leser ALLTID disse
+      // presise verdiene – kun React-state-oppdateringen under er gatet.
+      stateRef.current.preciseRemainingSec = remaining;
+      stateRef.current.preciseTotalElapsedSec = totalElapsedSec;
+
+      // Gater React-render til nedtellingen faktisk endrer hele sekund (Math.ceil er
+      // tallet som faktisk vises, jf. TimerState.phaseRemainingSeconds) – uten dette
+      // re-rendres hele TimerDisplay-treet 10x/s selv om kun millisekund-desimaler
+      // endres. stateRef.current.phaseRemaining speiler siste COMMITTEDE render (satt
+      // på toppen av hook-kroppen ved hvert render), så sammenligningen er trygg.
+      if (Math.ceil(remaining) !== Math.ceil(stateRef.current.phaseRemaining)) {
+        setPhaseRemaining(remaining);
+      }
+      if (Math.floor(totalElapsedSec) !== Math.floor(stateRef.current.totalElapsed)) {
+        setTotalElapsed(totalElapsedSec);
+      }
 
       const wholeSecondsLeft = Math.ceil(remaining);
       const persona = getActiveCoachPersona();
@@ -513,7 +574,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
           phase: stateRef.current.phase,
           currentRound: stateRef.current.currentRound,
           currentItemIndex: stateRef.current.currentItemIndex,
-          totalElapsedSeconds: Math.floor(stateRef.current.totalElapsed),
+          totalElapsedSeconds: Math.floor(stateRef.current.preciseTotalElapsedSec),
         });
       }
     };
@@ -523,9 +584,13 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     const ticker = createTicker(tick);
     ticker.start();
 
-    // Visibility-opphenting når skjermen vekkes fra dvale
+    // Visibility-opphenting når skjermen vekkes fra dvale. Re-ankre veggklokke/
+    // performance.now FØR tick() kjøres, slik at en eventuell dvale-periode der
+    // performance.now frøs (A6) er reflektert i phaseStartTime/workoutStartTime
+    // når tick() sin (performance.now-baserte) catchUpExpiredPhases evaluerer overshoot.
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && stateRef.current.status === 'running') {
+        reanchorAfterSleep();
         tick();
       }
     };
@@ -535,7 +600,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       ticker.stop();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [status, catchUpExpiredPhases]);
+  }, [status, catchUpExpiredPhases, reanchorAfterSleep]);
 
   // Kontrollfunksjoner
   const startWorkout = useCallback(
@@ -562,8 +627,12 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
         await wakeLockService.requestLock();
       }
 
-      stateRef.current.phaseStartTime = performance.now();
-      stateRef.current.workoutStartTime = performance.now();
+      const nowPerf = performance.now();
+      stateRef.current.phaseStartTime = nowPerf;
+      stateRef.current.workoutStartTime = nowPerf;
+      stateRef.current.preciseTotalElapsedSec = 0;
+      stateRef.current.lastTickWallMs = Date.now();
+      stateRef.current.lastTickPerfMs = nowPerf;
       stateRef.current.status = 'running';
       setStatus('running');
 
@@ -581,7 +650,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       phase: stateRef.current.phase,
       currentRound: stateRef.current.currentRound,
       currentItemIndex: stateRef.current.currentItemIndex,
-      totalElapsedSeconds: Math.floor(stateRef.current.totalElapsed),
+      totalElapsedSeconds: Math.floor(stateRef.current.preciseTotalElapsedSec),
     });
   }, []);
 
@@ -592,9 +661,14 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       await wakeLockService.requestLock();
     }
 
-    // Juster phaseStartTime slik at resterende tid bevares nøyaktig
-    const currentRemaining = stateRef.current.phaseRemaining;
-    stateRef.current.phaseStartTime = performance.now() - (stateRef.current.phaseDuration - currentRemaining) * 1000;
+    // Juster phaseStartTime slik at resterende tid bevares nøyaktig. Bruker det
+    // PRESISE (ugatede) speilet, ikke React-state phaseRemaining – sistnevnte kan
+    // henge inntil ~1s bak faktisk gjenværende tid pga. A3-render-gatingen.
+    const nowPerf = performance.now();
+    const currentRemaining = stateRef.current.preciseRemainingSec;
+    stateRef.current.phaseStartTime = nowPerf - (stateRef.current.phaseDuration - currentRemaining) * 1000;
+    stateRef.current.lastTickWallMs = Date.now();
+    stateRef.current.lastTickPerfMs = nowPerf;
     setStatus('running');
   }, []);
 
@@ -607,11 +681,13 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     setTotalElapsed(0);
     setPhaseRemaining(stateRef.current.workout?.prepareDurationSeconds || 5);
     setPhaseDuration(stateRef.current.workout?.prepareDurationSeconds || 5);
+    stateRef.current.preciseTotalElapsedSec = 0;
   }, [setupPhase]);
 
   const restoreSession = useCallback((session: InterruptedSession) => {
     setupPhase(session.phase, session.currentRound, session.currentItemIndex, true);
     setTotalElapsed(session.totalElapsedSeconds);
+    stateRef.current.preciseTotalElapsedSec = session.totalElapsedSeconds;
     setStatus('paused');
   }, [setupPhase]);
 

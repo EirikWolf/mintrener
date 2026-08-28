@@ -488,3 +488,188 @@ describe('useIntervalTimer Hook – persona-sekvensering og persona-bevisst resy
     expect(announceRestSpy).toHaveBeenCalledWith('Knebøy', 'rolig');
   });
 });
+
+describe('useIntervalTimer Hook – render-gating av nedtelling (Oppgave A3)', () => {
+  // Samme scaffolding som catch-up-blokken over, men her lar vi performance.now følge
+  // vi.advanceTimersByTime i lockstep (i stedet for ett stort sprang) for å simulere
+  // normal drift tick for tick – akkurat scenarioet A3 skal gate rendringer for.
+  const START_MS = 5_000_000;
+  let nowMs = START_MS;
+  let performanceNowSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    nowMs = START_MS;
+    vi.useFakeTimers();
+    performanceNowSpy = vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+    silenceAudioPreloads();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    performanceNowSpy.mockRestore();
+  });
+
+  it('gater React-render til ~1x/sekund under 1 simulert sekund med 10 tick à 100ms', async () => {
+    // Render-probe: telleren økes inni selve render-funksjonen som kalles av
+    // renderHook, altså nøyaktig én gang per faktiske React-render av komponenten
+    // som bruker hooken. Uten A3-gating ville de 10 100ms-tickene gitt ~10 renders
+    // (én per setPhaseRemaining/setTotalElapsed-kall); med gating skal kun tick-er
+    // som krysser en hel sekundgrense (Math.ceil endres) trigge re-render.
+    const renderCount = { current: 0 };
+    const { result } = renderHook(() => {
+      renderCount.current++;
+      return useIntervalTimer({ workout: TABATA_WORKOUT });
+    });
+
+    await act(async () => {
+      await result.current.startWorkout();
+    });
+    const baselineRenders = renderCount.current;
+
+    const observedCeilValues = new Set<number>();
+    observedCeilValues.add(result.current.state.phaseRemainingSeconds);
+
+    for (let i = 0; i < 10; i++) {
+      nowMs += 100;
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      observedCeilValues.add(result.current.state.phaseRemainingSeconds);
+    }
+
+    const rendersDuringSecond = renderCount.current - baselineRenders;
+    expect(rendersDuringSecond).toBeLessThanOrEqual(2);
+    // phaseRemainingSeconds (Math.ceil av phaseRemaining) skal maks ha endret verdi 1-2 ganger
+    expect(observedCeilValues.size).toBeLessThanOrEqual(2);
+  });
+
+  it('fasetransisjon skjer fortsatt presist på riktig tick til tross for gatede renders', async () => {
+    const { result } = renderHook(() => useIntervalTimer({ workout: TABATA_WORKOUT }));
+    await act(async () => {
+      await result.current.startWorkout();
+    });
+
+    // Prepare varer 10s (TABATA_WORKOUT). Tikk 100 ganger à 100ms = nøyaktig 10s,
+    // i lockstep med performance.now – motoren skal fortsatt bytte fase presist på
+    // riktig tick, selv om React-state kun oppdateres ~1x/sekund.
+    for (let i = 0; i < 100; i++) {
+      nowMs += 100;
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+    }
+
+    expect(result.current.state.phase).toBe('work');
+    expect(result.current.state.currentItemIndex).toBe(0);
+  });
+});
+
+describe('useIntervalTimer Hook – veggklokke-re-anker ved dvale (Oppgave A6)', () => {
+  // performance.now og Date.now spiones uavhengig av hverandre: performance.now
+  // "fryser" (holdes konstant) for å simulere kjent iOS/macOS Safari-oppførsel der
+  // dvale stopper performance.now-klokken, mens Date.now (veggklokken) fortsetter.
+  const START_MS = 6_000_000;
+  let nowMs = START_MS;
+  let dateNowMs = START_MS;
+  let performanceNowSpy: ReturnType<typeof vi.spyOn>;
+  let dateNowSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    nowMs = START_MS;
+    dateNowMs = START_MS;
+    vi.useFakeTimers();
+    performanceNowSpy = vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+    dateNowSpy = vi.spyOn(Date, 'now').mockImplementation(() => dateNowMs);
+    silenceAudioPreloads();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    performanceNowSpy.mockRestore();
+    dateNowSpy.mockRestore();
+    coachPersonaService.setActiveCoachPersona('standard');
+  });
+
+  it('performance.now fryser under dvale: visibilitychange re-ankrer via Date.now og lander riktig, med maks én resync-cue', async () => {
+    const workStartSpy = vi.spyOn(audioService, 'playWorkStart');
+    const restStartSpy = vi.spyOn(audioService, 'playRestStart');
+    const announceWorkSpy = vi.spyOn(speechService, 'announceWork');
+    const announceRestSpy = vi.spyOn(speechService, 'announceRest');
+
+    const { result } = renderHook(() => useIntervalTimer({ workout: TABATA_WORKOUT }));
+    await act(async () => {
+      await result.current.startWorkout();
+    });
+    workStartSpy.mockClear();
+    restStartSpy.mockClear();
+    announceWorkSpy.mockClear();
+    announceRestSpy.mockClear();
+
+    // Date.now hopper 95s frem (ekte veggklokketid som gikk mens enheten sov), men
+    // performance.now (nowMs) forblir UENDRET – det er nettopp dette som gjorde at
+    // catch-up-logikken (performance.now-basert) tidligere ville "mistet" søvnperioden.
+    dateNowMs = START_MS + 95_000;
+
+    // jsdom sin document.visibilityState er 'visible' som standard, så vi trenger
+    // ikke overstyre den – kun trigge selve hendelsen mens status er 'running'.
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    // Samme forventede landing som performance.now-baserte "dvale midt i økten"-testen
+    // for t=95s (se catch-up-blokken over): rest-fase, øvelse index 2, ~5s igjen.
+    expect(result.current.state.status).toBe('running');
+    expect(result.current.state.phase).toBe('rest');
+    expect(result.current.state.currentItemIndex).toBe(2);
+
+    // Maks én resync-cue, ikke en kaskade per hoppet fase
+    expect(workStartSpy).toHaveBeenCalledTimes(0);
+    expect(restStartSpy).toHaveBeenCalledTimes(1);
+    expect(announceWorkSpy).toHaveBeenCalledTimes(0);
+    expect(announceRestSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('drift under terskelen (500ms) re-ankrer IKKE og påvirker ikke gjenværende tid', async () => {
+    const { result } = renderHook(() => useIntervalTimer({ workout: TABATA_WORKOUT }));
+    await act(async () => {
+      await result.current.startWorkout();
+    });
+
+    // Normal drift: performance.now og Date.now går begge ~2s frem, men med 500ms
+    // avvik mellom dem – godt under SLEEP_REANCHOR_THRESHOLD_MS (2000ms). Dette skal
+    // IKKE trigge noen re-ankring av phaseStartTime/workoutStartTime.
+    nowMs += 2000;
+    dateNowMs += 2500;
+
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    // Prepare er 10s; uten re-ankring skal gjenværende tid reflektere de faktiske
+    // 2s (performance.now-baserte) som har gått, avrundet oppover: 8s igjen.
+    expect(result.current.state.phase).toBe('prepare');
+    expect(result.current.state.phaseRemainingSeconds).toBe(8);
+  });
+
+  it('negativ drift (veggklokken justert bakover) re-ankrer IKKE', async () => {
+    const { result } = renderHook(() => useIntervalTimer({ workout: TABATA_WORKOUT }));
+    await act(async () => {
+      await result.current.startWorkout();
+    });
+
+    // performance.now går normalt 3s frem, men Date.now hopper BAKOVER (f.eks. NTP-
+    // korrigering av en veggklokke som gikk feil) – negativ drift skal ignoreres helt,
+    // ikke tolkes som at tid har "forsvunnet".
+    nowMs += 3000;
+    dateNowMs -= 5000;
+
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    expect(result.current.state.phase).toBe('prepare');
+    expect(result.current.state.phaseRemainingSeconds).toBe(7);
+  });
+});

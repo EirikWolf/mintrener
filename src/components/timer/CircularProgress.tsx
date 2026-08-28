@@ -85,7 +85,13 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
           strokeLinecap="round"
           fill="transparent"
           style={{
-            transition: 'stroke-dashoffset 0.1s linear, stroke 0.3s ease',
+            // Oppgave A3: React-state for phaseRemaining oppdateres nå kun ~1x/sekund
+            // (rendring gates på Math.ceil-endring, se useIntervalTimer sin tick()),
+            // så ringen ville "hakket" ett hakk i sekundet uten denne. 1s lineær
+            // transisjon bygger bro mellom de sjeldnere render-hoppene slik at ringen
+            // fortsatt oppleves som en jevnt tømmende/fyllende sirkel, ikke en klokke
+            // som hopper. prefers-reduced-motion overstyres globalt i index.css.
+            transition: 'stroke-dashoffset 1s linear, stroke 0.3s ease',
             filter: `drop-shadow(0 0 8px ${colors.glow})`,
           }}
         />
