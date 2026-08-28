@@ -7,6 +7,7 @@ import { speechService } from '../services/speechService';
 import { audioClipService } from '../services/audioClipService';
 import { motionTrackerService, MotionMetrics } from '../services/motionTrackerService';
 import { saveInterruptedSession, clearInterruptedSession, InterruptedSession } from '../services/sessionRecoveryService';
+import { createTicker } from '../services/tickerService';
 import {
   playPersonaCue,
   getActiveCoachPersona,
@@ -17,6 +18,15 @@ import {
 interface UseIntervalTimerProps {
   workout: WorkoutTemplate;
 }
+
+// Terskel (sekunder) for å skille normal tick-drift (fanen synlig) fra en reell
+// oppvåkning etter dvale/lomme – under denne kjøres vanlig enkelt-avansement.
+const CATCH_UP_THRESHOLD_S = 1.5;
+// Sikkerhetsgrense på antall stille faser catchUpExpiredPhases kan spole gjennom i
+// én tick. Ved (ekstremt usannsynlig) treff på grensen droppes resten av overshoot
+// bevisst – tilstanden forblir konsistent, men timeren går da bak veggklokken til
+// neste tick fanger opp resten.
+const MAX_CATCH_UP_PHASES = 500;
 
 export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
   const [status, setStatus] = useState<TimerState['status']>('idle');
@@ -237,52 +247,126 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     [workout]
   );
 
-  // Gå til neste logiske fase
-  const advanceToNextPhase = useCallback(() => {
+  // Gå til neste logiske fase. `silent` propageres til setupPhase slik at
+  // catchUpExpiredPhases kan spole gjennom flere faser uten lyd/vibrasjon per fase.
+  const advanceToNextPhase = useCallback((silent: boolean = false) => {
     const { phase: currentPhase, currentRound: r, currentItemIndex: idx, workout: w } = stateRef.current;
 
     if (currentPhase === 'prepare') {
-      setupPhase('work', 1, 0);
+      setupPhase('work', 1, 0, silent);
     } else if (currentPhase === 'work') {
       const isLastItem = idx + 1 >= w.items.length;
       const isLastRound = r >= w.rounds;
 
-      // Hvis dette var siste øvelse i siste runde, fullfør økten umiddelbart
+      // Hvis dette var siste øvelse i siste runde, fullfør økten umiddelbart.
+      // Fullføring er ALDRI stille – selv under catch-up skal sluttsignalet høres
+      // (silent-parameteren ignoreres bevisst her, se catchUpExpiredPhases).
       if (isLastItem && isLastRound) {
-        setupPhase('complete', r, idx);
+        setupPhase('complete', r, idx, false);
       } else {
         const item = w.items[idx];
         if (item && item.restDurationSeconds > 0) {
-          setupPhase('rest', r, idx);
+          setupPhase('rest', r, idx, silent);
         } else {
           // Hopp direkte til neste øvelse hvis 0 sekunders pause
           if (idx + 1 < w.items.length) {
-            setupPhase('work', r, idx + 1);
+            setupPhase('work', r, idx + 1, silent);
           } else if (r < w.rounds) {
             if (w.roundRestDurationSeconds > 0) {
-              setupPhase('round_rest', r, 0);
+              setupPhase('round_rest', r, 0, silent);
             } else {
-              setupPhase('work', r + 1, 0);
+              setupPhase('work', r + 1, 0, silent);
             }
           }
         }
       }
     } else if (currentPhase === 'rest') {
       if (idx + 1 < w.items.length) {
-        setupPhase('work', r, idx + 1);
+        setupPhase('work', r, idx + 1, silent);
       } else if (r < w.rounds) {
         if (w.roundRestDurationSeconds > 0) {
-          setupPhase('round_rest', r, 0);
+          setupPhase('round_rest', r, 0, silent);
         } else {
-          setupPhase('work', r + 1, 0);
+          setupPhase('work', r + 1, 0, silent);
         }
       } else {
-        setupPhase('complete', r, idx);
+        // Fullføring er aldri stille – se kommentar i 'work'-grenen over.
+        setupPhase('complete', r, idx, false);
       }
     } else if (currentPhase === 'round_rest') {
-      setupPhase('work', r + 1, 0);
+      setupPhase('work', r + 1, 0, silent);
     }
   }, [setupPhase]);
+
+  // Spill én resynkroniserings-cue etter stille catch-up: gjenbruker eksisterende
+  // lyd/tale/vibrasjons-tjenester (ikke nye lydstier), basert på landingsfasen.
+  const playResyncCue = useCallback(() => {
+    const w = stateRef.current.workout;
+    const items = w?.items || [];
+    const tone = w?.voiceTone || 'rolig';
+    const idx = stateRef.current.currentItemIndex;
+    const landingPhase = stateRef.current.phase;
+
+    if (landingPhase === 'work') {
+      audioService.playWorkStart(stateRef.current.soundEnabled);
+      if (stateRef.current.speechEnabled) {
+        speechService.announceWork(items[idx]?.exercise?.name, tone);
+      }
+      vibrationService.workStart(stateRef.current.vibrateEnabled);
+    } else {
+      // rest eller round_rest
+      audioService.playRestStart(stateRef.current.soundEnabled);
+      if (stateRef.current.speechEnabled) {
+        const nextEx = landingPhase === 'round_rest' ? items[0]?.exercise : items[idx + 1]?.exercise;
+        speechService.announceRest(nextEx?.name, tone);
+      }
+      vibrationService.restStart(stateRef.current.vibrateEnabled);
+    }
+  }, []);
+
+  // Håndter en eller flere utløpte faser i én tick. Ved normal drift (fanen synlig,
+  // overshoot ~0) beholdes dagens oppførsel uendret: ett avansement med full lyd.
+  // Ved oppvåkning etter dvale (stort overshoot) spoles alle utløpte faser stille
+  // gjennom, og landingsfasen får korrekt gjenværende tid pluss én resync-cue –
+  // i stedet for en kaskade av lyd/vibrasjon, én per utløpt fase.
+  const catchUpExpiredPhases = useCallback(() => {
+    const phaseElapsed = (performance.now() - stateRef.current.phaseStartTime) / 1000;
+    const overshoot = Math.max(0, phaseElapsed - stateRef.current.phaseDuration);
+
+    if (overshoot < CATCH_UP_THRESHOLD_S) {
+      advanceToNextPhase();
+      return;
+    }
+
+    let restOvershoot = overshoot;
+    let skippedSilently = 0;
+    let iterations = 0;
+
+    // Fullføring kaller alltid setupPhase(..., false) (se advanceToNextPhase), så
+    // status blir 'completed' idet loopen når 'complete' – while-betingelsen under
+    // avslutter da loopen naturlig, uten noe eget complete-tilfelle her.
+    while (stateRef.current.status === 'running' && iterations < MAX_CATCH_UP_PHASES) {
+      iterations++;
+      advanceToNextPhase(true);
+      skippedSilently++;
+
+      const newDuration = stateRef.current.phaseDuration;
+      if (restOvershoot >= newDuration) {
+        // Denne fasens hele varighet er også spist opp av overshoot – fortsett til neste.
+        restOvershoot -= newDuration;
+        continue;
+      }
+
+      // Landet korrekt inni denne fasen: bakdater phaseStartTime slik at gjenværende
+      // tid blir riktig fremover (uten dette ville fasen fremstå som nylig startet).
+      stateRef.current.phaseStartTime = performance.now() - restOvershoot * 1000;
+      break;
+    }
+
+    if (skippedSilently >= 1 && stateRef.current.status === 'running') {
+      playResyncCue();
+    }
+  }, [advanceToNextPhase, playResyncCue]);
 
   // Hopp over eller gå tilbake manuelt
   const skipNext = useCallback(() => {
@@ -329,10 +413,13 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       const phaseElapsedSec = Math.floor(phaseElapsed);
       const halfwaySec = Math.floor(stateRef.current.phaseDuration / 2);
 
-      // 3 - 2 - 1 Nedtelling fra treneren under prepare, rest og round_rest (starter 3.5s før arbeid)
+      // 3 - 2 - 1 Nedtelling fra treneren under prepare, rest og round_rest (starter 3.5s før arbeid).
+      // remaining > 0 hindrer at denne fyres på en allerede utløpt fase rett før
+      // catchUpExpiredPhases spoler stille forbi den (ellers: spurious cue ved oppvåkning).
       if (
         persona !== 'standard' &&
         (stateRef.current.phase === 'prepare' || stateRef.current.phase === 'rest' || stateRef.current.phase === 'round_rest') &&
+        remaining > 0 &&
         remaining <= 3.5 &&
         !stateRef.current.firedCues.has('start_321') &&
         stateRef.current.speechEnabled
@@ -367,9 +454,10 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
         vibrationService.countdown(stateRef.current.vibrateEnabled);
       }
 
-      // Hvis fasen er utløpt, gå automatisk videre til neste fase
+      // Hvis fasen er utløpt, gå automatisk videre – stille fast-forward ved store
+      // tidshopp (dvale/lomme), normal enkelt-avansement med lyd ellers
       if (remaining <= 0) {
-        advanceToNextPhase();
+        catchUpExpiredPhases();
       } else if (
         stateRef.current.status === 'running' &&
         wholeSecondsLeft % 2 === 0 &&
@@ -387,8 +475,10 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       }
     };
 
-    // 100ms interval for responsiv oppdatering
-    const intervalId = window.setInterval(tick, 100);
+    // Tick leveres fra en Web Worker (metronom) i stedet for window.setInterval,
+    // slik at ticken overlever bakgrunns-throttling av hovedtrådens timere i skjulte faner
+    const ticker = createTicker(tick);
+    ticker.start();
 
     // Visibility-opphenting når skjermen vekkes fra dvale
     const handleVisibilityChange = () => {
@@ -399,10 +489,10 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      clearInterval(intervalId);
+      ticker.stop();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [status, advanceToNextPhase]);
+  }, [status, catchUpExpiredPhases]);
 
   // Kontrollfunksjoner
   const startWorkout = useCallback(

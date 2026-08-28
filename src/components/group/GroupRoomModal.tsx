@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { WorkoutTemplate } from '../../types/workout';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,6 +9,7 @@ import {
   subscribeToGroupRoom,
   startGroupWorkout,
 } from '../../services/groupRoomService';
+import { estimateServerClockOffset, getServerNow } from '../../services/clockSyncService';
 import { Users, X, Play, Copy, Check, Radio, Sparkles, ArrowRight } from 'lucide-react';
 
 interface GroupRoomModalProps {
@@ -29,7 +30,12 @@ export const GroupRoomModal: React.FC<GroupRoomModalProps> = ({
   const [roomState, setRoomState] = useState<GroupRoomState | null>(null);
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [isJoining, setIsJoining] = useState<boolean>(false);
+  const [isStarting, setIsStarting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Hindrer at felles-starten trigges flere ganger (onSnapshot kan fyre igjen mens vi venter)
+  const hasStartedRef = useRef(false);
+  const startTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Vert oppretter rom
   const handleCreateRoom = async () => {
@@ -41,6 +47,9 @@ export const GroupRoomModal: React.FC<GroupRoomModalProps> = ({
         workout
       );
       setRoomCode(code);
+      // Varm opp klokkeoffset-cachen mens vi venter på deltakere, så selve starten
+      // ikke må vente på en fersk måling. Fire-and-forget: funksjonen kaster aldri.
+      void estimateServerClockOffset();
     } catch (err: any) {
       setErrorMsg('Kunne ikke opprette rom. Prøv igjen.');
     }
@@ -60,6 +69,8 @@ export const GroupRoomModal: React.FC<GroupRoomModalProps> = ({
       if (room) {
         setRoomState(room);
         setRoomCode(room.roomId);
+        // Samme oppvarming som verten gjør, se handleCreateRoom.
+        void estimateServerClockOffset();
       } else {
         setErrorMsg('Fant ikke noe aktivt rom med den koden.');
       }
@@ -77,24 +88,61 @@ export const GroupRoomModal: React.FC<GroupRoomModalProps> = ({
     const unsubscribe = subscribeToGroupRoom(roomCode, (state) => {
       if (state) {
         setRoomState(state);
-        // Hvis verten har startet økten, start timeren for deltakeren!
-        if (state.status === 'running') {
-          onStartSyncedWorkout(state);
-          onClose();
+        // Hvis verten har startet økten, start timeren for deltakeren (og verten selv)!
+        if (state.status === 'running' && !hasStartedRef.current) {
+          hasStartedRef.current = true;
+
+          const beginSyncedWorkout = () => {
+            // Nullstill FØR callbackene kjører: cleanup som løper etter en normal (fyrt)
+            // start skal ikke tolke dette som en avbrutt, uferdig start og resette guarden.
+            startTimeoutRef.current = null;
+            onStartSyncedWorkout(state);
+            onClose();
+          };
+
+          if (typeof state.startAtServerMs === 'number') {
+            // Klokkesynkronisert start: alle klienter venter til samme serverklokke-tidspunkt,
+            // uavhengig av avvik mellom enhetenes egne veggklokker. Se clockSyncService.
+            const delayMs = Math.max(0, state.startAtServerMs - getServerNow());
+            startTimeoutRef.current = setTimeout(beginSyncedWorkout, delayMs);
+          } else {
+            // Fallback for eldre rom/klienter uten startAtServerMs: uendret gammel oppførsel.
+            beginSyncedWorkout();
+          }
         }
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (startTimeoutRef.current) {
+        // Timeout var IKKE fyrt ennå (beginSyncedWorkout ville ha nullstilt den selv).
+        // TimerDisplay re-rendrer stadig mens en pulssensor er tilkoblet, som gir
+        // onClose/onStartSyncedWorkout ny identitet og trigger denne cleanupen midt i
+        // 3s-ventetiden. Vi må derfor nullstille guarden også, slik at det gjenabonnerte
+        // onSnapshot-kallet (som fyrer umiddelbart med status 'running') får lov til å
+        // planlegge en ny, korrekt omregnet forsinkelse i stedet for å bli blokkert.
+        clearTimeout(startTimeoutRef.current);
+        startTimeoutRef.current = null;
+        hasStartedRef.current = false;
+      }
+    };
   }, [roomCode, onStartSyncedWorkout, onClose]);
 
   const handleStartAsHost = async () => {
-    if (!roomCode) return;
-    await startGroupWorkout(roomCode);
-    if (roomState) {
-      onStartSyncedWorkout({ ...roomState, status: 'running' });
+    if (!roomCode || isStarting) return;
+    setErrorMsg(null);
+    // Sperr knappen med det samme: et andre trykk ville skrevet en ny startAtServerMs
+    // og dermed forskjøvet starttidspunktet for klienter som allerede har planlagt sin.
+    setIsStarting(true);
+    try {
+      await startGroupWorkout(roomCode);
+      // Selve overgangen til økten skjer i onSnapshot-lytteren over (klokkesynkronisert),
+      // slik at verten starter i takt med deltakerne i stedet for øyeblikkelig.
+    } catch (err) {
+      setErrorMsg('Kunne ikke starte økten. Prøv igjen.');
+      setIsStarting(false);
     }
-    onClose();
   };
 
   const handleCopyCode = () => {
@@ -230,10 +278,11 @@ export const GroupRoomModal: React.FC<GroupRoomModalProps> = ({
 
             <button
               onClick={handleStartAsHost}
-              className="w-full py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 active:scale-95 text-zinc-950 font-black rounded-2xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 text-base"
+              disabled={isStarting}
+              className="w-full py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 active:scale-95 disabled:opacity-60 disabled:pointer-events-none text-zinc-950 font-black rounded-2xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 text-base"
             >
               <Play className="w-5 h-5 fill-current" />
-              Start felles økt for alle!
+              {isStarting ? 'Starter om 3 sekunder...' : 'Start felles økt for alle!'}
             </button>
           </div>
         )}
