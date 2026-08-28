@@ -63,9 +63,28 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
     }
   };
 
+  // WCAG: Lukk ved trykk på Escape-tast
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 text-white">
-      <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 text-white"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ai-generator-title"
+        className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-850 pb-3">
           <div className="flex items-center gap-2.5">
@@ -73,7 +92,7 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
               <Bot className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-black text-base text-white">AI Treningsgenerator</h3>
+              <h3 id="ai-generator-title" className="font-black text-base text-white">AI Treningsgenerator</h3>
               <p className="text-xs text-zinc-400">Skreddersydd økt på sekunder</p>
             </div>
           </div>
@@ -95,10 +114,12 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
             </span>
             <span className="text-emerald-400 font-mono font-black text-sm">{duration} minutter</span>
           </div>
-          <div className="grid grid-cols-5 gap-1.5">
+          <div role="radiogroup" aria-label="Varighet" className="grid grid-cols-5 gap-1.5">
             {[3, 5, 8, 12, 20].map((mins) => (
               <button
                 key={mins}
+                role="radio"
+                aria-checked={duration === mins}
                 onClick={() => setDuration(mins)}
                 className={`py-1.5 rounded-xl text-xs font-bold border transition-all ${
                   duration === mins
@@ -118,7 +139,7 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
             <Flame className="w-3.5 h-3.5 text-amber-400" />
             Hva vil du trene?
           </span>
-          <div className="grid grid-cols-2 gap-1.5 text-xs">
+          <div role="radiogroup" aria-label="Fokusområde" className="grid grid-cols-2 gap-1.5 text-xs">
             {[
               { id: 'helkropp', label: '🏋️ Helkropp' },
               { id: 'kontor_nakke', label: '💻 Nakke & Kontor' },
@@ -129,6 +150,8 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
             ].map((f) => (
               <button
                 key={f.id}
+                role="radio"
+                aria-checked={focus === f.id}
                 onClick={() => setFocus(f.id as any)}
                 className={`p-2 rounded-xl text-left border transition-all ${
                   focus === f.id
@@ -148,7 +171,7 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
             <Battery className="w-3.5 h-3.5 text-emerald-400" />
             Energinivå i dag:
           </span>
-          <div className="grid grid-cols-3 gap-1.5">
+          <div role="radiogroup" aria-label="Energinivå" className="grid grid-cols-3 gap-1.5">
             {[
               { id: 'lav', label: '🌱 Lav / Rolig' },
               { id: 'middels', label: '🔥 Middels' },
@@ -156,6 +179,8 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
             ].map((e) => (
               <button
                 key={e.id}
+                role="radio"
+                aria-checked={energy === e.id}
                 onClick={() => setEnergy(e.id as any)}
                 className={`py-1.5 rounded-xl text-xs font-bold border transition-all ${
                   energy === e.id
@@ -173,17 +198,19 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
               <ShieldAlert className="w-3 h-3 text-amber-400" />
               Ta hensyn til (valgfritt):
             </span>
-            <div className="flex flex-wrap gap-1">
+            <div role="group" aria-label="Hensyn til skader" className="flex flex-wrap gap-1">
               {['hopp', 'knær', 'korsrygg', 'skuldre'].map((issue) => {
                 const isSelected = avoidList.includes(issue);
                 return (
                   <button
                     key={issue}
+                    role="checkbox"
+                    aria-checked={isSelected}
                     onClick={() => toggleAvoid(issue)}
                     className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${
                       isSelected
                         ? 'bg-amber-950 border-amber-500 text-amber-300'
-                        : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:text-zinc-300'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-300'
                     }`}
                   >
                     Unngå {issue}

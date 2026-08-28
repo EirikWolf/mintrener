@@ -1,6 +1,7 @@
 import { VoiceTone } from '../schemas/profileSchema';
 import { getVoiceLine, VOICE_LINES } from '../data/voiceLines';
 import { speakMessage } from './speechService';
+import { playPersonaCue } from './coachPersonaService';
 
 export interface VoiceEventPlan {
   totalSeconds: number;
@@ -71,6 +72,7 @@ export class VoiceCoachEngine {
   private tickCountdownMode(elapsed: number, remaining: number) {
     if (elapsed === 0 && !this.firedMilestones.has('start')) {
       this.firedMilestones.add('start');
+      playPersonaCue('start_321').catch(() => {});
       const line = getVoiceLine(this.tone, 'start');
       this.speak(line, 1.0);
       return;
@@ -78,6 +80,7 @@ export class VoiceCoachEngine {
 
     if (remaining === 0 && !this.firedMilestones.has('finish')) {
       this.firedMilestones.add('finish');
+      playPersonaCue('finish').catch(() => {});
       const line = getVoiceLine(this.tone, 'finish');
       this.speak(line, 1.0);
       return;
@@ -121,6 +124,7 @@ export class VoiceCoachEngine {
       !this.firedMilestones.has('halfway')
     ) {
       this.firedMilestones.add('halfway');
+      playPersonaCue('halfway').catch(() => {});
       const line = getVoiceLine(this.tone, 'halfway');
       this.speak(line, 1.0);
       return;

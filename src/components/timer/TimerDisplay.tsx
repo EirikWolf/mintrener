@@ -12,12 +12,12 @@ import { GpsTrackerModal } from '../gps/GpsTrackerModal';
 import { GroupRoomModal } from '../group/GroupRoomModal';
 import { AboutGuideModal } from '../help/AboutGuideModal';
 import { AiCoachModal } from '../coach/AiCoachModal';
-import { PwaInstallPromptModal } from '../pwa/PwaInstallPromptModal';
 import { ChallengeCatalogModal } from '../challenges/ChallengeCatalogModal';
 import { StrengthWorkoutModal } from '../strength/StrengthWorkoutModal';
 import { TvBigScreenDisplay } from '../instructor/TvBigScreenDisplay';
 import { SkillTreeModal } from '../skills/SkillTreeModal';
 import { AiWorkoutGeneratorModal } from '../ai/AiWorkoutGeneratorModal';
+import { PainFilterModal } from './PainFilterModal';
 import { voiceCommandService, TimerVoiceCommand } from '../../services/voiceCommandService';
 import { updateMediaSession, clearMediaSession } from '../../services/mediaSessionService';
 import { STARTER_CHALLENGES } from '../../data/challenges';
@@ -36,13 +36,9 @@ import {
   VolumeX,
   Lock,
   Unlock,
-  Smartphone,
-  Sun,
-  Moon,
   Activity,
   Dumbbell,
   Mic,
-  MicOff,
   ChevronRight,
   Star,
   Zap,
@@ -53,8 +49,9 @@ import {
   Check,
   Target,
   Trophy,
+  TrendingUp,
+  ShieldAlert,
   Tv,
-  Bot,
 } from 'lucide-react';
 import { shareWorkout } from '../../services/shareWorkoutService';
 import { calculateWeeklyProgress, WeeklyGoalProgress } from '../../services/weeklyGoalService';
@@ -94,9 +91,9 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   onPrevious,
   onToggleLock,
   onToggleSound,
-  onToggleVibrate,
-  onToggleWakeLock,
-  onToggleSpeech,
+  onToggleVibrate: _onToggleVibrate,
+  onToggleWakeLock: _onToggleWakeLock,
+  onToggleSpeech: _onToggleSpeech,
   onOpenCurator,
   onOpenPrograms,
 }) => {
@@ -111,6 +108,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   const [isTvModeOpen, setIsTvModeOpen] = useState(false);
   const [isSkillTreeModalOpen, setIsSkillTreeModalOpen] = useState(false);
   const [isAiWorkoutModalOpen, setIsAiWorkoutModalOpen] = useState(false);
+  const [isPainFilterOpen, setIsPainFilterOpen] = useState(false);
   const [isVoiceControlActive, setIsVoiceControlActive] = useState<boolean>(() => voiceCommandService.getIsListening());
   const [activeMicroExercise, setActiveMicroExercise] = useState<ExerciseItem | null>(null);
   const [activeChallengeId, setActiveChallengeIdState] = useState<string | null>(() => getActiveChallengeId());
@@ -156,7 +154,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
       const exerciseTitle = state.currentExercise?.name || workout.name;
       const phaseName = state.phase === 'work' ? 'Jobb' : state.phase === 'rest' ? 'Pause' : 'Klargjøring';
       updateMediaSession({
-        title: `${exerciseTitle} (${formatTime(state.phaseRemainingSeconds)})`,
+        title: exerciseTitle,
         artist: `Min Trener • ${phaseName}`,
         album: `${workout.name} • Runde ${state.currentRound}/${state.totalRounds}`,
         artworkUrl: state.currentExercise ? `/images/exercises/${state.currentExercise.id}-0.png` : undefined,
@@ -168,7 +166,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
     } else {
       clearMediaSession();
     }
-  }, [state.status, state.phase, state.phaseRemainingSeconds, state.currentExercise, workout.name, state.currentRound, state.totalRounds]);
+  }, [state.status, state.phase, state.currentExercise, workout.name, state.currentRound, state.totalRounds, onResume, onPause, onSkipNext, onPrevious]);
 
   // Håndfri Stemmestyring Listener (Steg 1)
   React.useEffect(() => {
@@ -261,134 +259,64 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             <div className="flex items-center gap-1.5">
               <Dumbbell className="w-4 h-4 text-emerald-400" />
               <span className="font-black text-xs sm:text-sm tracking-tight text-white">Min Trener</span>
-              <button
-                onClick={() => setIsAboutModalOpen(true)}
-                title="Om Min Trener & Veiledning (?)"
-                aria-label="Om Min Trener og hjelpeguide"
-                className="w-5 h-5 rounded-full bg-zinc-900/90 border border-zinc-700/80 hover:border-emerald-400 text-zinc-400 hover:text-emerald-300 font-black text-[10px] flex items-center justify-center transition-all active:scale-95 shadow-sm ml-0.5"
-              >
-                ?
-              </button>
             </div>
           </div>
 
-          {/* Høyre: Sensor-, puls- og kontrollknapper */}
-          <div className="flex items-center gap-1">
-            {/* PWA Installer-knapp (vises kun i hvilemodus) */}
-            {state.status === 'idle' && <PwaInstallPromptModal />}
-
-            {/* Heart Rate Widget */}
+          {/* Høyre: Puls (hvis tilkoblet), Aktiv stemmestyring, Lyd og Lås */}
+          <div className="flex items-center gap-1.5">
+            {/* Heart Rate Widget (vises diskret når tilkoblet) */}
             <HeartRateWidget onHeartRateUpdate={setCurrentHeartRate} />
 
-            <div className="flex items-center gap-0.5 bg-zinc-900/90 border border-zinc-800/80 backdrop-blur-md rounded-full p-1 shadow-sm">
-              {/* Norsk stemmeveiledning */}
-              {onToggleSpeech && (
-                <button
-                  onClick={onToggleSpeech}
-                  title={state.speechEnabled ? 'Norsk stemme på' : 'Stemme av'}
-                  aria-label={state.speechEnabled ? 'Slå av stemme' : 'Slå på stemme'}
-                  className={`p-1.5 rounded-full transition-all ${
-                    state.speechEnabled ? 'text-emerald-400 bg-emerald-950/60' : 'text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  {state.speechEnabled ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
-                </button>
-              )}
-
-              {/* Håndfri Stemmestyring */}
-              {voiceCommandService.isSupported() && (
-                <button
-                  onClick={() => voiceCommandService.toggleListening()}
-                  title={isVoiceControlActive ? 'Håndfri stemmestyring på (lytter...)' : 'Slå på håndfri stemmestyring (Pause, Fortsett, Neste)'}
-                  aria-label="Håndfri stemmestyring"
-                  className={`p-1.5 rounded-full transition-all ${
-                    isVoiceControlActive
-                      ? 'text-indigo-400 bg-indigo-950/80 ring-1 ring-indigo-400/60 animate-pulse'
-                      : 'text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  <Bot className="w-3.5 h-3.5" />
-                </button>
-              )}
-
-              {/* Dvale / Skjerm */}
+            {/* Aktiv lytter-indikator for håndfri stemmestyring (kun når aktiv) */}
+            {isVoiceControlActive && (
               <button
-                onClick={onToggleWakeLock}
-                title={state.wakeLockEnabled ? 'Skjerm holdes på (dvale av)' : 'Skjerm kan gå i dvale'}
-                aria-label={state.wakeLockEnabled ? 'Skjerm holdes på' : 'Skjerm kan gå i dvale'}
-                className={`p-1.5 rounded-full transition-all ${
-                  state.wakeLockEnabled ? 'text-amber-400 bg-amber-950/60 shadow-inner' : 'text-zinc-500 hover:text-zinc-300'
-                }`}
+                onClick={() => voiceCommandService.toggleListening()}
+                aria-label="Håndfri stemmestyring aktiv (trykk for å pause)"
+                className="p-2 rounded-full text-indigo-400 bg-indigo-950/80 ring-1 ring-indigo-400/60 animate-pulse transition-all active:scale-95"
               >
-                {state.wakeLockEnabled ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+                <Mic className="w-4 h-4" />
               </button>
+            )}
 
-              {/* Lyd */}
-              <button
-                onClick={onToggleSound}
-                title={state.soundEnabled ? 'Lyd på' : 'Lyd av'}
-                aria-label={state.soundEnabled ? 'Slå av lyd' : 'Slå på lyd'}
-                className={`p-1.5 rounded-full transition-all ${
-                  state.soundEnabled ? 'text-emerald-400 bg-emerald-950/60' : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                {state.soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-              </button>
+            {/* Storskjerm / TV-visning */}
+            <button
+              onClick={() => setIsTvModeOpen(true)}
+              aria-label="Storskjerm- og TV-visning"
+              title="Vis på storskjerm / TV"
+              className="p-2 rounded-full border border-blue-800/80 bg-blue-950/80 text-blue-400 hover:text-white hover:bg-blue-900 transition-all active:scale-95 shadow-sm ring-1 ring-blue-500/20"
+            >
+              <Tv className="w-4 h-4" />
+            </button>
 
-              {/* Vibrasjon */}
-              <button
-                onClick={onToggleVibrate}
-                title={state.vibrateEnabled ? 'Vibrasjon på' : 'Vibrasjon av'}
-                aria-label={state.vibrateEnabled ? 'Slå av vibrasjon' : 'Slå på vibrasjon'}
-                className={`p-1.5 rounded-full transition-all ${
-                  state.vibrateEnabled ? 'text-amber-400 bg-amber-950/60' : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                <Smartphone className="w-3.5 h-3.5" />
-              </button>
+            {/* Lyd av/på (44x44px touch target) */}
+            <button
+              onClick={onToggleSound}
+              role="switch"
+              aria-checked={state.soundEnabled}
+              aria-label="Lydvarsler"
+              className={`p-2 rounded-full border transition-all active:scale-95 ${
+                state.soundEnabled
+                  ? 'bg-zinc-900 border-zinc-700 text-emerald-400 hover:bg-zinc-800'
+                  : 'bg-zinc-900/60 border-zinc-800 text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              {state.soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </button>
 
-              {/* TV & Storskjerm / Instruktørmodus */}
-              <button
-                onClick={() => setIsTvModeOpen(true)}
-                title="Storskjerm & TV-visning for grupper"
-                aria-label="Storskjerm og TV-visning"
-                className="p-1.5 rounded-full text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 transition-all active:scale-95 flex items-center"
-              >
-                <Tv className="w-3.5 h-3.5" />
-              </button>
-
-              {/* Astrid AI-Trener */}
-              <button
-                onClick={() => setIsAiCoachOpen(true)}
-                title="Astrid • AI-Trener"
-                aria-label="Åpne AI-Trener"
-                className="p-1.5 rounded-full text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-all active:scale-95 flex items-center gap-1"
-              >
-                <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-              </button>
-
-              {/* Sensorstatus */}
-              <button
-                onClick={() => setIsSensorModalOpen(true)}
-                title="Sensorstatus"
-                aria-label="Åpne sensorstatus"
-                className="p-1.5 rounded-full text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 transition-all"
-              >
-                <Activity className="w-3.5 h-3.5" />
-              </button>
-
-              {/* Berøringslås */}
-              <button
-                onClick={onToggleLock}
-                title={state.isLocked ? 'Skjerm låst' : 'Lås mot feiltrykk'}
-                aria-label={state.isLocked ? 'Lås opp skjerm' : 'Lås skjerm mot feiltrykk'}
-                className={`p-1.5 rounded-full transition-all ${
-                  state.isLocked ? 'text-rose-400 bg-rose-950/60' : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                {state.isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
-              </button>
-            </div>
+            {/* Skjermlås mot feiltrykk (44x44px touch target) */}
+            <button
+              onClick={onToggleLock}
+              role="switch"
+              aria-checked={state.isLocked}
+              aria-label="Skjermlås"
+              className={`p-2 rounded-full border transition-all active:scale-95 ${
+                state.isLocked
+                  ? 'bg-rose-950/80 border-rose-800 text-rose-400'
+                  : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-white'
+              }`}
+            >
+              {state.isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+            </button>
           </div>
         </div>
 
@@ -397,7 +325,9 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           const favoriteIds = getFavoriteProgramIds();
           const uniqueWorkoutsMap = new Map<string, WorkoutTemplate>();
           presets.forEach((w) => uniqueWorkoutsMap.set(w.id, w));
-          TRAINING_PROGRAMS.forEach((p) => uniqueWorkoutsMap.set(p.workout.id, p.workout));
+          TRAINING_PROGRAMS.forEach((p) =>
+            uniqueWorkoutsMap.set(p.workout.id, { ...p.workout, voiceTone: p.voiceTone })
+          );
 
           const matchedFavs = favoriteIds
             .map((id) => uniqueWorkoutsMap.get(id))
@@ -549,76 +479,103 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                 );
               })()}
 
-              <div className="flex items-center justify-between px-1 gap-2">
-                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-                  <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider flex items-center gap-1 shrink-0">
-                    <Star className="w-3 h-3 text-amber-400 fill-current" />
-                    {matchedFavs.length > 0 ? `Favoritter (${matchedFavs.length})` : 'Hurtigstart'}
-                  </span>
-                  <button
-                    onClick={() => setIsAiWorkoutModalOpen(true)}
-                    title="AI Treningsgenerator (Skreddersy økt etter dagsform og tid)"
-                    className="px-1.5 py-0.5 rounded-md bg-indigo-950/80 border border-indigo-800/80 text-[10px] font-black text-indigo-300 hover:bg-indigo-900 transition-all flex items-center gap-0.5 shadow-sm active:scale-95 shrink-0"
-                  >
-                    <Sparkles className="w-2.5 h-2.5" />
-                    <span>AI Økt</span>
-                  </button>
-                  <button
-                    onClick={() => setIsSkillTreeModalOpen(true)}
-                    title="Ferdighetstrær & Mestringsstige (Kroppsvekt)"
-                    className="px-1.5 py-0.5 rounded-md bg-purple-950/80 border border-purple-800/80 text-[10px] font-black text-purple-400 hover:bg-purple-900 transition-all flex items-center gap-0.5 shadow-sm active:scale-95 shrink-0"
-                  >
-                    <Trophy className="w-2.5 h-2.5" />
-                    <span>Ferdighet</span>
-                  </button>
-                  <button
-                    onClick={() => setIsStrengthModalOpen(true)}
-                    title="Styrketrening med Dobbel Progresjon"
-                    className="px-1.5 py-0.5 rounded-md bg-emerald-950/80 border border-emerald-800/80 text-[10px] font-black text-emerald-400 hover:bg-emerald-900 transition-all flex items-center gap-0.5 shadow-sm active:scale-95 shrink-0"
-                  >
-                    <Dumbbell className="w-2.5 h-2.5" />
-                    <span>Styrke</span>
-                  </button>
-                  <button
-                    onClick={() => setIsChallengesModalOpen(true)}
-                    title="Utfordringer (28/30 dagers program)"
-                    className="px-1.5 py-0.5 rounded-md bg-amber-950/80 border border-amber-800/80 text-[10px] font-black text-amber-400 hover:bg-amber-900 transition-all flex items-center gap-0.5 shadow-sm active:scale-95 shrink-0"
-                  >
-                    <Trophy className="w-2.5 h-2.5" />
-                    <span>Utfordring</span>
-                  </button>
-                  <button
-                    onClick={() => setIsMicroModalOpen(true)}
-                    title="Microtrening (1 øvelse 1-5 min)"
-                    className="px-1.5 py-0.5 rounded-md bg-amber-950/80 border border-amber-800/80 text-[10px] font-black text-amber-400 hover:bg-amber-900 transition-all flex items-center gap-0.5 shadow-sm active:scale-95 shrink-0"
-                  >
-                    <Zap className="w-2.5 h-2.5 fill-current" />
-                    <span>Micro</span>
-                  </button>
-                  <button
-                    onClick={() => setIsGpsModalOpen(true)}
-                    title="GPS Utendørsøkt (Løp, gå, sykkel)"
-                    className="px-1.5 py-0.5 rounded-md bg-emerald-950/80 border border-emerald-800/80 text-[10px] font-black text-emerald-400 hover:bg-emerald-900 transition-all flex items-center gap-0.5 shadow-sm active:scale-95 shrink-0"
-                  >
-                    <Navigation className="w-2.5 h-2.5 fill-current" />
-                    <span>GPS</span>
-                  </button>
-                  <button
-                    onClick={() => setIsGroupModalOpen(true)}
-                    title="Grupperom (Synkronisert timer)"
-                    className="px-1.5 py-0.5 rounded-md bg-purple-950/80 border border-purple-800/80 text-[10px] font-black text-purple-400 hover:bg-purple-900 transition-all flex items-center gap-0.5 shadow-sm active:scale-95 shrink-0"
-                  >
-                    <Users className="w-2.5 h-2.5" />
-                    <span>Gruppe</span>
-                  </button>
-                </div>
+              {/* 1. VERKTØY- OG MODUS-MATRISE (Alltid synlige på 2 linjer) */}
+              <div className="grid grid-cols-5 gap-1 sm:gap-1.5 py-0.5">
+                <button
+                  onClick={() => setIsChallengesModalOpen(true)}
+                  aria-label="28 og 30 dagers treningsutfordringer"
+                  className="py-1.5 px-1 rounded-xl bg-amber-950/80 border border-amber-500/50 text-[10px] sm:text-[11px] font-bold text-amber-300 hover:bg-amber-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 ring-1 ring-amber-400/20 text-center"
+                >
+                  <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span className="truncate">Utfordring</span>
+                </button>
+                <button
+                  onClick={() => setIsPainFilterOpen(true)}
+                  aria-label="Skade- og smertefilter for trygg trening"
+                  className="py-1.5 px-1 rounded-xl bg-rose-950/80 border border-rose-500/50 text-[10px] sm:text-[11px] font-bold text-rose-300 hover:bg-rose-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 ring-1 ring-rose-400/20 text-center"
+                >
+                  <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                  <span className="truncate">Skånsom</span>
+                </button>
+                <button
+                  onClick={() => setIsAiCoachOpen(true)}
+                  aria-label="Astrid AI-Trener"
+                  className="py-1.5 px-1 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-[10px] sm:text-[11px] font-bold text-emerald-300 hover:bg-emerald-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span className="truncate">Astrid AI</span>
+                </button>
+                <button
+                  onClick={() => setIsAiWorkoutModalOpen(true)}
+                  aria-label="AI Treningsgenerator"
+                  className="py-1.5 px-1 rounded-xl bg-indigo-950/80 border border-indigo-800/80 text-[10px] sm:text-[11px] font-bold text-indigo-300 hover:bg-indigo-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
+                >
+                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">AI Økt</span>
+                </button>
+                <button
+                  onClick={() => setIsSkillTreeModalOpen(true)}
+                  aria-label="Ferdighetstrær & Mestringsstige"
+                  className="py-1.5 px-1 rounded-xl bg-purple-950/80 border border-purple-800/80 text-[10px] sm:text-[11px] font-bold text-purple-400 hover:bg-purple-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
+                >
+                  <TrendingUp className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Ferdighet</span>
+                </button>
+                <button
+                  onClick={() => setIsStrengthModalOpen(true)}
+                  aria-label="Styrketrening med Dobbel Progresjon"
+                  className="py-1.5 px-1 rounded-xl bg-emerald-950/80 border border-emerald-800/80 text-[10px] sm:text-[11px] font-bold text-emerald-400 hover:bg-emerald-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
+                >
+                  <Dumbbell className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Styrke</span>
+                </button>
+                <button
+                  onClick={() => setIsMicroModalOpen(true)}
+                  aria-label="Microtrening"
+                  className="py-1.5 px-1 rounded-xl bg-amber-950/80 border border-amber-800/80 text-[10px] sm:text-[11px] font-bold text-amber-400 hover:bg-amber-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
+                >
+                  <Zap className="w-3.5 h-3.5 fill-current shrink-0" />
+                  <span className="truncate">Micro</span>
+                </button>
+                <button
+                  onClick={() => setIsGpsModalOpen(true)}
+                  aria-label="GPS Utendørsøkt"
+                  className="py-1.5 px-1 rounded-xl bg-emerald-950/80 border border-emerald-800/80 text-[10px] sm:text-[11px] font-bold text-emerald-400 hover:bg-emerald-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
+                >
+                  <Navigation className="w-3.5 h-3.5 fill-current shrink-0" />
+                  <span className="truncate">GPS</span>
+                </button>
+                <button
+                  onClick={() => setIsGroupModalOpen(true)}
+                  aria-label="Grupperom"
+                  className="py-1.5 px-1 rounded-xl bg-purple-950/80 border border-purple-800/80 text-[10px] sm:text-[11px] font-bold text-purple-400 hover:bg-purple-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
+                >
+                  <Users className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Gruppe</span>
+                </button>
+                <button
+                  onClick={() => setIsTvModeOpen(true)}
+                  aria-label="Storskjerm og TV-visning"
+                  className="py-1.5 px-1 rounded-xl bg-blue-950/80 border border-blue-800/80 text-[10px] sm:text-[11px] font-bold text-blue-400 hover:bg-blue-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 ring-1 ring-blue-400/20 text-center"
+                >
+                  <Tv className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">TV</span>
+                </button>
+              </div>
+
+              {/* 2. FAVORITT-PROGRAMMER OVERSKRIFT & LENKE */}
+              <div className="flex items-center justify-between px-1 pt-1.5 pb-0.5">
+                <span className="text-[11px] uppercase font-black text-zinc-300 tracking-wider flex items-center gap-1.5">
+                  <Star className="w-3.5 h-3.5 text-amber-400 fill-current" />
+                  {matchedFavs.length > 0 ? `Favorittøkter (${matchedFavs.length})` : 'Hurtigstart'}
+                </span>
                 {onOpenPrograms && (
                   <button
                     onClick={onOpenPrograms}
-                    className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 transition-colors shrink-0"
+                    className="text-xs font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 transition-colors px-1 py-0.5"
                   >
-                    <span className="hidden xs:inline">Alle</span>
-                    <ChevronRight className="w-3 h-3" />
+                    <span>Alle programmer</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
@@ -647,8 +604,8 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                         <p className={`text-xs font-bold truncate ${isSelected ? 'text-emerald-300' : 'text-zinc-200'}`}>
                           {tpl.name}
                         </p>
-                        <p className="text-[10px] text-zinc-400 capitalize">
-                          {tpl.items.length} øvelser {tpl.rounds > 1 ? `• ${tpl.rounds} rnd` : ''}
+                        <p className="text-[10px] text-zinc-400">
+                          {tpl.items.length} øvelser {tpl.rounds > 1 ? `• ${tpl.rounds} runder` : ''}
                         </p>
                       </div>
 
@@ -709,6 +666,8 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           </div>
 
           <span
+            aria-live="assertive"
+            aria-atomic="true"
             className={`px-3 py-0.5 rounded-full text-[10px] sm:text-xs tracking-widest uppercase shadow-md transition-all ${phaseStyle.badgeBg}`}
           >
             {phaseStyle.badgeText}
@@ -716,7 +675,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
         </div>
 
         {/* Øvelsestittel (Stort og tydelig) */}
-        <div className="min-h-[2rem] flex items-center justify-center px-4">
+        <div className="min-h-[2rem] flex items-center justify-center px-4" aria-live="polite" aria-atomic="true">
           <h1 className="text-xl xs:text-2xl sm:text-3xl font-black text-white tracking-tight line-clamp-1 drop-shadow-sm">
             {state.phase === 'prepare'
               ? 'Gjør deg klar'
@@ -754,12 +713,12 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
 
           {state.nextExercise && state.phase !== 'prepare' ? (
             <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-zinc-900/60 border border-zinc-800/60 text-[11px] text-zinc-300 backdrop-blur-sm">
-              <span className="text-zinc-500 font-semibold uppercase text-[10px]">Neste:</span>
+              <span className="text-zinc-400 font-semibold uppercase text-[10px]">Neste:</span>
               <span className="font-bold text-white line-clamp-1">{state.nextExercise.name}</span>
             </div>
           ) : state.phase === 'prepare' && state.currentExercise ? (
             <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-zinc-900/60 border border-zinc-800/60 text-[11px] text-zinc-300 backdrop-blur-sm">
-              <span className="text-zinc-500 font-semibold uppercase text-[10px]">Først:</span>
+              <span className="text-zinc-400 font-semibold uppercase text-[10px]">Først:</span>
               <span className="font-bold text-white line-clamp-1">{state.currentExercise.name}</span>
             </div>
           ) : null}
@@ -994,6 +953,17 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
               onSelectWorkout(aiWorkout);
               onStart();
             }
+          }}
+        />
+      )}
+
+      {/* Skade- & Smertefilter Modal */}
+      {isPainFilterOpen && (
+        <PainFilterModal
+          workout={workout}
+          onClose={() => setIsPainFilterOpen(false)}
+          onApplyWorkout={(adapted) => {
+            onSelectWorkout(adapted);
           }}
         />
       )}

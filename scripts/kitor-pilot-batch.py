@@ -14,10 +14,19 @@ CN = "flux1-dev-controlnet-union-pro-2.0.safetensors"
 W, H, STEPS = 896, 1152, 24
 
 TOKEN = None
-for line in (Path(__file__).parent.parent / ".env").read_text().splitlines():
-    if line.startswith("KITOR_TOKEN="):
-        TOKEN = line.split("=", 1)[1].strip()
-assert TOKEN, "KITOR_TOKEN mangler i .env"
+root_dir = Path(__file__).parent.parent
+for env_name in [".env.local", ".env"]:
+    env_file = root_dir / env_name
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            if line.startswith("KITOR_TOKEN="):
+                val = line.split("=", 1)[1].strip()
+                if val and "ditt_kitor_token" not in val and "placeholder" not in val:
+                    TOKEN = val
+                    break
+    if TOKEN:
+        break
+assert TOKEN, "KITOR_TOKEN mangler. Legg den i .env.local"
 HDR = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
 
 

@@ -13,6 +13,8 @@ interface MediaSessionParams {
   onPrevious?: () => void;
 }
 
+let areActionHandlersRegistered = false;
+
 export function updateMediaSession(params: MediaSessionParams): void {
   if (typeof window === 'undefined' || !('mediaSession' in navigator)) {
     return;
@@ -36,17 +38,20 @@ export function updateMediaSession(params: MediaSessionParams): void {
       artwork,
     });
 
-    if (params.onPlay) {
-      navigator.mediaSession.setActionHandler('play', params.onPlay);
-    }
-    if (params.onPause) {
-      navigator.mediaSession.setActionHandler('pause', params.onPause);
-    }
-    if (params.onNext) {
-      navigator.mediaSession.setActionHandler('nexttrack', params.onNext);
-    }
-    if (params.onPrevious) {
-      navigator.mediaSession.setActionHandler('previoustrack', params.onPrevious);
+    if (!areActionHandlersRegistered) {
+      if (params.onPlay) {
+        navigator.mediaSession.setActionHandler('play', params.onPlay);
+      }
+      if (params.onPause) {
+        navigator.mediaSession.setActionHandler('pause', params.onPause);
+      }
+      if (params.onNext) {
+        navigator.mediaSession.setActionHandler('nexttrack', params.onNext);
+      }
+      if (params.onPrevious) {
+        navigator.mediaSession.setActionHandler('previoustrack', params.onPrevious);
+      }
+      areActionHandlersRegistered = true;
     }
   } catch (err) {
     console.warn('Kunne ikke oppdatere MediaSession:', err);
@@ -60,10 +65,13 @@ export function clearMediaSession(): void {
 
   try {
     navigator.mediaSession.metadata = null;
-    navigator.mediaSession.setActionHandler('play', null);
-    navigator.mediaSession.setActionHandler('pause', null);
-    navigator.mediaSession.setActionHandler('nexttrack', null);
-    navigator.mediaSession.setActionHandler('previoustrack', null);
+    if (areActionHandlersRegistered) {
+      navigator.mediaSession.setActionHandler('play', null);
+      navigator.mediaSession.setActionHandler('pause', null);
+      navigator.mediaSession.setActionHandler('nexttrack', null);
+      navigator.mediaSession.setActionHandler('previoustrack', null);
+      areActionHandlersRegistered = false;
+    }
   } catch (err) {
     console.warn('Kunne ikke nullstille MediaSession:', err);
   }

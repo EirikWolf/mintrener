@@ -1,0 +1,174 @@
+import { speechService } from './speechService';
+import { audioDuckingService } from './audioDuckingService';
+import { VoiceTone } from '../schemas/profileSchema';
+import rawManifest from '../data/audioManifest.json';
+
+const AUDIO_MANIFEST: Record<string, string> = rawManifest as Record<string, string>;
+
+export class AudioClipService {
+  private activeAudio: HTMLAudioElement | null = null;
+  private audioCache = new Map<string, HTMLAudioElement>();
+
+  /**
+   * Spiller en lydfil fra manifestet, eller kaller fallback-talesyntese hvis filen ikke finnes
+   */
+  public async playClipOrFallback(
+    clipKey: string,
+    fallbackText: string,
+    _tone: VoiceTone = 'rolig',
+    rate: number = 1.05
+  ): Promise<void> {
+    const audioUrl = AUDIO_MANIFEST[clipKey];
+
+    if (audioUrl) {
+      try {
+        await this.playAudioFile(audioUrl);
+        return;
+      } catch (err) {
+        console.warn(`Kunne ikke spille lydklipp (${audioUrl}), bruker talesyntese fallback:`, err);
+      }
+    }
+
+    // Fallback til Web Speech hvis lydfil ikke er generert ennå
+    speechService.speak(fallbackText, rate);
+  }
+
+  private playAudioFile(url: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      try {
+        if (this.activeAudio) {
+          this.activeAudio.pause();
+          this.activeAudio.currentTime = 0;
+        }
+
+        let audio = this.audioCache.get(url);
+        if (!audio) {
+          audio = new Audio(url);
+          this.audioCache.set(url, audio);
+        }
+
+        audio.onplay = () => {
+          audioDuckingService.startDucking();
+        };
+
+        audio.onended = () => {
+          audioDuckingService.stopDucking();
+          resolve();
+        };
+
+        audio.onerror = (e) => {
+          audioDuckingService.stopDucking();
+          reject(e);
+        };
+
+        this.activeAudio = audio;
+        audio.play().catch(reject);
+      } catch (err) {
+        audioDuckingService.stopDucking();
+        reject(err);
+      }
+    });
+  }
+
+  /**
+   * Annonserer klargjøring til en øvelse
+   */
+  public announcePrepare(exerciseId?: string, exerciseName?: string, tone: VoiceTone = 'rolig'): void {
+    const key = exerciseId ? `exercise-${exerciseId}` : `prepare-${tone}`;
+    const fallbackText =
+      tone === 'lek'
+        ? exerciseName
+          ? `Gjør deg klar til ${exerciseName}! Nå starter moroa!`
+          : 'Er du klar? Nå setter vi i gang!'
+        : tone === 'gira'
+        ? exerciseName
+          ? `Gjør deg klar til ${exerciseName}! Fullt fokus!`
+          : 'Gjør deg klar! Nå gir vi alt!'
+        : tone === 'tørr'
+        ? exerciseName
+          ? `Klargjøring. ${exerciseName}.`
+          : 'Klargjøring.'
+        : exerciseName
+        ? `Gjør deg klar til ${exerciseName}`
+        : 'Gjør deg klar';
+
+    this.playClipOrFallback(key, fallbackText, tone);
+  }
+
+  /**
+   * Annonserer start på et arbeidsintervall
+   */
+  public announceWork(exerciseId?: string, exerciseName?: string, tone: VoiceTone = 'rolig'): void {
+    const key = exerciseId ? `exercise-${exerciseId}` : `start-${tone}-1`;
+    const fallbackText =
+      tone === 'lek'
+        ? exerciseName
+          ? `Og kjør på med ${exerciseName}!`
+          : 'Tre, to, en – og kjør på!'
+        : tone === 'gira'
+        ? exerciseName
+          ? `Let’s go! Fullt trøkk med ${exerciseName}!`
+          : 'Let’s go! Fullt trøkk!'
+        : tone === 'tørr'
+        ? exerciseName
+          ? `Start. ${exerciseName}.`
+          : 'Start.'
+        : exerciseName
+        ? `Kjør! ${exerciseName}`
+        : 'Kjør!';
+
+    this.playClipOrFallback(key, fallbackText, tone);
+  }
+
+  /**
+   * Annonserer pause
+   */
+  public announceRest(nextExerciseName?: string, tone: VoiceTone = 'rolig'): void {
+    const fallbackText =
+      tone === 'lek'
+        ? nextExerciseName
+          ? `Pause! Neste øvelse er ${nextExerciseName}.`
+          : 'Pause! Pust som en løve!'
+        : tone === 'gira'
+        ? nextExerciseName
+          ? `Pause! Hent pusten, neste er ${nextExerciseName}!`
+          : 'Pause! Hent pusten!'
+        : tone === 'tørr'
+        ? nextExerciseName
+          ? `Pause. Neste er ${nextExerciseName}.`
+          : 'Pause.'
+        : nextExerciseName
+        ? `Pause. Neste er ${nextExerciseName}`
+        : 'Pause';
+
+    const key = `rest-${tone}`;
+    this.playClipOrFallback(key, fallbackText, tone);
+  }
+
+  /**
+   * Annonserer 3-2-1 nedtelling
+   */
+  public announceCountdown(second: number, tone: VoiceTone = 'rolig'): void {
+    const key = `count-${tone}-${second}`;
+    this.playClipOrFallback(key, second.toString(), tone);
+  }
+
+  /**
+   * Annonserer fullført økt
+   */
+  public announceComplete(tone: VoiceTone = 'rolig'): void {
+    const key = `finish-${tone}-1`;
+    const fallbackText =
+      tone === 'lek'
+        ? 'Hurra! Du klarte det! Kjempebra jobba!'
+        : tone === 'gira'
+        ? 'BOM! Fullført! Rått levert!'
+        : tone === 'tørr'
+        ? 'Ferdig. Økten er fullført.'
+        : 'Bra jobba! Økten er fullført!';
+
+    this.playClipOrFallback(key, fallbackText, tone);
+  }
+}
+
+export const audioClipService = new AudioClipService();

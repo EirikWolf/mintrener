@@ -1,4 +1,65 @@
 import { audioDuckingService } from './audioDuckingService';
+import { VoiceTone } from '../schemas/profileSchema';
+
+/**
+ * Fonetiske oversettelser og optimaliseringer for norsk Web Speech TTS
+ */
+export const PRONUNCIATION_MAP: Record<string, string> = {
+  // Engelske øvelsesnavn -> naturlig norsk / fonetisk
+  'mountain climbers': 'fjellklatrer',
+  'mountain climber': 'fjellklatrer',
+  'jumping jacks': 'sprellmenn',
+  'jumping jack': 'sprellmann',
+  'push-ups': 'armhevinger',
+  'push-up': 'armhevinger',
+  'pushups': 'armhevinger',
+  'pushup': 'armhevinger',
+  'squats': 'knebøy',
+  'squat': 'knebøy',
+  'burpees': 'børpis',
+  'burpee': 'børpi',
+  'high knees': 'høye kneløft',
+  'glute bridge': 'bekkenhev',
+  'lunges': 'utfall',
+  'lunge': 'utfall',
+  'side plank': 'sideplanke',
+  'hollow body': 'båtstilling',
+  'kettlebell swing': 'kettlebell-sving',
+  'kettlebell swings': 'kettlebell-sving',
+  'pull-ups': 'kroppshevinger',
+  'pull-up': 'kroppshevinger',
+  'chin-ups': 'kroppshevinger med underhåndsgrep',
+  'dips': 'dips',
+  'dead bug': 'død flue',
+  'russian twists': 'russisk vri',
+  'russian twist': 'russisk vri',
+  'plank jacks': 'planke med sprell',
+  'wall sit': 'veggsitt',
+  'crunches': 'mageløft',
+  'crunch': 'mageløft',
+  'bear crawl': 'bjørnegang',
+
+  // Sammensatte ord som trenger fonetisk trykkhjelp i nettlesere
+  'bjørnegang': 'bjørne gang',
+  'flamingo-balanse': 'flamingo balanse',
+  'kenguru-sprett': 'kenguru sprett',
+  'katte-ku': 'katt og ku',
+  'katt-ku': 'katt og ku',
+  'skulder-dislocates': 'skulderrulling bakover',
+  'dislocates': 'skulderrulling',
+};
+
+export function normalizeTextForSpeech(raw: string): string {
+  if (!raw) return '';
+  let text = raw;
+
+  for (const [key, replacement] of Object.entries(PRONUNCIATION_MAP)) {
+    const regex = new RegExp(`\\b${key}\\b`, 'gi');
+    text = text.replace(regex, replacement);
+  }
+
+  return text;
+}
 
 export class SpeechService {
   private synth: SpeechSynthesis | null = null;
@@ -102,7 +163,8 @@ export class SpeechService {
       }
 
       const activeVoice = this.voice || this.loadVoice();
-      const utterance = new SpeechSynthesisUtterance(text);
+      const normalized = normalizeTextForSpeech(text);
+      const utterance = new SpeechSynthesisUtterance(normalized);
 
       if (activeVoice) {
         utterance.voice = activeVoice;
@@ -150,27 +212,87 @@ export class SpeechService {
     this.speak('Dette er en test av norsk stemmeveiledning. Klar til trening!');
   }
 
-  public announceWork(exerciseName?: string) {
-    if (exerciseName) {
-      this.speak(`Kjør! ${exerciseName}`);
+  public announceWork(exerciseName?: string, tone: VoiceTone = 'rolig') {
+    if (tone === 'lek') {
+      if (exerciseName) {
+        this.speak(`Og kjør på med ${exerciseName}!`);
+      } else {
+        this.speak('Tre, to, en – og kjør på!');
+      }
+    } else if (tone === 'gira') {
+      if (exerciseName) {
+        this.speak(`Let’s go! Fullt trøkk med ${exerciseName}!`);
+      } else {
+        this.speak('Let’s go! Fullt trøkk!');
+      }
+    } else if (tone === 'tørr') {
+      if (exerciseName) {
+        this.speak(`Start. ${exerciseName}.`);
+      } else {
+        this.speak('Start.');
+      }
     } else {
-      this.speak('Kjør!');
+      if (exerciseName) {
+        this.speak(`Kjør! ${exerciseName}`);
+      } else {
+        this.speak('Kjør!');
+      }
     }
   }
 
-  public announceRest(nextExerciseName?: string) {
-    if (nextExerciseName) {
-      this.speak(`Pause. Neste er ${nextExerciseName}`);
+  public announceRest(nextExerciseName?: string, tone: VoiceTone = 'rolig') {
+    if (tone === 'lek') {
+      if (nextExerciseName) {
+        this.speak(`Pause! Neste øvelse er ${nextExerciseName}.`);
+      } else {
+        this.speak('Pause! Pust som en løve!');
+      }
+    } else if (tone === 'gira') {
+      if (nextExerciseName) {
+        this.speak(`Pause! Hent pusten, neste er ${nextExerciseName}!`);
+      } else {
+        this.speak('Pause! Hent pusten!');
+      }
+    } else if (tone === 'tørr') {
+      if (nextExerciseName) {
+        this.speak(`Pause. Neste er ${nextExerciseName}.`);
+      } else {
+        this.speak('Pause.');
+      }
     } else {
-      this.speak('Pause');
+      if (nextExerciseName) {
+        this.speak(`Pause. Neste er ${nextExerciseName}`);
+      } else {
+        this.speak('Pause');
+      }
     }
   }
 
-  public announcePrepare(exerciseName?: string) {
-    if (exerciseName) {
-      this.speak(`Gjør deg klar til ${exerciseName}`);
+  public announcePrepare(exerciseName?: string, tone: VoiceTone = 'rolig') {
+    if (tone === 'lek') {
+      if (exerciseName) {
+        this.speak(`Gjør deg klar til ${exerciseName}! Nå starter moroa!`);
+      } else {
+        this.speak('Er du klar? Nå setter vi i gang!');
+      }
+    } else if (tone === 'gira') {
+      if (exerciseName) {
+        this.speak(`Gjør deg klar til ${exerciseName}! Fullt fokus!`);
+      } else {
+        this.speak('Gjør deg klar! Nå gir vi alt!');
+      }
+    } else if (tone === 'tørr') {
+      if (exerciseName) {
+        this.speak(`Klargjøring. ${exerciseName}.`);
+      } else {
+        this.speak('Klargjøring.');
+      }
     } else {
-      this.speak('Gjør deg klar');
+      if (exerciseName) {
+        this.speak(`Gjør deg klar til ${exerciseName}`);
+      } else {
+        this.speak('Gjør deg klar');
+      }
     }
   }
 
@@ -180,8 +302,16 @@ export class SpeechService {
     }
   }
 
-  public announceComplete() {
-    this.speak('Bra jobba! Økten er fullført!');
+  public announceComplete(tone: VoiceTone = 'rolig') {
+    if (tone === 'lek') {
+      this.speak('Hurra! Du klarte det! Kjempebra jobba!');
+    } else if (tone === 'gira') {
+      this.speak('BOM! Fullført! Rått levert!');
+    } else if (tone === 'tørr') {
+      this.speak('Ferdig. Økten er fullført.');
+    } else {
+      this.speak('Bra jobba! Økten er fullført!');
+    }
   }
 }
 

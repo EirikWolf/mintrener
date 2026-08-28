@@ -117,8 +117,9 @@ export const CreateCustomExerciseModal: React.FC<CreateCustomExerciseModalProps>
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto space-y-3.5 pr-1">
           {/* Navn */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-zinc-300">Øvelsens navn *</label>
+            <label htmlFor="custom-ex-name" className="text-xs font-bold text-zinc-300">Øvelsens navn *</label>
             <input
+              id="custom-ex-name"
               type="text"
               required
               value={navn}
@@ -130,8 +131,9 @@ export const CreateCustomExerciseModal: React.FC<CreateCustomExerciseModalProps>
 
           {/* Kategori */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-zinc-300">Kategori</label>
+            <label htmlFor="custom-ex-kategori" className="text-xs font-bold text-zinc-300">Kategori</label>
             <select
+              id="custom-ex-kategori"
               value={kategori}
               onChange={(e) => setKategori(e.target.value as any)}
               className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500"
@@ -157,8 +159,9 @@ export const CreateCustomExerciseModal: React.FC<CreateCustomExerciseModalProps>
 
             <div className="grid grid-cols-2 gap-2 pt-1">
               <div>
-                <label className="text-[10px] uppercase font-bold text-zinc-400">Minutter</label>
+                <label htmlFor="custom-ex-minutes" className="text-[10px] uppercase font-bold text-zinc-400">Minutter</label>
                 <input
+                  id="custom-ex-minutes"
                   type="number"
                   min="0"
                   max="120"
@@ -168,8 +171,9 @@ export const CreateCustomExerciseModal: React.FC<CreateCustomExerciseModalProps>
                 />
               </div>
               <div>
-                <label className="text-[10px] uppercase font-bold text-zinc-400">Sekunder</label>
+                <label htmlFor="custom-ex-seconds" className="text-[10px] uppercase font-bold text-zinc-400">Sekunder</label>
                 <input
+                  id="custom-ex-seconds"
                   type="number"
                   min="0"
                   max="59"
@@ -192,8 +196,9 @@ export const CreateCustomExerciseModal: React.FC<CreateCustomExerciseModalProps>
           {/* Muskler & Utstyr */}
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <label className="text-xs font-bold text-zinc-300">Primærmuskler</label>
+              <label htmlFor="custom-ex-muskler" className="text-xs font-bold text-zinc-300">Primærmuskler</label>
               <input
+                id="custom-ex-muskler"
                 type="text"
                 value={muskler}
                 onChange={(e) => setMuskler(e.target.value)}
@@ -202,8 +207,9 @@ export const CreateCustomExerciseModal: React.FC<CreateCustomExerciseModalProps>
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-bold text-zinc-300">Utstyr</label>
+              <label htmlFor="custom-ex-utstyr" className="text-xs font-bold text-zinc-300">Utstyr</label>
               <input
+                id="custom-ex-utstyr"
                 type="text"
                 value={utstyr}
                 onChange={(e) => setUtstyr(e.target.value)}
@@ -215,8 +221,9 @@ export const CreateCustomExerciseModal: React.FC<CreateCustomExerciseModalProps>
 
           {/* Instruks / Notat */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-zinc-300">Instruksjon eller notat</label>
+            <label htmlFor="custom-ex-instruks" className="text-xs font-bold text-zinc-300">Instruksjon eller notat</label>
             <textarea
+              id="custom-ex-instruks"
               rows={2}
               value={instruks}
               onChange={(e) => setInstruks(e.target.value)}

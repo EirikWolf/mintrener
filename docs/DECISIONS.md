@@ -196,6 +196,33 @@ Dette dokumentet fører en kronologisk oversikt over tekniske og arkitektoniske 
   2. Startbilde fra Astrid-LoRA animeres til 2–4 sekunders sømløse loops (300–500 KB per øvelse i MP4/WebM) og avspilles som maskinvareakselerert `<video autoPlay loop muted playsInline>` under øktene.
   3. Dokumentert i `docs/vedlegg-a-bildepipeline.md` (kapittel A.15).
 
+---
+
+## [2026-08-27] Beslutning 24: Atomisk Programoppstart, Lydløs Nullstilling & Tone-tilpasset Tale
+* **Kontekst:** Ved oppstart av et nytt program fra katalogen (f.eks. *Dyre-safari i stua* med Barn-profil) oppstod det en tilstandskollisjon der den forrige økten (Tabata med Knebøy) ble annonsert under klargjøringen før det nye programmet (Froskehopp) startet.
+* **Valg:**
+  1. `src/hooks/useIntervalTimer.ts`:
+     - `resetWorkout()` er nå 100 % lydløs (`silent = true`), slik at nullstilling aldri trigger tale.
+     - `startWorkout(explicitWorkout)` tar inn det nye øktobjektet direkte og setter tilstanden atomisk, uten forsinkelse fra React-re-renderinger.
+     - Synkronisering av `activeWorkout` i `useEffect` beskyttet mot feilaktig overskriving under aktive faser.
+  2. `src/services/speechService.ts`:
+     - `announcePrepare`, `announceWork`, `announceRest` og `announceComplete` støtter nå stemmetoner (`rolig`, `lek`, `gira`, `tørr`).
+     - Barn-profilen og programmer med `voiceTone: 'lek'` bruker barnevennlige, lekne tilrop (*«Gjør deg klar til Froskehopp! Nå starter moroa!»* og *«Og kjør på med Froskehopp!»*).
+  3. `src/types/workout.ts`:
+     - Utvidet `WorkoutTemplate` med valgfri `voiceTone`.
+
+---
+
+## [2026-08-27] Beslutning 25: Fonetisk Uttale-Ordbok & Kitor Chatterbox-TTS Pipeline
+* **Kontekst:** Nettleserens innebygde talesyntese (Web Speech API) slet med uttalen av engelske øvelsesnavn (f.eks. «Mountain climbers», «Jumping jacks») og sammensatte norske ord («Bjørnegang», «Kenguru-sprett»).
+* **Valg:**
+  1. `src/services/speechService.ts`:
+     - Implementert `PRONUNCIATION_MAP` og `normalizeTextForSpeech()` som automatisk oversetter engelske låneord til naturlige norske begreper (*«Mountain climbers»* $\rightarrow$ *«Fjellklatrer»*, *«Jumping jacks»* $\rightarrow$ *«Sprellmenn»*, *«Push-ups»* $\rightarrow$ *«Armhevinger»*) og justerer fonetisk trykk for sammensatte ord (*«Bjørne gang»*).
+  2. `scripts/generateVoiceAudioBatch.ts`:
+     - Opprettet produksjonsskript for å generere ekte forhåndsinnspilte MP3-lydklipp via Chatterbox-TTS på Kitor (RTX 3090) over Tailscale API (`https://kitor.tail49f298.ts.net/chatterbox/tts`), med støtte for voice-cloning og batch-prosessering.
+  3. `src/services/audioClipService.ts`:
+     - Ny tjeneste som sømløst spiller av ekte MP3-filer fra `src/data/audioManifest.json` når tilgjengelig, og automatisk faller tilbake til forbedret Web Speech API hvis et klipp ikke finnes.
+
 
 
 

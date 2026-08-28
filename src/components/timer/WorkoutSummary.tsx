@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { updateWorkoutRating } from '../../services/firestoreService';
 import { savePersonalRecord } from '../../services/personalRecordService';
 import { recordWorkoutTelemetry } from '../../services/telemetryService';
-import { Trophy, RotateCcw, Flame, CheckCircle2, ThumbsUp, Smile, Flame as FireIcon, Medal } from 'lucide-react';
+import { Trophy, RotateCcw, Flame, CheckCircle2, ThumbsUp, Smile, Medal, Sparkles } from 'lucide-react';
 
 interface WorkoutSummaryProps {
   workout: WorkoutTemplate;
@@ -103,8 +103,10 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div role="radiogroup" aria-label="Hvordan føltes økten?" className="grid grid-cols-3 gap-2">
           <button
+            role="radio"
+            aria-checked={selectedRating === 'for_lett'}
             onClick={() => handleRate('for_lett')}
             className={`py-2 px-1 rounded-xl text-xs font-bold transition-all flex flex-col items-center gap-1 border ${
               selectedRating === 'for_lett'
@@ -117,6 +119,8 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
           </button>
 
           <button
+            role="radio"
+            aria-checked={selectedRating === 'passe'}
             onClick={() => handleRate('passe')}
             className={`py-2 px-1 rounded-xl text-xs font-bold transition-all flex flex-col items-center gap-1 border ${
               selectedRating === 'passe'
@@ -129,6 +133,8 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
           </button>
 
           <button
+            role="radio"
+            aria-checked={selectedRating === 'for_tungt'}
             onClick={() => handleRate('for_tungt')}
             className={`py-2 px-1 rounded-xl text-xs font-bold transition-all flex flex-col items-center gap-1 border ${
               selectedRating === 'for_tungt'
@@ -136,7 +142,7 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
                 : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800'
             }`}
           >
-            <FireIcon className="w-4 h-4 text-amber-400" />
+            <Flame className="w-4 h-4 text-amber-400" />
             <span>For tungt</span>
           </button>
         </div>
@@ -160,15 +166,8 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
 
       {/* Astrid AI Trener Feedback */}
       <div className="w-full bg-gradient-to-r from-emerald-950/40 via-zinc-900 to-teal-950/40 border border-emerald-500/30 rounded-2xl p-3 text-left flex items-start gap-2.5">
-        <div className="w-8 h-8 rounded-full bg-emerald-500/20 p-0.5 shrink-0 border border-emerald-500/40">
-          <img
-            src="/images/exercises/kneboy-0.png"
-            alt="Astrid AI"
-            className="w-full h-full object-cover rounded-full"
-            onError={(e) => {
-              (e.currentTarget as HTMLElement).style.display = 'none';
-            }}
-          />
+        <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0 border border-emerald-500/40 text-emerald-400">
+          <Sparkles className="w-4 h-4" />
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">

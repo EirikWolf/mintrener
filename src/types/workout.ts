@@ -24,6 +24,7 @@ export interface WorkoutTemplate {
   rounds: number;
   roundRestDurationSeconds: number;
   items: IntervalItem[];
+  voiceTone?: 'rolig' | 'lek' | 'gira' | 'tørr';
 }
 
 export interface TimerState {

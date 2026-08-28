@@ -57,14 +57,33 @@ export const ShareCardModal: React.FC<ShareCardModalProps> = ({
     }
   };
 
+  // WCAG: Lukk ved trykk på Escape-tast
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 text-white">
-      <div className="w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl space-y-4 text-center">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 text-white"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="share-card-title"
+        className="w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl space-y-4 text-center"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-850 pb-3">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-emerald-400" />
-            <h3 className="font-black text-sm text-white">Del din bragd</h3>
+            <h3 id="share-card-title" className="font-black text-sm text-white">Del din bragd</h3>
           </div>
           <button
             onClick={onClose}
@@ -84,7 +103,7 @@ export const ShareCardModal: React.FC<ShareCardModalProps> = ({
               className="w-full h-full object-contain"
             />
           ) : (
-            <div className="flex flex-col items-center gap-2 text-zinc-500 text-xs">
+            <div className="flex flex-col items-center gap-2 text-zinc-400 text-xs">
               <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
               <span>Genererer delingskort...</span>
             </div>
@@ -113,7 +132,7 @@ export const ShareCardModal: React.FC<ShareCardModalProps> = ({
             )}
           </button>
 
-          <p className="text-[10px] text-zinc-500">
+          <p className="text-[10px] text-zinc-400">
             Kortet kan deles direkte til Teams, Slack, Instagram eller melding.
           </p>
         </div>

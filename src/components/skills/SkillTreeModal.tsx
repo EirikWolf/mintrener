@@ -9,7 +9,7 @@ import { audioService } from '../../services/audioService';
 import { WorkoutTemplate } from '../../types/workout';
 import {
   X,
-  Trophy,
+  TrendingUp,
   Lock,
   Unlock,
   Check,
@@ -39,13 +39,12 @@ export const SkillTreeModal: React.FC<SkillTreeModalProps> = ({
     nextUnlocked: boolean;
   } | null>(null);
 
-  const activeTree = SKILL_TREES.find((t) => t.id === selectedTreeId) || SKILL_TREES[0];
-
   useEffect(() => {
-    const prog = getUserSkillProgress(selectedTreeId);
-    setProgress(prog);
-    const activeLvl = activeTree.levels.find((l) => l.level === prog.currentLevel) || activeTree.levels[0];
-    setSelectedLevel(activeLvl);
+    const updated = getUserSkillProgress(selectedTreeId);
+    setProgress(updated);
+    const tree = SKILL_TREES.find((t) => t.id === selectedTreeId) || SKILL_TREES[0];
+    const curLevel = tree.levels.find((l) => l.level === updated.currentLevel) || tree.levels[0];
+    setSelectedLevel(curLevel);
     setTestResultFeedback(null);
   }, [selectedTreeId]);
 
@@ -88,8 +87,8 @@ export const SkillTreeModal: React.FC<SkillTreeModalProps> = ({
             name: selectedLevel.title,
             category: 'bodyweight',
           },
-          workDurationSeconds: isReps ? Math.max(30, target * 3) : target,
-          restDurationSeconds: 0,
+          workDurationSeconds: isReps ? 30 : target,
+          restDurationSeconds: 45,
         },
       ],
     };
@@ -98,18 +97,39 @@ export const SkillTreeModal: React.FC<SkillTreeModalProps> = ({
     onClose();
   };
 
+  const activeTree = SKILL_TREES.find((t) => t.id === selectedTreeId) || SKILL_TREES[0];
+
+  // WCAG: Lukk ved trykk på Escape-tast
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 text-white">
-      <div className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 text-white"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="skills-modal-title"
+        className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-850 pb-3 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/40">
-              <Trophy className="w-5 h-5" />
+            <div className="p-2 rounded-2xl bg-purple-500/20 text-purple-400 border border-purple-500/40">
+              <TrendingUp className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-white">Ferdighetstrær</h2>
-              <p className="text-xs text-zinc-400">Kroppsvektmestringsstige i 7 nivåer (C.7)</p>
+              <h2 id="skills-modal-title" className="text-xl font-black text-white">Ferdighetstrær</h2>
+              <p className="text-xs text-zinc-400">Kroppsvektmestringsstige i 7 nivåer</p>
             </div>
           </div>
           <button
@@ -221,10 +241,10 @@ export const SkillTreeModal: React.FC<SkillTreeModalProps> = ({
           {/* Test / Evalueringsboks */}
           <div className="p-3.5 bg-zinc-900 border border-zinc-800 rounded-2xl space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-white flex items-center gap-1">
+              <label htmlFor="skill-test-score-input" className="text-xs font-bold text-white flex items-center gap-1">
                 <Award className="w-4 h-4 text-amber-400" />
                 Registrer Nivåtest
-              </span>
+              </label>
               <span className="text-[10px] text-zinc-400">
                 Klarer du {selectedLevel.masteryRequirement.target}{' '}
                 {selectedLevel.masteryRequirement.type === 'reps' ? 'reps' : 'sekunder'}?
@@ -233,6 +253,7 @@ export const SkillTreeModal: React.FC<SkillTreeModalProps> = ({
 
             <div className="flex items-center gap-2">
               <input
+                id="skill-test-score-input"
                 type="number"
                 value={testScoreInput}
                 onChange={(e) => setTestScoreInput(e.target.value)}

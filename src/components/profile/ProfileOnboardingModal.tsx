@@ -67,16 +67,30 @@ export const ProfileOnboardingModal: React.FC<ProfileOnboardingModalProps> = ({
   const activeProfiles = Object.values(CONTEXT_PROFILES).filter((p) => p.status === 'active');
   const plannedProfiles = Object.values(CONTEXT_PROFILES).filter((p) => p.status === 'planned');
 
+  // WCAG: Lukk ved trykk på Escape-tast
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleSkip();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-6 text-zinc-100 max-h-[90vh] overflow-y-auto">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="profile-onboarding-title"
+        className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-6 text-zinc-100 max-h-[90vh] overflow-y-auto"
+      >
         {/* Header */}
         <div className="text-center space-y-2">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-800 text-emerald-400 text-xs font-bold uppercase tracking-wider">
             <Sparkles className="w-3.5 h-3.5" />
             Tilpass din opplevelse
           </div>
-          <h2 className="text-2xl font-black text-white tracking-tight">
+          <h2 id="profile-onboarding-title" className="text-2xl font-black text-white tracking-tight">
             Hvor skal du bruke Min Trener?
           </h2>
           <p className="text-xs text-zinc-400 max-w-xs mx-auto">
@@ -89,13 +103,16 @@ export const ProfileOnboardingModal: React.FC<ProfileOnboardingModalProps> = ({
           <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
             Aktive profiler (Velg de som passer)
           </span>
-          <div className="grid grid-cols-1 gap-2.5">
+          <div role="group" aria-label="Velg profiler" className="grid grid-cols-1 gap-2.5">
             {activeProfiles.map((p) => {
               const isSelected = selectedProfiles.includes(p.id);
               return (
                 <button
                   key={p.id}
                   type="button"
+                  role="checkbox"
+                  aria-checked={isSelected}
+                  aria-label={p.name.nb}
                   onClick={() => toggleProfile(p.id)}
                   className={`flex items-start gap-3.5 p-4 rounded-2xl border text-left transition-all ${
                     isSelected
@@ -132,16 +149,16 @@ export const ProfileOnboardingModal: React.FC<ProfileOnboardingModalProps> = ({
         {/* Planlagte profiler (hvis noen) */}
         {plannedProfiles.length > 0 && (
           <div className="space-y-2 pt-1">
-            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
               Kommende kontekster
             </span>
             <div className="grid grid-cols-2 gap-2">
               {plannedProfiles.map((p) => (
                 <div
                   key={p.id}
-                  className="flex items-center gap-2 p-2.5 rounded-xl bg-zinc-900/30 border border-zinc-850/60 text-zinc-500 opacity-70 cursor-not-allowed"
+                  className="flex items-center gap-2 p-2.5 rounded-xl bg-zinc-900/30 border border-zinc-850/60 text-zinc-400 opacity-70 cursor-not-allowed"
                 >
-                  <div className="p-1.5 rounded-lg bg-zinc-800/60 text-zinc-500">
+                  <div className="p-1.5 rounded-lg bg-zinc-800/60 text-zinc-400">
                     {PROFILE_ICONS[p.id]}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -166,7 +183,7 @@ export const ProfileOnboardingModal: React.FC<ProfileOnboardingModalProps> = ({
           <button
             type="button"
             onClick={handleSkip}
-            className="w-full py-2.5 text-xs text-zinc-500 hover:text-zinc-300 font-semibold transition-colors"
+            className="w-full py-2.5 text-xs text-zinc-400 hover:text-zinc-300 font-semibold transition-colors"
           >
             Hopp over (bruk standard kontor-profil)
           </button>

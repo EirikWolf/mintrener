@@ -144,8 +144,8 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
       </div>
 
       {/* Filterknapper */}
-      <div className="flex gap-1.5 py-2.5 overflow-x-auto scrollbar-none shrink-0">
-        <Filter className="w-4 h-4 text-zinc-500 my-auto ml-1 mr-0.5" />
+      <div className="flex gap-1.5 py-2.5 overflow-x-auto no-scrollbar shrink-0">
+        <Filter className="w-4 h-4 text-zinc-400 my-auto ml-1 mr-0.5" />
         {categories.map((cat) => (
           <button
             key={cat}
@@ -185,7 +185,7 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
                   <span className="text-xs text-zinc-400 ml-1.5">({exercise.navn.en})</span>
                 )}
               </div>
-              <span className="text-[10px] text-zinc-500 font-mono">ID: {exercise.id}</span>
+              <span className="text-[10px] text-zinc-400 font-mono">ID: {exercise.id}</span>
             </div>
 
             {/* De to fasene side ved side */}
@@ -234,7 +234,7 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
                     {/* Tilbakemeldingsfelt */}
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-zinc-400 flex items-center gap-1">
-                        <MessageSquare className="w-3 h-3 text-zinc-500" />
+                        <MessageSquare className="w-3 h-3 text-zinc-400" />
                         Hva må forbedres på dette bildet?
                       </label>
                       <textarea

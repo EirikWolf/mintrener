@@ -8,23 +8,14 @@ import path from 'path';
  * Modell: Flux.1 Dev fp8 + Astrid LoRA (synthiq/astrid_k.safetensors)
  */
 
+import { getKitorToken } from './kitorEnv';
+
 const KITOR_HOST = process.env.KITOR_HOST || 'https://kitor.tail49f298.ts.net';
 const COMFY_PATH = '/comfy-mintrener';
 const ARBITER_PATH = '/arbiter';
 
 function getToken(): string {
-  if (process.env.KITOR_TOKEN) {
-    return process.env.KITOR_TOKEN.trim();
-  }
-  const envPath = path.resolve(process.cwd(), '.env');
-  if (fs.existsSync(envPath)) {
-    const content = fs.readFileSync(envPath, 'utf-8');
-    const match = content.match(/^KITOR_TOKEN=(.+)$/m);
-    if (match && match[1]) {
-      return match[1].trim();
-    }
-  }
-  throw new Error('KITOR_TOKEN mangler. Legg KITOR_TOKEN=<token_fra_vaultwarden> i .env filen.');
+  return getKitorToken();
 }
 
 async function acquireGpuLease(token: string, durationH: number = 1): Promise<string> {

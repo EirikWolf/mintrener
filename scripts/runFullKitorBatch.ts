@@ -8,22 +8,14 @@ import { EXERCISE_LIBRARY } from '../src/data/exercises/index.js';
  * Anatomisk presisjon, dynamisk bevegelse, svetteglans og motiverende smil
  */
 
+import { getKitorToken } from './kitorEnv';
+
 const KITOR_HOST = process.env.KITOR_HOST || 'https://kitor.tail49f298.ts.net';
 const COMFY_PATH = '/comfy-mintrener';
 const ARBITER_PATH = '/arbiter';
 
 function getToken(): string {
-  if (process.env.KITOR_TOKEN) {
-    return process.env.KITOR_TOKEN.trim();
-  }
-  const envPath = path.resolve(process.cwd(), '.env');
-  if (fs.existsSync(envPath)) {
-    const match = fs.readFileSync(envPath, 'utf-8').match(/^KITOR_TOKEN=(.+)$/m);
-    if (match && match[1]) {
-      return match[1].trim();
-    }
-  }
-  throw new Error('KITOR_TOKEN mangler i .env');
+  return getKitorToken();
 }
 
 async function acquireGpuLeaseWithRetry(token: string, durationH: number = 2, maxRetries: number = 5): Promise<string> {

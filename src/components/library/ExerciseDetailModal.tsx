@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ExerciseItem } from '../../schemas/exerciseSchema';
 import { ExerciseIllustration } from '../exercises/ExerciseIllustration';
-import { X, CheckCircle2, AlertTriangle, Dumbbell, Target } from 'lucide-react';
+import { MuscleIcon } from '../icons/MuscleIcon';
+import { EquipmentIcon } from '../icons/EquipmentIcon';
+import { X, CheckCircle2, AlertTriangle, Target } from 'lucide-react';
 
 interface ExerciseDetailModalProps {
   exercise: ExerciseItem;
@@ -97,26 +99,50 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
             </div>
           </div>
 
-          {/* Muskelgrupper & Utstyr */}
+          {/* Muskelgrupper & Utstyr med nye SVG-ikoner */}
           <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-2.5 space-y-1">
+            <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-2.5 space-y-1.5">
               <div className="flex items-center gap-1.5 text-zinc-400 font-semibold uppercase text-[10px]">
                 <Target className="w-3.5 h-3.5 text-emerald-400" />
                 Muskler
               </div>
-              <p className="text-zinc-200 font-bold">{exercise.muskler.primær.join(', ')}</p>
+              <div className="flex flex-wrap gap-1">
+                {exercise.muskler.primær.map((m, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-200 font-bold"
+                  >
+                    <MuscleIcon name={m} className="w-3 h-3 text-emerald-400 shrink-0" />
+                    <span>{m}</span>
+                  </span>
+                ))}
+              </div>
               {exercise.muskler.sekundær.length > 0 && (
-                <p className="text-[10px] text-zinc-400">Sekundær: {exercise.muskler.sekundær.join(', ')}</p>
+                <p className="text-[10px] text-zinc-400">
+                  Sekundær: {exercise.muskler.sekundær.join(', ')}
+                </p>
               )}
             </div>
 
-            <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-2.5 space-y-1">
+            <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-2.5 space-y-1.5">
               <div className="flex items-center gap-1.5 text-zinc-400 font-semibold uppercase text-[10px]">
-                <Dumbbell className="w-3.5 h-3.5 text-amber-400" />
+                <EquipmentIcon name={exercise.utstyr[0] || 'egenvekt'} className="w-3.5 h-3.5 text-amber-400" />
                 Utstyr
               </div>
-              <p className="text-zinc-200 font-bold capitalize">{exercise.utstyr.join(', ')}</p>
-              <p className="text-[10px] text-zinc-400">Type: {exercise.type === 'reps' ? 'Repetisjoner' : 'Tid'}</p>
+              <div className="flex flex-wrap gap-1">
+                {exercise.utstyr.map((u, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-200 font-bold capitalize"
+                  >
+                    <EquipmentIcon name={u} className="w-3 h-3 text-amber-400 shrink-0" />
+                    <span>{u}</span>
+                  </span>
+                ))}
+              </div>
+              <p className="text-[10px] text-zinc-400">
+                Type: {exercise.type === 'reps' ? 'Repetisjoner' : 'Tid'}
+              </p>
             </div>
           </div>
 

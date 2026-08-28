@@ -109,10 +109,10 @@ export const WorkoutCalendarHeatmap: React.FC<WorkoutCalendarHeatmapProps> = ({
       <div className="space-y-1.5 pt-1 border-t border-zinc-800/60">
         <div className="flex items-center justify-between text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
           <span className="flex items-center gap-1">
-            <CalendarIcon className="w-3 h-3 text-zinc-500" />
+            <CalendarIcon className="w-3 h-3 text-zinc-400" />
             Aktivitets-heatmap (siste 4 uker)
           </span>
-          <span className="text-[9px] text-zinc-500">Mørkere = Flere økter</span>
+          <span className="text-[9px] text-zinc-400">Mørkere = Flere økter</span>
         </div>
 
         <div className="grid grid-cols-7 gap-1.5">

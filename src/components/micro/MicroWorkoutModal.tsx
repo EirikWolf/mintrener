@@ -123,10 +123,10 @@ export const MicroWorkoutModal: React.FC<MicroWorkoutModalProps> = ({
         <div className="flex-1 overflow-y-auto space-y-4 pr-1">
           {/* 1. Velg øvelse */}
           <div className="space-y-2">
-            <label className="text-xs uppercase font-bold text-zinc-300 tracking-wider">
+            <span className="text-xs uppercase font-bold text-zinc-300 tracking-wider">
               1. Velg øvelse
-            </label>
-            <div className="grid grid-cols-2 gap-1.5">
+            </span>
+            <div role="radiogroup" aria-label="Velg øvelse" className="grid grid-cols-2 gap-1.5">
               {EXERCISE_LIBRARY.filter((e) =>
                 POPULAR_MICRO_EXERCISES.includes(e.id)
               ).map((ex) => {
@@ -134,6 +134,8 @@ export const MicroWorkoutModal: React.FC<MicroWorkoutModalProps> = ({
                 return (
                   <button
                     key={ex.id}
+                    role="radio"
+                    aria-checked={isSelected}
                     onClick={() => setSelectedExerciseId(ex.id)}
                     className={`p-2.5 rounded-2xl border text-left transition-all ${
                       isSelected
@@ -152,15 +154,15 @@ export const MicroWorkoutModal: React.FC<MicroWorkoutModalProps> = ({
           {/* 2. Velg varighet */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs uppercase font-bold text-zinc-300 tracking-wider">
+              <span className="text-xs uppercase font-bold text-zinc-300 tracking-wider">
                 2. Velg varighet
-              </label>
+              </span>
               <span className="text-xs font-mono font-bold text-amber-400">
                 {isOpenEnded ? 'Maks innsats' : `${selectedDuration} sek`}
               </span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div role="radiogroup" aria-label="Velg varighet" className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {PRESET_DURATIONS.map((preset) => {
                 const isSelected =
                   preset.isOpenEnded === isOpenEnded &&
@@ -168,6 +170,8 @@ export const MicroWorkoutModal: React.FC<MicroWorkoutModalProps> = ({
                 return (
                   <button
                     key={preset.label}
+                    role="radio"
+                    aria-checked={isSelected}
                     onClick={() => {
                       setSelectedDuration(preset.seconds);
                       setIsOpenEnded(Boolean(preset.isOpenEnded));

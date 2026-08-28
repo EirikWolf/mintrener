@@ -109,27 +109,24 @@ export const AiCoachModal: React.FC<AiCoachModalProps> = ({
       }}
       className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200"
     >
-      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-lg h-[90vh] sm:h-[650px] flex flex-col overflow-hidden shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ai-coach-title"
+        className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-lg h-[90vh] sm:h-[650px] flex flex-col overflow-hidden shadow-2xl"
+      >
         {/* Topplinje */}
         <div className="p-4 bg-zinc-950/80 border-b border-zinc-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="relative">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 p-0.5 shadow-md shadow-emerald-500/20">
-                <img
-                  src="/images/exercises/kneboy-0.png"
-                  alt="Astrid AI"
-                  className="w-full h-full object-cover rounded-full"
-                  onError={(e) => {
-                    // Fallback om bilde feiler
-                    (e.currentTarget as HTMLElement).style.display = 'none';
-                  }}
-                />
+              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 p-0.5 shadow-md shadow-emerald-500/20 flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-white" />
               </div>
               <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-zinc-900 rounded-full" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <h3 className="font-black text-sm text-white">Astrid • AI-Trener</h3>
+                <h3 id="ai-coach-title" className="font-black text-sm text-white">Astrid • AI-Trener</h3>
                 <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold rounded-full border border-emerald-500/30 flex items-center gap-1">
                   <Sparkles className="w-2.5 h-2.5" /> Lokal AI
                 </span>
@@ -149,6 +146,9 @@ export const AiCoachModal: React.FC<AiCoachModalProps> = ({
                   speechService.speak('Stemmeveiledning aktivert.');
                 }
               }}
+              role="switch"
+              aria-checked={voiceSpeechEnabled}
+              aria-label="Stemmeveiledning"
               title={voiceSpeechEnabled ? 'Slå av stemme' : 'Slå på stemme'}
               className={`p-2 rounded-xl border transition-all ${
                 voiceSpeechEnabled
@@ -160,6 +160,7 @@ export const AiCoachModal: React.FC<AiCoachModalProps> = ({
             </button>
             <button
               onClick={onClose}
+              aria-label="Lukk"
               className="p-2 text-zinc-400 hover:text-white bg-zinc-800/80 hover:bg-zinc-800 rounded-xl border border-zinc-700/50 transition-all"
             >
               <X className="w-4 h-4" />
@@ -183,7 +184,7 @@ export const AiCoachModal: React.FC<AiCoachModalProps> = ({
               >
                 {msg.text}
               </div>
-              <span className="text-[9px] text-zinc-500 mt-1 px-1">
+              <span className="text-[9px] text-zinc-400 mt-1 px-1">
                 {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
@@ -200,7 +201,7 @@ export const AiCoachModal: React.FC<AiCoachModalProps> = ({
         </div>
 
         {/* Hurtigvalg-chips */}
-        <div className="px-3 pt-2 pb-1 bg-zinc-950/40 border-t border-zinc-800/60 overflow-x-auto whitespace-nowrap scrollbar-none flex gap-1.5">
+        <div className="px-3 pt-2 pb-1 bg-zinc-950/40 border-t border-zinc-800/60 overflow-x-auto whitespace-nowrap no-scrollbar flex gap-1.5">
           {QUICK_PROMPTS.map((prompt, idx) => (
             <button
               key={idx}

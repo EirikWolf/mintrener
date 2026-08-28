@@ -74,9 +74,28 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
   const completedCount = progress.completedDays.length;
   const progressPercent = Math.round((completedCount / challenge.durationDays) * 100);
 
+  // WCAG: Lukk ved trykk på Escape-tast
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden text-white space-y-4">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="challenge-detail-title"
+        className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden text-white space-y-4"
+      >
         {/* Header */}
         <div className="flex items-start justify-between border-b border-zinc-850 pb-3 shrink-0">
           <div className="space-y-1">
@@ -88,7 +107,7 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
                 {challenge.category}
               </span>
             </div>
-            <h2 className="text-xl font-black text-white">{challenge.title}</h2>
+            <h2 id="challenge-detail-title" className="text-xl font-black text-white">{challenge.title}</h2>
             <p className="text-xs text-zinc-400 leading-relaxed">{challenge.description}</p>
           </div>
           <button
@@ -161,7 +180,7 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
                 }`}
               >
                 <p className="font-bold truncate">{phase.name}</p>
-                <p className="text-[9px] text-zinc-500">
+                <p className="text-[9px] text-zinc-400">
                   Dag {phase.dayRange[0]}–{phase.dayRange[1]}
                 </p>
               </div>

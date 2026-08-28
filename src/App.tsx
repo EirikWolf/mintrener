@@ -86,8 +86,6 @@ export function App() {
     }
   }, [state.status, state.totalElapsedSeconds, user, selectedWorkout]);
 
-  const [autoStartPending, setAutoStartPending] = useState(false);
-
   const handleSelectWorkout = (tpl: WorkoutTemplate) => {
     setSelectedWorkout(tpl);
     resetWorkout();
@@ -95,17 +93,9 @@ export function App() {
 
   const handleStartWorkoutDirectly = (tpl: WorkoutTemplate) => {
     setSelectedWorkout(tpl);
-    resetWorkout();
-    setAutoStartPending(true);
     setActiveTab('timer');
+    startWorkout(tpl);
   };
-
-  useEffect(() => {
-    if (autoStartPending) {
-      setAutoStartPending(false);
-      startWorkout();
-    }
-  }, [autoStartPending, selectedWorkout, startWorkout]);
 
   const handleStartCustomWorkout = (customW: WorkoutTemplate) => {
     handleStartWorkoutDirectly(customW);
@@ -138,7 +128,7 @@ export function App() {
             presets={allPresets}
             onSelectWorkout={handleSelectWorkout}
             onStartWorkoutDirectly={handleStartWorkoutDirectly}
-            onStart={startWorkout}
+            onStart={() => startWorkout()}
             onPause={pauseWorkout}
             onResume={resumeWorkout}
             onReset={resetWorkout}

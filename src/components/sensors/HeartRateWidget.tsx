@@ -153,7 +153,7 @@ export const HeartRateWidget: React.FC<HeartRateWidgetProps> = ({ onHeartRateUpd
           onClick={() => setIsModalOpen(true)}
           title="Koble til pulsbelte / Garmin / Amazfit"
           aria-label="Åpne pulsmåler"
-          className="p-1.5 rounded-full text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 transition-all"
+          className="p-1.5 rounded-full text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 transition-all"
         >
           <Heart className="w-3.5 h-3.5" />
         </button>

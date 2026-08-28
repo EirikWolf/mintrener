@@ -1,12 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
+import { getKitorToken } from './kitorEnv';
 
 const KITOR_HOST = 'https://kitor.tail49f298.ts.net';
 const COMFY_URL = `${KITOR_HOST}/comfy-mintrener`;
 
-const envPath = path.resolve(process.cwd(), '.env');
-const token = fs.readFileSync(envPath, 'utf-8').match(/^KITOR_TOKEN=(.+)$/m)![1].trim();
+const token = getKitorToken();
 
 function curlPostJson(url: string, payload: any): any {
   const tmpFile = path.resolve(process.cwd(), 'temp_test_prompt.json');

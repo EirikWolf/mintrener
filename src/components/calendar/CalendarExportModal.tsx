@@ -44,9 +44,28 @@ export const CalendarExportModal: React.FC<CalendarExportModalProps> = ({
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
+  // WCAG: Lukk ved trykk på Escape-tast
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 text-white">
-      <div className="w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl space-y-4">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 text-white"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="calendar-export-title"
+        className="w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl space-y-4"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-850 pb-3">
           <div className="flex items-center gap-2">
@@ -54,7 +73,7 @@ export const CalendarExportModal: React.FC<CalendarExportModalProps> = ({
               <Calendar className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-black text-sm text-white">Legg i kalender</h3>
+              <h3 id="calendar-export-title" className="font-black text-sm text-white">Legg i kalender</h3>
               <p className="text-[10px] text-zinc-400">{challenge.title}</p>
             </div>
           </div>
@@ -69,12 +88,13 @@ export const CalendarExportModal: React.FC<CalendarExportModalProps> = ({
 
         {/* Klokkeslett-innstilling */}
         <div className="p-3.5 bg-zinc-900 border border-zinc-800 rounded-2xl space-y-2">
-          <label className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
+          <label htmlFor="calendar-time-input" className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5 text-amber-400" />
             Når på dagen vil du trene?
           </label>
           <div className="flex items-center gap-2">
             <input
+              id="calendar-time-input"
               type="time"
               value={selectedTime}
               onChange={(e) => setSelectedTime(e.target.value)}

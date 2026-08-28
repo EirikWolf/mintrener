@@ -182,7 +182,7 @@ export const GroupRoomModal: React.FC<GroupRoomModalProps> = ({
         {tab === 'create' && !roomCode && (
           <div className="space-y-4">
             <div className="p-3 bg-zinc-950 border border-zinc-800/80 rounded-2xl space-y-1">
-              <span className="text-[10px] uppercase font-bold text-zinc-500">Valgt økt:</span>
+              <span className="text-[10px] uppercase font-bold text-zinc-400">Valgt økt:</span>
               <p className="text-xs font-bold text-white truncate">{workout.name}</p>
               <p className="text-[10px] text-zinc-400">
                 {workout.items.length} øvelser • {workout.rounds} {workout.rounds === 1 ? 'runde' : 'runder'}
@@ -242,8 +242,9 @@ export const GroupRoomModal: React.FC<GroupRoomModalProps> = ({
         {tab === 'join' && !roomState && (
           <div className="space-y-4">
             <div className="space-y-1.5 text-center">
-              <label className="text-xs font-bold text-zinc-300">Tast inn 6-tegns romkode</label>
+              <label htmlFor="group-room-code-input" className="text-xs font-bold text-zinc-300">Tast inn 6-tegns romkode</label>
               <input
+                id="group-room-code-input"
                 type="text"
                 maxLength={6}
                 value={inputCode}

@@ -267,7 +267,7 @@ export const MicroTimerDisplay: React.FC<MicroTimerDisplayProps> = ({
           <button
             onClick={() => setSpeechEnabled(!speechEnabled)}
             className={`p-2 rounded-xl border transition-all ${
-              speechEnabled ? 'bg-emerald-950 border-emerald-800 text-emerald-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500'
+              speechEnabled ? 'bg-emerald-950 border-emerald-800 text-emerald-400' : 'bg-zinc-900 border-zinc-800 text-zinc-400'
             }`}
           >
             {speechEnabled ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
@@ -275,7 +275,7 @@ export const MicroTimerDisplay: React.FC<MicroTimerDisplayProps> = ({
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
             className={`p-2 rounded-xl border transition-all ${
-              soundEnabled ? 'bg-emerald-950 border-emerald-800 text-emerald-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500'
+              soundEnabled ? 'bg-emerald-950 border-emerald-800 text-emerald-400' : 'bg-zinc-900 border-zinc-800 text-zinc-400'
             }`}
           >
             {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}

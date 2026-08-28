@@ -97,7 +97,7 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
 
         {/* Søkefelt */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
           <input
             type="text"
             value={searchQuery}
@@ -108,7 +108,7 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
         </div>
 
         {/* Kategori chips */}
-        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
           {CATEGORIES.map((cat) => (
             <button
               key={cat.id}
@@ -131,13 +131,14 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
             const isCustom = Boolean(customItem.isCustom || customItem.id.startsWith('custom-'));
 
             return (
-              <div
+              <button
                 key={ex.id}
+                type="button"
                 onClick={() => {
                   onSelect(ex);
                   onClose();
                 }}
-                className={`p-2.5 bg-zinc-950/60 hover:bg-zinc-800 active:scale-[0.99] border rounded-xl flex items-center justify-between cursor-pointer transition-all ${
+                className={`w-full text-left p-2.5 bg-zinc-950/60 hover:bg-zinc-800 active:scale-[0.99] border rounded-xl flex items-center justify-between cursor-pointer transition-all ${
                   isCustom ? 'border-emerald-800/60 bg-zinc-950/90' : 'border-zinc-800/80'
                 }`}
               >
@@ -154,7 +155,7 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
                     )}
 
                     {customItem.defaultDurationSeconds && (
-                      <span className="flex items-center gap-1 text-[9px] font-mono font-bold text-amber-400 bg-amber-950/40 px-1.5 py-0.2 rounded border border-amber-900/40">
+                      <span className="flex items-center gap-1 text-[9px] font-mono font-bold text-amber-400 bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-900/40">
                         <Clock className="w-2.5 h-2.5" />
                         {Math.floor(customItem.defaultDurationSeconds / 60) > 0 ? `${Math.floor(customItem.defaultDurationSeconds / 60)}m ` : ''}
                         {customItem.defaultDurationSeconds % 60 > 0 || Math.floor(customItem.defaultDurationSeconds / 60) === 0 ? `${customItem.defaultDurationSeconds % 60}s` : ''}
@@ -164,13 +165,10 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
                   <h4 className="text-xs font-bold text-white truncate mt-0.5">{ex.navn.nb}</h4>
                 </div>
 
-                <button
-                  aria-label={`Legg til ${ex.navn.nb}`}
-                  className="p-1.5 rounded-lg bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white transition-all shrink-0"
-                >
+                <div className="p-1.5 rounded-lg bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white transition-all shrink-0">
                   <Plus className="w-4 h-4" />
-                </button>
-              </div>
+                </div>
+              </button>
             );
           })}
         </div>

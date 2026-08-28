@@ -55,6 +55,7 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [savedWorkouts, setSavedWorkouts] = useState<WorkoutTemplate[]>([]);
   const [isSavedToast, setIsSavedToast] = useState(false);
+  const [workoutToDelete, setWorkoutToDelete] = useState<WorkoutTemplate | null>(null);
 
   useEffect(() => {
     fetchCustomWorkouts(user?.uid).then(setSavedWorkouts);
@@ -177,10 +178,11 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
   };
 
   // Slett lagret mal
-  const handleDeleteSaved = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    await deleteCustomWorkout(id, user?.uid);
-    setSavedWorkouts((prev) => prev.filter((w) => w.id !== id));
+  const handleConfirmDelete = async () => {
+    if (!workoutToDelete) return;
+    await deleteCustomWorkout(workoutToDelete.id, user?.uid);
+    setSavedWorkouts((prev) => prev.filter((w) => w.id !== workoutToDelete.id));
+    setWorkoutToDelete(null);
   };
 
   return (
@@ -333,14 +335,14 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
                     <button
                       onClick={() => handleMove(idx, 'up')}
                       disabled={idx === 0}
-                      className="p-1 rounded text-zinc-500 hover:text-white disabled:opacity-20"
+                      className="p-1 rounded text-zinc-400 hover:text-white disabled:opacity-20"
                     >
                       <ChevronUp className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => handleMove(idx, 'down')}
                       disabled={idx === items.length - 1}
-                      className="p-1 rounded text-zinc-500 hover:text-white disabled:opacity-20"
+                      className="p-1 rounded text-zinc-400 hover:text-white disabled:opacity-20"
                     >
                       <ChevronDown className="w-3.5 h-3.5" />
                     </button>
@@ -455,8 +457,12 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
                       <Play className="w-3.5 h-3.5 fill-current" />
                     </button>
                     <button
-                      onClick={(e) => handleDeleteSaved(w.id, e)}
-                      className="p-1.5 text-zinc-500 hover:text-rose-400"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setWorkoutToDelete(w);
+                      }}
+                      className="p-1.5 text-zinc-400 hover:text-rose-400"
+                      aria-label={`Slett malen ${w.name}`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -467,6 +473,39 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Modal for å bekrefte sletting */}
+      {workoutToDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-dialog-title"
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        >
+          <div className="bg-zinc-900 border border-zinc-700 p-5 rounded-2xl max-w-xs w-full space-y-4 shadow-xl text-center">
+            <h3 id="delete-dialog-title" className="text-sm font-bold text-white">
+              Slette lagret mal?
+            </h3>
+            <p className="text-xs text-zinc-400">
+              Er du sikker på at du vil slette <strong className="text-zinc-200">«{workoutToDelete.name}»</strong>? Dette kan ikke angres.
+            </p>
+            <div className="flex gap-2 justify-center pt-1">
+              <button
+                onClick={() => setWorkoutToDelete(null)}
+                className="px-4 py-2 text-xs font-bold text-zinc-300 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-all"
+              >
+                Avbryt
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 rounded-xl transition-all shadow-sm"
+              >
+                Ja, slett
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal for å plukke øvelser */}
       {isPickerOpen && (

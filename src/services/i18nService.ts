@@ -112,10 +112,20 @@ export function getCurrentLanguage(): SupportedLanguage {
 export function setLanguage(lang: SupportedLanguage): void {
   try {
     localStorage.setItem(I18N_STORAGE_KEY, lang);
-    window.dispatchEvent(new CustomEvent('language-changed', { detail: { language: lang } }));
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = lang;
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('language-changed', { detail: { language: lang } }));
+    }
   } catch (e) {
     console.error('Feil ved lagring av språk:', e);
   }
+}
+
+// Synkroniser initial lang-attributt
+if (typeof document !== 'undefined') {
+  document.documentElement.lang = getCurrentLanguage();
 }
 
 export function t(key: string, fallback?: string): string {

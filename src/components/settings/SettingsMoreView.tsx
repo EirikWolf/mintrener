@@ -11,6 +11,7 @@ import { SensorStatusModal } from '../sensors/SensorStatusModal';
 import { AboutGuideModal } from '../help/AboutGuideModal';
 import { PrivacyPolicyModal } from '../legal/PrivacyPolicyModal';
 import { ProfileOnboardingModal } from '../profile/ProfileOnboardingModal';
+import { OfficeKioskScreen } from '../kiosk/OfficeKioskScreen';
 import { getActiveContextProfiles } from '../../services/profileCompositionService';
 import { ContextProfile } from '../../schemas/profileSchema';
 import {
@@ -22,11 +23,11 @@ import {
 import {
   Volume2,
   VolumeX,
-  Smartphone,
-  Sun,
-  Moon,
-  Mic,
-  MicOff,
+  Vibrate,
+  VibrateOff,
+  Eye,
+  EyeOff,
+  AudioLines,
   Activity,
   Download,
   Trash2,
@@ -38,12 +39,19 @@ import {
   Check,
   ChevronRight,
   Dumbbell,
-  BarChart3,
-  Flame,
-  Globe2,
   Target,
   Sparkles,
+  Globe2,
+  Flame,
+  Tv,
+  Mic,
 } from 'lucide-react';
+import { CoachPersonaModal } from './CoachPersonaModal';
+import {
+  COACH_PERSONAS,
+  getActiveCoachPersona,
+  CoachPersonaId,
+} from '../../services/coachPersonaService';
 import { getWeeklyGoal, setWeeklyGoal } from '../../services/weeklyGoalService';
 
 interface SettingsMoreViewProps {
@@ -74,21 +82,34 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isKioskOpen, setIsKioskOpen] = useState(false);
   const [activeProfiles, setActiveProfiles] = useState<ContextProfile[]>(() => getActiveContextProfiles());
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
   const [telemetryEnabled, setTelemetryEnabledState] = useState<boolean>(() => getTelemetryConsent());
   const [globalStats, setGlobalStats] = useState<GlobalTelemetryStats | null>(null);
   const [weeklyGoal, setWeeklyGoalState] = useState<number>(() => getWeeklyGoal());
   const [currentLang, setCurrentLang] = useState<SupportedLanguage>(() => getCurrentLanguage());
+  const [isCoachPersonaModalOpen, setIsCoachPersonaModalOpen] = useState(false);
+  const [currentPersonaId, setCurrentPersonaId] = useState<CoachPersonaId>(() => getActiveCoachPersona());
+
+  const currentPersona = COACH_PERSONAS.find(p => p.id === currentPersonaId) || COACH_PERSONAS[0];
 
   React.useEffect(() => {
     const handleProfileChange = () => {
       setActiveProfiles(getActiveContextProfiles());
     };
+    const handlePersonaChange = () => {
+      setCurrentPersonaId(getActiveCoachPersona());
+    };
     window.addEventListener('user-profiles-changed', handleProfileChange);
-    return () => window.removeEventListener('user-profiles-changed', handleProfileChange);
+    window.addEventListener('coach-persona-changed', handlePersonaChange);
+    return () => {
+      window.removeEventListener('user-profiles-changed', handleProfileChange);
+      window.removeEventListener('coach-persona-changed', handlePersonaChange);
+    };
   }, []);
 
   React.useEffect(() => {
@@ -120,16 +141,11 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
     }
   };
 
-  const handleDeleteAccount = async () => {
-    const confirm = window.confirm(
-      'Er du helt sikker på at du vil slette kontoen din og alle lagrede treningsdata permanent? Denne handlingen kan ikke angres.'
-    );
-    if (!confirm) return;
-
+  const handleConfirmDeleteAccount = async () => {
     setIsDeleting(true);
     try {
       await deleteAccount();
-      alert('Kontoen og alle dine treningsdata har blitt slettet.');
+      setIsDeleteAccountModalOpen(false);
     } catch (err: any) {
       alert('Kunne ikke slette konto: ' + (err.message || 'Ukjent feil'));
     } finally {
@@ -197,15 +213,18 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
           {/* Lyd */}
           <div className="flex items-center justify-between py-2">
             <div className="flex items-center gap-2.5">
-              {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-zinc-500" />}
+              {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-zinc-400" />}
               <div>
                 <p className="text-xs font-bold text-white">Lydsignaler (Pip)</p>
                 <p className="text-[10px] text-zinc-400">Varsler start, pause og 3-2-1 nedtelling</p>
               </div>
             </div>
             <button
+              role="switch"
+              aria-checked={soundEnabled}
+              aria-label="Lydsignaler"
               onClick={onToggleSound}
-              className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${soundEnabled ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+              className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${soundEnabled ? 'bg-emerald-500' : 'bg-zinc-600'}`}
             >
               <div className={`w-5 h-5 rounded-full bg-white transition-transform ${soundEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
@@ -214,32 +233,58 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
           {/* Stemmeveiledning */}
           <div className="flex items-center justify-between py-2">
             <div className="flex items-center gap-2.5">
-              {speechEnabled ? <Mic className="w-4 h-4 text-emerald-400" /> : <MicOff className="w-4 h-4 text-zinc-500" />}
+              <AudioLines className={`w-4 h-4 ${speechEnabled ? 'text-emerald-400' : 'text-zinc-400'}`} />
               <div>
                 <p className="text-xs font-bold text-white">Norsk stemmeveiledning</p>
                 <p className="text-[10px] text-zinc-400">Leser opp øvelsesnavn og instruksjoner</p>
               </div>
             </div>
             <button
+              role="switch"
+              aria-checked={speechEnabled}
+              aria-label="Norsk stemmeveiledning"
               onClick={onToggleSpeech}
-              className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${speechEnabled ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+              className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${speechEnabled ? 'bg-emerald-500' : 'bg-zinc-600'}`}
             >
               <div className={`w-5 h-5 rounded-full bg-white transition-transform ${speechEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
+
+          {/* Trenerstemme & Dialekt (Suno & Kitor Personaer) */}
+          <div className="flex items-center justify-between py-2 border-t border-zinc-800/60">
+            <div className="flex items-center gap-2.5">
+              <Mic className="w-4 h-4 text-amber-400" />
+              <div>
+                <p className="text-xs font-bold text-white">Trenerstemme & Dialekt</p>
+                <p className="text-[10px] text-zinc-400">
+                  {currentPersona.icon} {currentPersona.name} ({currentPersona.badge})
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsCoachPersonaModalOpen(true)}
+              className="px-2.5 py-1 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-amber-300 border border-zinc-700 transition-all active:scale-95 flex items-center gap-1 shadow-sm"
+            >
+              <span>Endre</span>
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {/* Vibrasjon */}
           <div className="flex items-center justify-between py-2">
             <div className="flex items-center gap-2.5">
-              <Smartphone className={`w-4 h-4 ${vibrateEnabled ? 'text-amber-400' : 'text-zinc-500'}`} />
+              {vibrateEnabled ? <Vibrate className="w-4 h-4 text-amber-400" /> : <VibrateOff className="w-4 h-4 text-zinc-400" />}
               <div>
                 <p className="text-xs font-bold text-white">Vibrasjon</p>
                 <p className="text-[10px] text-zinc-400">Haptisk feedback ved faseoverganger</p>
               </div>
             </div>
             <button
+              role="switch"
+              aria-checked={vibrateEnabled}
+              aria-label="Vibrasjon"
               onClick={onToggleVibrate}
-              className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${vibrateEnabled ? 'bg-amber-500' : 'bg-zinc-700'}`}
+              className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${vibrateEnabled ? 'bg-amber-500' : 'bg-zinc-600'}`}
             >
               <div className={`w-5 h-5 rounded-full bg-white transition-transform ${vibrateEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
@@ -248,15 +293,18 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
           {/* Hold skjermen våken */}
           <div className="flex items-center justify-between py-2">
             <div className="flex items-center gap-2.5">
-              {wakeLockEnabled ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-zinc-500" />}
+              {wakeLockEnabled ? <Eye className="w-4 h-4 text-amber-400" /> : <EyeOff className="w-4 h-4 text-zinc-400" />}
               <div>
-                <p className="text-xs font-bold text-white">Hold skjermen våken</p>
+                <p className="text-xs font-bold text-white">Hold skjermen på</p>
                 <p className="text-[10px] text-zinc-400">Forhindrer at mobilen slukker under økten</p>
               </div>
             </div>
             <button
+              role="switch"
+              aria-checked={wakeLockEnabled}
+              aria-label="Hold skjermen på"
               onClick={onToggleWakeLock}
-              className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${wakeLockEnabled ? 'bg-amber-500' : 'bg-zinc-700'}`}
+              className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${wakeLockEnabled ? 'bg-amber-500' : 'bg-zinc-600'}`}
             >
               <div className={`w-5 h-5 rounded-full bg-white transition-transform ${wakeLockEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
@@ -341,7 +389,7 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
               <p className="text-[10px] text-zinc-400">Tilpass øvelser, stemmetone og hurtigvalg</p>
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-zinc-500" />
+          <ChevronRight className="w-4 h-4 text-zinc-400" />
         </button>
       </section>
 
@@ -359,7 +407,22 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
               <p className="text-[10px] text-zinc-400">Bluetooth pulsmåler, bevegelse og GPS</p>
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-zinc-500" />
+          <ChevronRight className="w-4 h-4 text-zinc-400" />
+        </button>
+
+        {/* Kontor-TV Kiosk */}
+        <button
+          onClick={() => setIsKioskOpen(true)}
+          className="w-full flex items-center justify-between py-2.5 px-3 bg-zinc-950 hover:bg-zinc-800/80 rounded-xl border border-zinc-800 text-left transition-all"
+        >
+          <div className="flex items-center gap-2.5">
+            <Tv className="w-4 h-4 text-cyan-400" />
+            <div>
+              <p className="text-xs font-bold text-white">Kontor-TV & Kiosk-modus</p>
+              <p className="text-[10px] text-zinc-400">Digital signage for storskjerm med faste mikropauser</p>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-zinc-400" />
         </button>
       </section>
 
@@ -417,7 +480,7 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
             )}
           </div>
         ) : (
-          <div className="p-4 bg-zinc-950/40 rounded-xl text-center text-xs text-zinc-500">
+          <div className="p-4 bg-zinc-950/40 rounded-xl text-center text-xs text-zinc-400">
             Laster fellesskapets statistikk...
           </div>
         )}
@@ -430,15 +493,18 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
         {/* Anonym telemetri samtykke-bryter */}
         <div className="flex items-center justify-between py-2 border-b border-zinc-800/80">
           <div className="flex items-center gap-2.5 pr-2">
-            <BarChart3 className={`w-4 h-4 ${telemetryEnabled ? 'text-emerald-400' : 'text-zinc-500'}`} />
+            <Activity className={`w-4 h-4 ${telemetryEnabled ? 'text-emerald-400' : 'text-zinc-400'}`} />
             <div>
               <p className="text-xs font-bold text-white">Del anonym bruksstatistikk</p>
               <p className="text-[10px] text-zinc-400">Hjelper oss å se hvilke øvelser som er mest populære (ingen personopplysninger)</p>
             </div>
           </div>
           <button
+            role="switch"
+            aria-checked={telemetryEnabled}
+            aria-label="Del anonym bruksstatistikk"
             onClick={handleToggleTelemetry}
-            className={`w-11 h-6 rounded-full transition-colors relative p-0.5 shrink-0 ${telemetryEnabled ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+            className={`w-11 h-6 rounded-full transition-colors relative p-0.5 shrink-0 ${telemetryEnabled ? 'bg-emerald-500' : 'bg-zinc-600'}`}
           >
             <div className={`w-5 h-5 rounded-full bg-white transition-transform ${telemetryEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
           </button>
@@ -470,12 +536,12 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
               <p className="text-[10px] text-zinc-400">Offline-first, dine data tilhører deg</p>
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-zinc-500" />
+          <ChevronRight className="w-4 h-4 text-zinc-400" />
         </button>
 
         {user && (
           <button
-            onClick={handleDeleteAccount}
+            onClick={() => setIsDeleteAccountModalOpen(true)}
             disabled={isDeleting}
             className="w-full flex items-center justify-between py-2.5 px-3 bg-rose-950/30 hover:bg-rose-950/60 rounded-xl border border-rose-900/50 text-left transition-all text-rose-300"
           >
@@ -486,7 +552,6 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
                 <p className="text-[10px] text-rose-400/80">Permanent sletting fra nettsky og enhet</p>
               </div>
             </div>
-            <ChevronRight className="w-4 h-4 text-rose-500" />
           </button>
         )}
       </section>
@@ -505,7 +570,7 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
               <p className="text-[10px] text-zinc-400">Lær mer om hvordan programmet fungerer</p>
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-zinc-500" />
+          <ChevronRight className="w-4 h-4 text-zinc-400" />
         </button>
 
         {user && onOpenCurator && (
@@ -519,9 +584,43 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
         )}
 
         <div className="text-center pt-2">
-          <p className="text-[10px] text-zinc-500 font-mono">Min Trener v1.3.0 · PWA & Offline-first</p>
+          <p className="text-[10px] text-zinc-400 font-mono">Min Trener v1.3.0 · PWA & Offline-first</p>
         </div>
       </section>
+
+      {/* Modal for å bekrefte sletting av konto */}
+      {isDeleteAccountModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-account-title"
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        >
+          <div className="bg-zinc-900 border border-zinc-700 p-5 rounded-2xl max-w-xs w-full space-y-4 shadow-xl text-center">
+            <h3 id="delete-account-title" className="text-sm font-bold text-white">
+              Slette konto permanent?
+            </h3>
+            <p className="text-xs text-zinc-400">
+              Er du sikker på at du vil slette kontoen din og alle treningsdata? Denne handlingen kan ikke angres.
+            </p>
+            <div className="flex gap-2 justify-center pt-1">
+              <button
+                onClick={() => setIsDeleteAccountModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-zinc-300 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-all"
+              >
+                Avbryt
+              </button>
+              <button
+                onClick={handleConfirmDeleteAccount}
+                disabled={isDeleting}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 rounded-xl transition-all shadow-sm"
+              >
+                {isDeleting ? 'Sletter...' : 'Ja, slett alt'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modaler */}
       {isSensorModalOpen && <SensorStatusModal onClose={() => setIsSensorModalOpen(false)} />}
@@ -532,6 +631,12 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
           isOpen={isProfileModalOpen}
           onClose={() => setIsProfileModalOpen(false)}
         />
+      )}
+      {isKioskOpen && (
+        <OfficeKioskScreen onClose={() => setIsKioskOpen(false)} />
+      )}
+      {isCoachPersonaModalOpen && (
+        <CoachPersonaModal onClose={() => setIsCoachPersonaModalOpen(false)} />
       )}
     </div>
   );

@@ -3,19 +3,21 @@ import { CompletedWorkoutLog } from '../../types/models';
 import { getUserWorkoutHistory } from '../../services/firestoreService';
 import { WorkoutCalendarHeatmap } from './WorkoutCalendarHeatmap';
 import { exportAllDataAsJson, exportHistoryAsCsv } from '../../services/exportDataService';
+import { getWeeklyGoal } from '../../services/weeklyGoalService';
 import { useAuth } from '../../contexts/AuthContext';
+import { BadgeShowcaseModal } from './BadgeShowcaseModal';
+import { getAllUserBadges } from '../../services/badgeService';
 import {
   History,
   Flame,
   Clock,
-  Trophy,
+  CheckCircle2,
   Calendar,
-  Sparkles,
   FileSpreadsheet,
   FileJson,
   Smile,
   ThumbsUp,
-  Flame as FireIcon,
+  Trophy,
 } from 'lucide-react';
 
 interface WorkoutHistoryViewProps {
@@ -29,6 +31,7 @@ export const WorkoutHistoryView: React.FC<WorkoutHistoryViewProps> = ({
   const [history, setHistory] = useState<CompletedWorkoutLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [displayCount, setDisplayCount] = useState<number>(20);
+  const [isBadgesModalOpen, setIsBadgesModalOpen] = useState(false);
 
   useEffect(() => {
     getUserWorkoutHistory(user?.uid).then((logs) => {
@@ -36,6 +39,12 @@ export const WorkoutHistoryView: React.FC<WorkoutHistoryViewProps> = ({
       setLoading(false);
     });
   }, [user]);
+
+  const userBadges = useMemo(() => {
+    return getAllUserBadges(history);
+  }, [history]);
+
+  const unlockedBadgesCount = userBadges.filter((b) => b.isUnlocked).length;
 
   const stats = useMemo(() => {
     const totalWorkouts = history.length;
@@ -112,8 +121,17 @@ export const WorkoutHistoryView: React.FC<WorkoutHistoryViewProps> = ({
           </div>
         </div>
 
-        {/* Dataeksport knapper (Steg 2) */}
-        <div className="flex items-center gap-1">
+        {/* Knapper for Merkeskap og Dataeksport */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setIsBadgesModalOpen(true)}
+            title="Se dine oppnådde merker og trofeer"
+            className="px-2.5 py-1.5 rounded-xl bg-amber-950/80 hover:bg-amber-900 border border-amber-500/40 text-amber-300 text-[11px] font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-sm ring-1 ring-amber-400/20"
+          >
+            <Trophy className="w-3.5 h-3.5 text-amber-400" />
+            <span>Merker ({unlockedBadgesCount}/{userBadges.length})</span>
+          </button>
+
           <button
             onClick={() => exportHistoryAsCsv(history)}
             title="Last ned CSV (Excel)"
@@ -151,14 +169,14 @@ export const WorkoutHistoryView: React.FC<WorkoutHistoryViewProps> = ({
       <div className="grid grid-cols-3 gap-2 shrink-0">
         {/* Fullførte økter */}
         <div className="bg-zinc-900/80 border border-zinc-800/80 rounded-2xl p-2 text-center shadow-sm">
-          <Trophy className="w-4 h-4 text-emerald-400 mx-auto mb-0.5" />
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 mx-auto mb-0.5" />
           <span className="text-sm font-black text-white">{stats.totalWorkouts}</span>
           <p className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider">Økter</p>
         </div>
 
         {/* Total treningstid */}
         <div className="bg-zinc-900/80 border border-zinc-800/80 rounded-2xl p-2 text-center shadow-sm">
-          <Clock className="w-4 h-4 text-cyan-400 mx-auto mb-0.5" />
+          <Clock className="w-4 h-4 text-emerald-400 mx-auto mb-0.5" />
           <span className="text-sm font-black text-white">{stats.totalMinutes}</span>
           <p className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider">Minutter</p>
         </div>
@@ -167,13 +185,13 @@ export const WorkoutHistoryView: React.FC<WorkoutHistoryViewProps> = ({
         <div className="bg-zinc-900/80 border border-zinc-800/80 rounded-2xl p-2 text-center shadow-sm">
           <Flame className="w-4 h-4 text-amber-400 mx-auto mb-0.5" />
           <span className="text-sm font-black text-white">{stats.streak}</span>
-          <p className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider">Dagers streak</p>
+          <p className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider">Dager på rad</p>
         </div>
       </div>
 
       {/* Ukesmål & Kalender Heatmap (Steg 1) */}
       <div className="shrink-0">
-        <WorkoutCalendarHeatmap history={history} weeklyGoal={3} />
+        <WorkoutCalendarHeatmap history={history} weeklyGoal={getWeeklyGoal()} />
       </div>
 
       {/* Scrollbar liste over logger */}
@@ -185,55 +203,66 @@ export const WorkoutHistoryView: React.FC<WorkoutHistoryViewProps> = ({
             ))}
           </div>
         ) : history.length === 0 ? (
-          <div className="text-center py-8 space-y-1.5 text-zinc-500">
-            <Sparkles className="w-6 h-6 mx-auto text-zinc-600" />
+          <div className="text-center py-8 space-y-1.5 text-zinc-400">
+            <History className="w-6 h-6 mx-auto text-zinc-600" />
             <p className="text-xs">Ingen fullførte økter registrert ennå.</p>
             <p className="text-[10px] text-zinc-400">Fullfør en økt i timeren for å starte loggen!</p>
           </div>
         ) : (
           <>
-            {history.slice(0, displayCount).map((log) => (
-              <div
-                key={log.id}
-                className="p-2.5 bg-zinc-900/70 border border-zinc-800/80 rounded-2xl flex items-center justify-between shadow-sm"
-              >
-                <div className="space-y-0.5 overflow-hidden pr-2">
-                  <div className="flex items-center gap-1.5 text-[9px] text-zinc-400">
-                    <Calendar className="w-2.5 h-2.5 text-zinc-500" />
-                    <span>{formatDate(log.completedAt)}</span>
-                    <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-[8px] uppercase font-bold text-zinc-300">
-                      {log.workoutType}
-                    </span>
-                    {log.difficultyRating && (
-                      <span
-                        className={`px-1.5 py-0.2 rounded text-[8px] uppercase font-bold flex items-center gap-0.5 ${
-                          log.difficultyRating === 'for_lett'
-                            ? 'bg-blue-950 text-blue-300 border border-blue-800/60'
-                            : log.difficultyRating === 'passe'
-                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60'
-                            : 'bg-amber-950 text-amber-300 border border-amber-800/60'
-                        }`}
-                      >
-                        {log.difficultyRating === 'for_lett' && <Smile className="w-2.5 h-2.5" />}
-                        {log.difficultyRating === 'passe' && <ThumbsUp className="w-2.5 h-2.5" />}
-                        {log.difficultyRating === 'for_tungt' && <FireIcon className="w-2.5 h-2.5" />}
-                        {log.difficultyRating.replace('_', ' ')}
-                      </span>
-                    )}
-                  </div>
-                  <h4 className="text-xs font-bold text-white truncate">{log.workoutName}</h4>
-                </div>
+            {history.slice(0, displayCount).map((log) => {
+              const ratingLabel =
+                log.difficultyRating === 'for_lett'
+                  ? 'For lett'
+                  : log.difficultyRating === 'passe'
+                  ? 'Passe'
+                  : log.difficultyRating === 'for_tungt'
+                  ? 'For tungt'
+                  : '';
 
-                <div className="text-right shrink-0">
-                  <span className="text-xs font-mono font-black text-emerald-400">
-                    {formatDuration(log.durationSeconds)}
-                  </span>
-                  <p className="text-[9px] text-zinc-500 font-medium">
-                    {log.roundsCompleted} {log.roundsCompleted === 1 ? 'runde' : 'runder'}
-                  </p>
+              return (
+                <div
+                  key={log.id}
+                  className="p-2.5 bg-zinc-900/70 border border-zinc-800/80 rounded-2xl flex items-center justify-between shadow-sm"
+                >
+                  <div className="space-y-0.5 overflow-hidden pr-2">
+                    <div className="flex items-center gap-1.5 text-[9px] text-zinc-400">
+                      <Calendar className="w-2.5 h-2.5 text-zinc-400" />
+                      <span>{formatDate(log.completedAt)}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-[8px] uppercase font-bold text-zinc-300">
+                        {log.workoutType}
+                      </span>
+                      {log.difficultyRating && (
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[8px] uppercase font-bold flex items-center gap-0.5 ${
+                            log.difficultyRating === 'for_lett'
+                              ? 'bg-blue-950 text-blue-300 border border-blue-800/60'
+                              : log.difficultyRating === 'passe'
+                              ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60'
+                              : 'bg-amber-950 text-amber-300 border border-amber-800/60'
+                          }`}
+                        >
+                          {log.difficultyRating === 'for_lett' && <Smile className="w-2.5 h-2.5" />}
+                          {log.difficultyRating === 'passe' && <ThumbsUp className="w-2.5 h-2.5" />}
+                          {log.difficultyRating === 'for_tungt' && <Flame className="w-2.5 h-2.5" />}
+                          {ratingLabel}
+                        </span>
+                      )}
+                    </div>
+                    <h4 className="text-xs font-bold text-white truncate">{log.workoutName}</h4>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <span className="text-xs font-mono font-black text-emerald-400">
+                      {formatDuration(log.durationSeconds)}
+                    </span>
+                    <p className="text-[9px] text-zinc-400 font-medium">
+                      {log.roundsCompleted} {log.roundsCompleted === 1 ? 'runde' : 'runder'}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {history.length > displayCount && (
               <button
@@ -246,6 +275,14 @@ export const WorkoutHistoryView: React.FC<WorkoutHistoryViewProps> = ({
           </>
         )}
       </div>
+
+      {/* Modal for trofé- og merkeskap */}
+      {isBadgesModalOpen && (
+        <BadgeShowcaseModal
+          history={history}
+          onClose={() => setIsBadgesModalOpen(false)}
+        />
+      )}
     </div>
   );
 };

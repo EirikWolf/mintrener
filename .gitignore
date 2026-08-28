@@ -37,3 +37,5 @@ firebase-debug.log
 .env.test.local
 .env.production.local
 temp_*.json
+*.tsbuildinfo
+audition/

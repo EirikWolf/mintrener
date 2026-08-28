@@ -61,6 +61,15 @@ export const TvBigScreenDisplay: React.FC<TvBigScreenDisplayProps> = ({
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
+  // WCAG: Lukk ved trykk på Escape-tast når ikke i fullskjerm
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !document.fullscreenElement) onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const currentEx = state.currentExercise;
   const currentExObj = EXERCISE_LIBRARY.find((e) => e.id === currentEx?.id) || EXERCISE_LIBRARY[0];
   const nextEx = state.nextExercise;
@@ -88,7 +97,12 @@ export const TvBigScreenDisplay: React.FC<TvBigScreenDisplayProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black text-white flex flex-col justify-between p-6 sm:p-10 select-none animate-in fade-in">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="tv-screen-title"
+      className="fixed inset-0 z-50 bg-black text-white flex flex-col justify-between p-6 sm:p-10 select-none animate-in fade-in"
+    >
       {/* Topplinje: Programnavn, Gruppe-badge, Fullskjerm & Lukk */}
       <div className="flex items-center justify-between shrink-0 border-b border-zinc-900 pb-4">
         <div className="flex items-center gap-3">
@@ -97,7 +111,7 @@ export const TvBigScreenDisplay: React.FC<TvBigScreenDisplayProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-black text-white">{workout.name}</h1>
+              <h1 id="tv-screen-title" className="text-xl sm:text-2xl font-black text-white">{workout.name}</h1>
               <span className="px-2.5 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs font-bold flex items-center gap-1">
                 <Users className="w-3.5 h-3.5 text-emerald-400" />
                 Storskjerm & Instruktør
@@ -113,6 +127,7 @@ export const TvBigScreenDisplay: React.FC<TvBigScreenDisplayProps> = ({
           {onToggleSound && (
             <button
               onClick={onToggleSound}
+              aria-label={state.soundEnabled ? 'Slå av lyd' : 'Slå på lyd'}
               className="p-3 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 transition-colors"
             >
               {state.soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5 text-zinc-600" />}
@@ -120,12 +135,14 @@ export const TvBigScreenDisplay: React.FC<TvBigScreenDisplayProps> = ({
           )}
           <button
             onClick={toggleFullscreen}
+            aria-label={isFullscreen ? 'Lukk fullskjerm' : 'Åpne fullskjerm'}
             className="p-3 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 transition-colors"
           >
             {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
           </button>
           <button
             onClick={onClose}
+            aria-label="Lukk storskjermvisning"
             className="p-3 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -166,7 +183,7 @@ export const TvBigScreenDisplay: React.FC<TvBigScreenDisplayProps> = ({
       <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-zinc-900 pt-4">
         {/* Neste øvelse forhåndsvisning */}
         <div className="flex items-center gap-3 bg-zinc-900/90 border border-zinc-800 px-4 py-2.5 rounded-2xl">
-          <span className="text-xs font-black uppercase tracking-wider text-zinc-500">
+          <span className="text-xs font-black uppercase tracking-wider text-zinc-400">
             Neste:
           </span>
           {nextEx ? (

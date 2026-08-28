@@ -129,7 +129,7 @@ export const SensorStatusModal: React.FC<SensorStatusModalProps> = ({ onClose })
                           ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/50'
                           : isWarning
                           ? 'bg-amber-950 text-amber-400 border border-amber-800/50'
-                          : 'bg-zinc-900 text-zinc-500 border border-zinc-800'
+                          : 'bg-zinc-900 text-zinc-400 border border-zinc-800'
                       }`}
                     >
                       {isSupported ? 'Støttet' : isWarning ? 'Krever samtykke' : 'Ikke tilgjengelig'}

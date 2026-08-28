@@ -178,8 +178,9 @@ export const StrengthLoggerModal: React.FC<StrengthLoggerModalProps> = ({
         <div className="flex-1 overflow-y-auto space-y-3 pr-1">
           {/* 1. Velg øvelse */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-zinc-300">Velg styrkeøvelse</label>
+            <label htmlFor="strength-exercise-select" className="text-xs font-bold text-zinc-300">Velg styrkeøvelse</label>
             <select
+              id="strength-exercise-select"
               value={exerciseId}
               onChange={(e) => setExerciseId(e.target.value)}
               className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
@@ -242,6 +243,7 @@ export const StrengthLoggerModal: React.FC<StrengthLoggerModalProps> = ({
                   <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl px-1.5 py-0.5">
                     <button
                       onClick={() => updateSetWeight(idx, -2.5)}
+                      aria-label={`Reduser vekt for sett ${s.setNumber}`}
                       className="w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-white font-black"
                     >
                       -
@@ -251,6 +253,7 @@ export const StrengthLoggerModal: React.FC<StrengthLoggerModalProps> = ({
                     </span>
                     <button
                       onClick={() => updateSetWeight(idx, 2.5)}
+                      aria-label={`Øk vekt for sett ${s.setNumber}`}
                       className="w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-white font-black"
                     >
                       +
@@ -261,6 +264,7 @@ export const StrengthLoggerModal: React.FC<StrengthLoggerModalProps> = ({
                   <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl px-1.5 py-0.5">
                     <button
                       onClick={() => updateSetReps(idx, -1)}
+                      aria-label={`Reduser reps for sett ${s.setNumber}`}
                       className="w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-white font-black"
                     >
                       -
@@ -270,6 +274,7 @@ export const StrengthLoggerModal: React.FC<StrengthLoggerModalProps> = ({
                     </span>
                     <button
                       onClick={() => updateSetReps(idx, 1)}
+                      aria-label={`Øk reps for sett ${s.setNumber}`}
                       className="w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-white font-black"
                     >
                       +
@@ -279,11 +284,14 @@ export const StrengthLoggerModal: React.FC<StrengthLoggerModalProps> = ({
                   {/* Avkryssingsknapp & Slett */}
                   <div className="flex items-center gap-1">
                     <button
+                      role="checkbox"
+                      aria-checked={s.completed}
+                      aria-label={`Sett ${s.setNumber}: ${s.completed ? 'Fullført' : 'Ikke fullført'}`}
                       onClick={() => handleToggleSet(idx)}
                       className={`p-1.5 rounded-xl border transition-all ${
                         s.completed
                           ? 'bg-emerald-500 text-zinc-950 border-emerald-400'
-                          : 'bg-zinc-900 text-zinc-500 border-zinc-800 hover:text-white hover:bg-zinc-800'
+                          : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white hover:bg-zinc-800'
                       }`}
                     >
                       <CheckCircle2 className="w-4 h-4" />
@@ -292,6 +300,7 @@ export const StrengthLoggerModal: React.FC<StrengthLoggerModalProps> = ({
                     {sets.length > 1 && (
                       <button
                         onClick={() => handleRemoveSet(idx)}
+                        aria-label={`Slett sett ${s.setNumber}`}
                         className="p-1 rounded-lg text-zinc-600 hover:text-rose-400"
                       >
                         <Trash2 className="w-3.5 h-3.5" />

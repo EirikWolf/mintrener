@@ -4,6 +4,7 @@ import { useIntervalTimer } from '../useIntervalTimer';
 import { TABATA_WORKOUT } from '../../data/mockWorkouts';
 import { audioService } from '../../services/audioService';
 import { wakeLockService } from '../../services/wakeLockService';
+import { speechService } from '../../services/speechService';
 
 describe('useIntervalTimer Hook', () => {
   beforeEach(() => {
@@ -118,5 +119,47 @@ describe('useIntervalTimer Hook', () => {
     expect(result.current.state.status).toBe('completed');
     expect(result.current.state.phase).toBe('complete');
     expect(completeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('nullstiller økten lydløst uten å trigge tale', () => {
+    const prepareSpy = vi.spyOn(speechService, 'announcePrepare');
+
+    const { result } = renderHook(() => useIntervalTimer({ workout: TABATA_WORKOUT }));
+
+    act(() => {
+      result.current.resetWorkout();
+    });
+
+    expect(result.current.state.status).toBe('idle');
+    expect(prepareSpy).not.toHaveBeenCalled();
+  });
+
+  it('starter direkte med ny økt og annonserer riktig første øvelse og tone', async () => {
+    const prepareSpy = vi.spyOn(speechService, 'announcePrepare');
+
+    const barnWorkout = {
+      id: 'barn-test',
+      name: 'Dyre-safari',
+      description: 'Lek',
+      type: 'custom' as const,
+      prepareDurationSeconds: 5,
+      rounds: 1,
+      roundRestDurationSeconds: 0,
+      voiceTone: 'lek' as const,
+      items: [
+        { id: 'b1', exercise: { id: 'frosk', name: 'Froskehopp' }, workDurationSeconds: 25, restDurationSeconds: 10 },
+      ],
+    };
+
+    const { result } = renderHook(() => useIntervalTimer({ workout: TABATA_WORKOUT }));
+
+    await act(async () => {
+      await result.current.startWorkout(barnWorkout);
+    });
+
+    expect(result.current.state.status).toBe('running');
+    expect(result.current.state.phaseTotalSeconds).toBe(5);
+    expect(result.current.state.currentExercise?.name).toBe('Froskehopp');
+    expect(prepareSpy).toHaveBeenCalledWith('Froskehopp', 'lek');
   });
 });

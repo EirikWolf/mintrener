@@ -230,9 +230,28 @@ export const StrengthWorkoutModal: React.FC<StrengthWorkoutModalProps> = ({
     );
   }
 
+  // WCAG: Lukk ved trykk på Escape-tast
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 text-white">
-      <div className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 text-white"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="strength-program-title"
+        className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-850 pb-3 shrink-0">
           <div className="flex items-center gap-2">
@@ -241,7 +260,7 @@ export const StrengthWorkoutModal: React.FC<StrengthWorkoutModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-black text-white">Sterkere 12 Uker</h2>
+                <h2 id="strength-program-title" className="text-lg font-black text-white">Sterkere 12 Uker</h2>
                 <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-emerald-400">
                   Uke 1 • Helkropp A
                 </span>
@@ -381,7 +400,7 @@ export const StrengthWorkoutModal: React.FC<StrengthWorkoutModalProps> = ({
                       className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${
                         set.isCompleted
                           ? 'bg-emerald-500 text-zinc-950 shadow-md font-bold'
-                          : 'bg-zinc-800 text-zinc-500 hover:text-white'
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white'
                       }`}
                     >
                       <Check className="w-5 h-5 stroke-[3]" />

@@ -33,9 +33,28 @@ export const ChallengeCatalogModal: React.FC<ChallengeCatalogModalProps> = ({
     return c.category === selectedCategory;
   });
 
+  // WCAG: Lukk ved trykk på Escape-tast
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden text-white space-y-4">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="challenges-modal-title"
+        className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden text-white space-y-4"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-850 pb-3 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -43,7 +62,7 @@ export const ChallengeCatalogModal: React.FC<ChallengeCatalogModalProps> = ({
               <Trophy className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-white">Treningsutfordringer</h2>
+              <h2 id="challenges-modal-title" className="text-xl font-black text-white">Treningsutfordringer</h2>
               <p className="text-xs text-zinc-400">28 & 30 dagers programmer med faste hviledager</p>
             </div>
           </div>
@@ -109,7 +128,7 @@ export const ChallengeCatalogModal: React.FC<ChallengeCatalogModalProps> = ({
                       </span>
                     </div>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0 mt-1" />
+                  <ChevronRight className="w-4 h-4 text-zinc-400 shrink-0 mt-1" />
                 </div>
 
                 <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">

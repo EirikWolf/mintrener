@@ -4,8 +4,15 @@ import { audioService } from '../services/audioService';
 import { wakeLockService } from '../services/wakeLockService';
 import { vibrationService } from '../services/vibrationService';
 import { speechService } from '../services/speechService';
+import { audioClipService } from '../services/audioClipService';
 import { motionTrackerService, MotionMetrics } from '../services/motionTrackerService';
 import { saveInterruptedSession, clearInterruptedSession, InterruptedSession } from '../services/sessionRecoveryService';
+import {
+  playPersonaCue,
+  getActiveCoachPersona,
+  stopCurrentPersonaAudio,
+  preloadPersonaAudio
+} from '../services/coachPersonaService';
 
 interface UseIntervalTimerProps {
   workout: WorkoutTemplate;
@@ -22,6 +29,8 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
   const [wakeLockEnabled, setWakeLockEnabled] = useState<boolean>(true);
   const [speechEnabled, setSpeechEnabled] = useState<boolean>(true);
   const [motionReps, setMotionReps] = useState<number>(0);
+
+  const [activeWorkout, setActiveWorkout] = useState<WorkoutTemplate>(workout);
 
   // Millisekund-presisjon tidsstempler
   const [phaseRemaining, setPhaseRemaining] = useState<number>(workout.prepareDurationSeconds);
@@ -44,7 +53,8 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     phaseStartTime: 0,
     workoutStartTime: 0,
     lastCountdownBeep: -1,
-    workout,
+    firedCues: new Set<string>(),
+    workout: activeWorkout,
   });
 
   stateRef.current.status = status;
@@ -58,67 +68,146 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
   stateRef.current.vibrateEnabled = vibrateEnabled;
   stateRef.current.wakeLockEnabled = wakeLockEnabled;
   stateRef.current.speechEnabled = speechEnabled;
-  stateRef.current.workout = workout;
+  stateRef.current.workout = activeWorkout;
 
   // Beregn total estimert tid for hele økten (uten unødvendig pause etter aller siste øvelse)
   const calculateTotalWorkoutSeconds = useCallback(() => {
-    if (workout.items.length === 0) return workout.prepareDurationSeconds;
-    let sum = workout.prepareDurationSeconds;
-    for (let r = 0; r < workout.rounds; r++) {
-      for (let i = 0; i < workout.items.length; i++) {
-        const item = workout.items[i];
+    const items = activeWorkout?.items || [];
+    const rounds = activeWorkout?.rounds || 1;
+    const prepareDuration = activeWorkout?.prepareDurationSeconds || 5;
+    if (items.length === 0) return prepareDuration;
+    let sum = prepareDuration;
+    for (let r = 0; r < rounds; r++) {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
         sum += item.workDurationSeconds;
-        const isLastInWorkout = r === workout.rounds - 1 && i === workout.items.length - 1;
+        const isLastInWorkout = r === rounds - 1 && i === items.length - 1;
         if (!isLastInWorkout) {
           sum += item.restDurationSeconds;
         }
       }
-      if (r < workout.rounds - 1) {
-        sum += workout.roundRestDurationSeconds;
+      if (r < rounds - 1) {
+        sum += activeWorkout?.roundRestDurationSeconds || 0;
       }
     }
     return sum;
-  }, [workout]);
+  }, [activeWorkout]);
 
   const totalWorkoutDuration = calculateTotalWorkoutSeconds();
   const totalRemainingSeconds = Math.max(0, totalWorkoutDuration - totalElapsed);
 
+  // Synkroniser kun når workout-propen faktisk endrer seg i idle-status
+  const prevWorkoutRef = useRef(workout);
+  useEffect(() => {
+    if (prevWorkoutRef.current !== workout) {
+      prevWorkoutRef.current = workout;
+      setActiveWorkout(workout);
+      if (status === 'idle') {
+        stateRef.current.workout = workout;
+        setPhaseDuration(workout.prepareDurationSeconds);
+        setPhaseRemaining(workout.prepareDurationSeconds);
+        setCurrentRound(1);
+        setCurrentItemIndex(0);
+        setPhase('prepare');
+        setTotalElapsed(0);
+      }
+    }
+  }, [workout, status]);
+
   // Sett opp en ny fase
   const setupPhase = useCallback(
-    (newPhase: IntervalPhase, round: number, itemIdx: number) => {
-      const w = stateRef.current.workout;
+    (
+      newPhase: IntervalPhase,
+      round: number,
+      itemIdx: number,
+      silent: boolean = false,
+      targetWorkout?: WorkoutTemplate
+    ) => {
+      const isValidTarget = Boolean(targetWorkout && typeof targetWorkout === 'object' && Array.isArray(targetWorkout.items));
+      const w = isValidTarget ? (targetWorkout as WorkoutTemplate) : (stateRef.current.workout?.items ? stateRef.current.workout : workout);
+      const items = w?.items || [];
+      const tone = w?.voiceTone || 'rolig';
       let duration = 0;
 
+      stateRef.current.firedCues = new Set<string>();
+      const persona = getActiveCoachPersona();
+
       if (newPhase === 'prepare') {
-        duration = w.prepareDurationSeconds;
-        speechService.announcePrepare(w.items[0]?.exercise.name);
+        duration = w?.prepareDurationSeconds || 5;
+        if (!silent && stateRef.current.speechEnabled) {
+          if (persona !== 'standard') {
+            playPersonaCue('intro');
+            if (duration >= 6) {
+              const firstEx = items[0]?.exercise;
+              setTimeout(() => {
+                if (stateRef.current.phase === 'prepare' && stateRef.current.status === 'running') {
+                  if (firstEx) audioClipService.playClipOrFallback('exercise_' + firstEx.id, firstEx.name);
+                }
+              }, 2300);
+            }
+          } else {
+            speechService.announcePrepare(items[0]?.exercise?.name, tone);
+          }
+        }
       } else if (newPhase === 'work') {
-        duration = w.items[itemIdx]?.workDurationSeconds || 20;
-        audioService.playWorkStart(stateRef.current.soundEnabled);
-        vibrationService.workStart(stateRef.current.vibrateEnabled);
-        speechService.announceWork(w.items[itemIdx]?.exercise.name);
+        duration = items[itemIdx]?.workDurationSeconds || 20;
+        if (!silent) {
+          if (persona === 'standard') {
+            audioService.playWorkStart(stateRef.current.soundEnabled);
+            if (stateRef.current.speechEnabled) {
+              speechService.announceWork(items[itemIdx]?.exercise?.name, tone);
+            }
+          }
+          vibrationService.workStart(stateRef.current.vibrateEnabled);
+        }
 
         // Start bevegelsessporing
         motionTrackerService.start((m: MotionMetrics) => {
           setMotionReps(m.count);
         }, 'hopp');
       } else if (newPhase === 'rest') {
-        duration = w.items[itemIdx]?.restDurationSeconds || 10;
-        audioService.playRestStart(stateRef.current.soundEnabled);
-        vibrationService.restStart(stateRef.current.vibrateEnabled);
-        speechService.announceRest(w.items[itemIdx + 1]?.exercise.name);
+        duration = items[itemIdx]?.restDurationSeconds || 10;
+        if (!silent) {
+          audioService.playRestStart(stateRef.current.soundEnabled);
+          vibrationService.restStart(stateRef.current.vibrateEnabled);
+          if (stateRef.current.speechEnabled) {
+            const nextEx = items[itemIdx + 1]?.exercise;
+            if (persona === 'standard') {
+              speechService.announceRest(nextEx?.name, tone);
+            } else if (nextEx) {
+              audioClipService.playClipOrFallback('exercise_' + nextEx.id, 'Neste: ' + nextEx.name);
+            }
+          }
+        }
         motionTrackerService.stop();
       } else if (newPhase === 'round_rest') {
-        duration = w.roundRestDurationSeconds;
-        audioService.playRestStart(stateRef.current.soundEnabled);
-        vibrationService.restStart(stateRef.current.vibrateEnabled);
-        speechService.announceRest(w.items[0]?.exercise.name);
+        duration = w?.roundRestDurationSeconds || 30;
+        if (!silent) {
+          audioService.playRestStart(stateRef.current.soundEnabled);
+          vibrationService.restStart(stateRef.current.vibrateEnabled);
+          if (stateRef.current.speechEnabled) {
+            const nextEx = items[0]?.exercise;
+            if (persona === 'standard') {
+              speechService.announceRest(nextEx?.name, tone);
+            } else if (nextEx) {
+              audioClipService.playClipOrFallback('exercise_' + nextEx.id, 'Neste: ' + nextEx.name);
+            }
+          }
+        }
         motionTrackerService.stop();
       } else if (newPhase === 'complete') {
         duration = 0;
-        audioService.playWorkoutComplete(stateRef.current.soundEnabled);
-        vibrationService.workoutComplete(stateRef.current.vibrateEnabled);
-        speechService.announceComplete();
+        if (!silent) {
+          if (persona !== 'standard') {
+            playPersonaCue('finish');
+          } else {
+            audioService.playWorkoutComplete(stateRef.current.soundEnabled);
+            if (stateRef.current.speechEnabled) {
+              speechService.announceComplete(tone);
+            }
+          }
+          vibrationService.workoutComplete(stateRef.current.vibrateEnabled);
+        }
         motionTrackerService.stop();
         wakeLockService.releaseLock();
       }
@@ -143,7 +232,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
         clearInterruptedSession();
       }
     },
-    []
+    [workout]
   );
 
   // Gå til neste logiske fase
@@ -233,9 +322,39 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       const totalElapsedSec = (now - stateRef.current.workoutStartTime) / 1000;
       setTotalElapsed(Math.max(0, totalElapsedSec));
 
-      // Sjekk for 3 - 2 - 1 nedtellingspip
       const wholeSecondsLeft = Math.ceil(remaining);
+      const persona = getActiveCoachPersona();
+      const phaseElapsedSec = Math.floor(phaseElapsed);
+      const halfwaySec = Math.floor(stateRef.current.phaseDuration / 2);
+
+      // 3 - 2 - 1 Nedtelling fra treneren under prepare, rest og round_rest (starter 3.5s før arbeid)
       if (
+        persona !== 'standard' &&
+        (stateRef.current.phase === 'prepare' || stateRef.current.phase === 'rest' || stateRef.current.phase === 'round_rest') &&
+        remaining <= 3.5 &&
+        !stateRef.current.firedCues.has('start_321') &&
+        stateRef.current.speechEnabled
+      ) {
+        stateRef.current.firedCues.add('start_321');
+        playPersonaCue('start_321');
+      }
+
+      // Halvveis persona-cue
+      if (
+        persona !== 'standard' &&
+        stateRef.current.phase === 'work' &&
+        stateRef.current.phaseDuration >= 15 &&
+        phaseElapsedSec === halfwaySec &&
+        !stateRef.current.firedCues.has('halfway') &&
+        stateRef.current.speechEnabled
+      ) {
+        stateRef.current.firedCues.add('halfway');
+        playPersonaCue('halfway');
+      }
+
+      // Sjekk for elektronisk 3 - 2 - 1 nedtellingspip (kun i standard-modus for å unngå kollisjon med stemmen)
+      if (
+        persona === 'standard' &&
         wholeSecondsLeft <= 3 &&
         wholeSecondsLeft >= 1 &&
         wholeSecondsLeft !== stateRef.current.lastCountdownBeep &&
@@ -278,23 +397,38 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
   }, [status, advanceToNextPhase]);
 
   // Kontrollfunksjoner
-  const startWorkout = useCallback(async () => {
-    await audioService.unlockAudio();
-    speechService.init();
-    if (stateRef.current.wakeLockEnabled) {
-      await wakeLockService.requestLock();
-    }
+  const startWorkout = useCallback(
+    async (explicitWorkout?: WorkoutTemplate | unknown) => {
+      const isValidTarget = Boolean(
+        explicitWorkout &&
+        typeof explicitWorkout === 'object' &&
+        'items' in explicitWorkout &&
+        Array.isArray((explicitWorkout as WorkoutTemplate).items)
+      );
+      const targetWorkout = isValidTarget ? (explicitWorkout as WorkoutTemplate) : stateRef.current.workout;
+      stateRef.current.workout = targetWorkout;
+      setActiveWorkout(targetWorkout);
 
-    stateRef.current.phaseStartTime = Date.now();
-    stateRef.current.workoutStartTime = Date.now();
-    setStatus('running');
-    if (phase === 'prepare' && phaseRemaining === workout.prepareDurationSeconds) {
-      setupPhase('prepare', 1, 0);
-    }
-  }, [phase, phaseRemaining, workout, setupPhase]);
+      preloadPersonaAudio();
+      await audioService.unlockAudio();
+      speechService.init();
+      if (stateRef.current.wakeLockEnabled) {
+        await wakeLockService.requestLock();
+      }
+
+      stateRef.current.phaseStartTime = Date.now();
+      stateRef.current.workoutStartTime = Date.now();
+      stateRef.current.status = 'running';
+      setStatus('running');
+
+      setupPhase('prepare', 1, 0, false, targetWorkout);
+    },
+    [setupPhase]
+  );
 
   const pauseWorkout = useCallback(() => {
     setStatus('paused');
+    stopCurrentPersonaAudio();
     wakeLockService.releaseLock();
     saveInterruptedSession({
       workout: stateRef.current.workout,
@@ -320,13 +454,14 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
 
   const resetWorkout = useCallback(() => {
     setStatus('idle');
+    stopCurrentPersonaAudio();
     wakeLockService.releaseLock();
     clearInterruptedSession();
-    setupPhase('prepare', 1, 0);
+    setupPhase('prepare', 1, 0, true); // silent reset!
     setTotalElapsed(0);
-    setPhaseRemaining(workout.prepareDurationSeconds);
-    setPhaseDuration(workout.prepareDurationSeconds);
-  }, [workout, setupPhase]);
+    setPhaseRemaining(stateRef.current.workout?.prepareDurationSeconds || 5);
+    setPhaseDuration(stateRef.current.workout?.prepareDurationSeconds || 5);
+  }, [setupPhase]);
 
   const restoreSession = useCallback((session: InterruptedSession) => {
     setupPhase(session.phase, session.currentRound, session.currentItemIndex);
@@ -359,12 +494,13 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
   }, []);
 
   // Nåværende og neste øvelse
-  const currentItem = workout.items[currentItemIndex] || workout.items[0];
+  const workoutItems = activeWorkout?.items || [];
+  const currentItem = workoutItems[currentItemIndex] || workoutItems[0];
   const nextItem =
-    currentItemIndex + 1 < workout.items.length
-      ? workout.items[currentItemIndex + 1]
-      : currentRound < workout.rounds
-      ? workout.items[0]
+    currentItemIndex + 1 < workoutItems.length
+      ? workoutItems[currentItemIndex + 1]
+      : currentRound < (activeWorkout?.rounds || 1)
+      ? workoutItems[0]
       : null;
 
   const currentExercise = currentItem ? currentItem.exercise : null;
@@ -376,9 +512,9 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     status,
     phase,
     currentRound,
-    totalRounds: workout.rounds,
+    totalRounds: activeWorkout?.rounds || 1,
     currentItemIndex,
-    totalItems: workout.items.length,
+    totalItems: workoutItems.length,
     currentExercise,
     nextExercise,
     phaseRemainingSeconds: Math.ceil(phaseRemaining),

@@ -217,8 +217,10 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
           <div className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-zinc-300">Velg aktivitetstype</label>
-              <div className="grid grid-cols-3 gap-2">
+              <div role="radiogroup" aria-label="Velg aktivitetstype" className="grid grid-cols-3 gap-2">
                 <button
+                  role="radio"
+                  aria-checked={activityType === 'lop'}
                   onClick={() => setActivityType('lop')}
                   className={`p-3 rounded-2xl border flex flex-col items-center gap-1.5 transition-all ${
                     activityType === 'lop'
@@ -230,6 +232,8 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
                   <span className="text-xs">Løp</span>
                 </button>
                 <button
+                  role="radio"
+                  aria-checked={activityType === 'ga'}
                   onClick={() => setActivityType('ga')}
                   className={`p-3 rounded-2xl border flex flex-col items-center gap-1.5 transition-all ${
                     activityType === 'ga'
@@ -241,6 +245,8 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
                   <span className="text-xs">Gå</span>
                 </button>
                 <button
+                  role="radio"
+                  aria-checked={activityType === 'sykkel'}
                   onClick={() => setActivityType('sykkel')}
                   className={`p-3 rounded-2xl border flex flex-col items-center gap-1.5 transition-all ${
                     activityType === 'sykkel'
@@ -257,8 +263,11 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
               <div className="flex items-center justify-between px-1 py-1">
                 <span className="text-xs text-zinc-300 font-medium">Auto-pause ved stillstand (rødt lys)</span>
                 <button
+                  role="switch"
+                  aria-checked={autoPauseEnabled}
+                  aria-label="Auto-pause ved stillstand"
                   onClick={() => setAutoPauseEnabled((p) => !p)}
-                  className={`w-9 h-5 rounded-full transition-colors relative p-0.5 shrink-0 ${autoPauseEnabled ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+                  className={`w-9 h-5 rounded-full transition-colors relative p-0.5 shrink-0 ${autoPauseEnabled ? 'bg-emerald-500' : 'bg-zinc-600'}`}
                 >
                   <div className={`w-4 h-4 rounded-full bg-white transition-transform ${autoPauseEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
                 </button>
@@ -297,13 +306,13 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
             {/* Tid & Tempo */}
             <div className="grid grid-cols-2 gap-2">
               <div className="bg-zinc-950 border border-zinc-800/80 rounded-2xl p-3">
-                <span className="text-[10px] uppercase font-bold text-zinc-500">Tid</span>
+                <span className="text-[10px] uppercase font-bold text-zinc-400">Tid</span>
                 <p className="text-xl font-black font-mono text-cyan-400 mt-0.5">
                   {formatTime(elapsedSeconds)}
                 </p>
               </div>
               <div className="bg-zinc-950 border border-zinc-800/80 rounded-2xl p-3">
-                <span className="text-[10px] uppercase font-bold text-zinc-500">Tempo</span>
+                <span className="text-[10px] uppercase font-bold text-zinc-400">Tempo</span>
                 <p className="text-sm font-black font-mono text-amber-400 mt-1">
                   {formatPace(currentSpeed)}
                 </p>
