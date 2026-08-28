@@ -10,6 +10,11 @@ import {
   increment,
 } from 'firebase/firestore';
 import { WorkoutTemplate } from '../types/workout';
+import { estimateServerClockOffset, getServerNow } from './clockSyncService';
+
+// Hvor lenge (ms) fram i tid verten legger den klokkesynkroniserte starten,
+// slik at alle klienter rekker å motta oppdateringen og telle ned til samme øyeblikk.
+const START_LEAD_TIME_MS = 3000;
 
 export interface GroupRoomState {
   roomId: string;
@@ -18,6 +23,8 @@ export interface GroupRoomState {
   workout: WorkoutTemplate;
   status: 'waiting' | 'running' | 'paused' | 'completed';
   startTimestamp?: number | null;
+  /** Serverklokke-tidspunkt (ms) for felles start. Se clockSyncService for klokkesynkroniseringen. */
+  startAtServerMs?: number | null;
   serverSyncTime?: number | null;
   participantCount: number;
   createdAt: string;
@@ -121,13 +128,21 @@ export function subscribeToGroupRoom(
 }
 
 /**
- * Vert starter timeren for alle i rommet
+ * Vert starter timeren for alle i rommet.
+ *
+ * Skriver `startAtServerMs` — et klokkesynkronisert starttidspunkt (serverklokke + ledetid) —
+ * i tillegg til det gamle `startTimestamp` (vertens lokale klokke, beholdt for
+ * bakoverkompatibilitet med eldre klienter). `estimateServerClockOffset()` er cachet
+ * etter første måling, så dette kallet er billig i praksis.
  */
 export async function startGroupWorkout(roomId: string): Promise<void> {
+  await estimateServerClockOffset();
+
   const roomRef = doc(db, 'rooms', roomId);
   await updateDoc(roomRef, {
     status: 'running',
     startTimestamp: Date.now(),
+    startAtServerMs: getServerNow() + START_LEAD_TIME_MS,
   });
 }
 

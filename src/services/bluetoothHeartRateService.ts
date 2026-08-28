@@ -8,6 +8,56 @@ export interface HeartRateData {
   zoneName: string;
   zoneColor: string;
   deviceName?: string;
+  rrIntervals?: number[]; // RR-intervaller i millisekunder (grunnlag for HRV)
+}
+
+/**
+ * Ren parsing av Bluetooth Heart Rate Measurement-karakteristikken (GATT 0x2A37).
+ * Trukket ut som egen funksjon slik at den kan testes uten et faktisk BLE-oppsett.
+ *
+ * Forutsetning: `view.byteLength >= 2` (flagg-byte + minst ett HR-byte). Kalles funksjonen
+ * med en tom eller for kort buffer, kaster de underliggende DataView-kallene `RangeError`.
+ */
+export function parseHeartRateMeasurement(view: DataView): { heartRate: number; rrIntervals: number[] } {
+  const flags = view.getUint8(0);
+  const is16Bit = (flags & 0x01) !== 0;
+  const hasEnergyExpended = (flags & 0x08) !== 0;
+  const hasRrIntervals = (flags & 0x10) !== 0;
+
+  let offset = 1;
+  let heartRate: number;
+  if (is16Bit && view.byteLength >= 3) {
+    heartRate = view.getUint16(offset, true); // Little endian
+    offset += 2;
+  } else {
+    heartRate = view.getUint8(offset);
+    offset += 1;
+  }
+
+  if (hasEnergyExpended) {
+    offset += 2; // Energy Expended-feltet brukes ikke her, men må hoppes over for riktig RR-offset
+  }
+
+  const rrIntervals: number[] = [];
+  if (hasRrIntervals) {
+    for (let i = offset; i + 1 < view.byteLength; i += 2) {
+      const raw = view.getUint16(i, true); // Enhet: 1/1024 sekund
+      rrIntervals.push(Math.round((raw / 1024) * 1000));
+    }
+  }
+
+  return { heartRate, rrIntervals };
+}
+
+/**
+ * Eksponentiell backoff-tidsplan for BLE-reconnect: 1s, 2s, 4s, 8s, 16s, deretter gi opp.
+ * `attempt` er 0-indeksert. Returnerer null når forsøkene er brukt opp (eller for negative forsøk).
+ */
+export function getReconnectDelayMs(attempt: number): number | null {
+  if (attempt < 0 || attempt > 4) {
+    return null;
+  }
+  return 1000 * 2 ** attempt;
 }
 
 // Web Bluetooth types
@@ -41,7 +91,13 @@ export class BluetoothHeartRateService {
   private characteristic: BluetoothGATTCharacteristic | null = null;
   private onDataCallback: ((data: HeartRateData) => void) | null = null;
   private onDisconnectCallback: (() => void) | null = null;
+  private onReconnectingCallback: ((attempt: number) => void) | null = null;
   private maxHeartRate: number = 190; // Standard estimat for aktiv voksen
+
+  // Reconnect-tilstand: skiller "bruker koblet fra bevisst" fra "beltet mistet kontakt"
+  private isManualDisconnect = false;
+  private reconnectAttempt = 0;
+  private reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   public isSupported(): boolean {
     return typeof navigator !== 'undefined' && 'bluetooth' in navigator;
@@ -70,7 +126,8 @@ export class BluetoothHeartRateService {
 
   public async connect(
     onData: (data: HeartRateData) => void,
-    onDisconnect?: () => void
+    onDisconnect?: () => void,
+    onReconnecting?: (attempt: number) => void
   ): Promise<boolean> {
     if (!this.isSupported()) {
       throw new Error('Web Bluetooth er ikke støttet i denne nettleseren.');
@@ -81,6 +138,10 @@ export class BluetoothHeartRateService {
       this.setMaxHeartRate(getUserMaxHeartRate());
       this.onDataCallback = onData;
       this.onDisconnectCallback = onDisconnect || null;
+      this.onReconnectingCallback = onReconnecting || null;
+      this.isManualDisconnect = false;
+      this.reconnectAttempt = 0;
+      this.clearReconnectTimer();
 
       const nav = navigator as unknown as {
         bluetooth: {
@@ -119,6 +180,11 @@ export class BluetoothHeartRateService {
   }
 
   public disconnect() {
+    // Manuell frakobling: hindre at gattserverdisconnected-handleren starter en reconnect
+    this.isManualDisconnect = true;
+    this.clearReconnectTimer();
+    this.reconnectAttempt = 0;
+
     if (this.characteristic) {
       try {
         this.characteristic.removeEventListener('characteristicvaluechanged', this.handleHeartRateMeasurement);
@@ -166,25 +232,146 @@ export class BluetoothHeartRateService {
   }
 
   private handleDisconnected = () => {
-    this.disconnect();
+    if (this.isManualDisconnect) {
+      // Håndtert av disconnect() selv - unngå å starte reconnect på en bevisst frakobling
+      return;
+    }
+
+    // Beltet mistet kontakt uventet: GATT-koblingen er allerede brutt, men behold
+    // device-referansen så vi kan forsøke å koble til igjen. Telleren nullstilles IKKE her -
+    // den er allerede 0 etter connect()/vellykket reconnect, og hvis et forsøk faller ut
+    // midt i en pågående backoff-kjede (flaky belte under service discovery) skal vi
+    // fortsette skjemaet der det var, ikke starte om fra 1s (uendelig retry-loop).
+    this.characteristic = null;
+    this.server = null;
+    this.scheduleReconnect();
   };
+
+  private clearReconnectTimer() {
+    if (this.reconnectTimeoutId !== null) {
+      clearTimeout(this.reconnectTimeoutId);
+      this.reconnectTimeoutId = null;
+    }
+  }
+
+  /** Planlegger neste reconnect-forsøk basert på backoff-skjemaet, eller gir opp. */
+  private scheduleReconnect() {
+    // Enkelte Web Bluetooth-implementasjoner fyrer gattserverdisconnected to ganger for
+    // samme frakobling; uten denne rydder vi bort en evt. allerede ventende timer først
+    // slik at vi aldri får to parallelle backoff/reconnect-kjeder (og dupliserte listeners).
+    this.clearReconnectTimer();
+
+    const delay = getReconnectDelayMs(this.reconnectAttempt);
+    if (delay === null) {
+      this.giveUpReconnecting();
+      return;
+    }
+
+    const attempt = this.reconnectAttempt;
+    this.reconnectTimeoutId = setTimeout(() => {
+      this.reconnectTimeoutId = null;
+      void this.tryReconnect(attempt);
+    }, delay);
+  }
+
+  /** Ett reconnect-forsøk: kobler til GATT-serveren igjen og re-abonnerer på notifikasjoner. */
+  private async tryReconnect(attempt: number) {
+    if (this.isManualDisconnect || !this.device || !this.device.gatt) {
+      return;
+    }
+
+    try {
+      // En kastende onReconnecting-konsument skal ikke avbryte reconnect-kjeden som en
+      // uhåndtert rejection - dette forsøket skal fortsette (eller reschedules) uansett.
+      this.onReconnectingCallback?.(attempt);
+    } catch (err) {
+      console.warn('onReconnecting-callback kastet feil:', err);
+    }
+
+    let staleServer: BluetoothGATTServer | null = null;
+    try {
+      // Brukeren kan ha kalt disconnect() mens et av awaitene under var i flight. disconnect()
+      // finner da ingenting å rive ned (this.server er fortsatt null) og fyrer onDisconnectCallback
+      // med en gang - så hvis vi lar dette forsøket fullføre uanfektet, "gjenopplive" vi en
+      // tilkobling brukeren bevisst har avsluttet, og UI-en begynner å motta data igjen selv om
+      // den allerede fikk beskjed om at økten var over. Derfor sjekkes flagget på nytt etter HVERT
+      // await, og en tilkobling som rekker å bli opprettet etter en manuell frakobling rives
+      // fysisk ned igjen i stedet for å bli tatt i bruk.
+      const server = await this.device.gatt.connect();
+      staleServer = server;
+      if (this.isManualDisconnect) {
+        this.abortStaleReconnect(server);
+        return;
+      }
+
+      const service = await server.getPrimaryService('heart_rate');
+      if (this.isManualDisconnect) {
+        this.abortStaleReconnect(server);
+        return;
+      }
+
+      const characteristic = await service.getCharacteristic('heart_rate_measurement');
+      if (this.isManualDisconnect) {
+        this.abortStaleReconnect(server);
+        return;
+      }
+
+      await characteristic.startNotifications();
+      if (this.isManualDisconnect) {
+        this.abortStaleReconnect(server);
+        return;
+      }
+
+      characteristic.addEventListener('characteristicvaluechanged', this.handleHeartRateMeasurement);
+      this.server = server;
+      this.characteristic = characteristic;
+      this.reconnectAttempt = 0; // Suksess - nullstill telleren for neste gang beltet faller ut
+    } catch (err) {
+      if (this.isManualDisconnect) {
+        // Avbrutt av brukeren mens forsøket var i gang - ikke reschedule, bare rydd opp
+        // en eventuell fersk (men nå ubrukt) GATT-kobling.
+        this.abortStaleReconnect(staleServer);
+        return;
+      }
+      console.warn('BLE reconnect-forsøk feilet:', err);
+      this.reconnectAttempt = attempt + 1;
+      this.scheduleReconnect();
+    }
+  }
+
+  /** Fysisk rydding av en GATT-kobling som ble opprettet etter at brukeren allerede koblet manuelt fra. */
+  private abortStaleReconnect(server: BluetoothGATTServer | null) {
+    if (server && server.connected) {
+      try {
+        server.disconnect();
+      } catch {}
+    }
+  }
+
+  /** Alle reconnect-forsøk er brukt opp: rydd opp og varsle konsumenten som ved vanlig frakobling. */
+  private giveUpReconnecting() {
+    this.clearReconnectTimer();
+
+    if (this.device) {
+      try {
+        this.device.removeEventListener('gattserverdisconnected', this.handleDisconnected);
+      } catch {}
+      this.device = null;
+    }
+    this.characteristic = null;
+    this.server = null;
+
+    if (this.onDisconnectCallback) {
+      this.onDisconnectCallback();
+    }
+  }
 
   private handleHeartRateMeasurement = (event: Event) => {
     const target = event.target as unknown as { value?: DataView };
     const value = target?.value;
     if (!value || value.byteLength < 2) return;
 
-    // Standard Bluetooth Heart Rate parsing (GATT Specification 0x2A37)
-    const flags = value.getUint8(0);
-    const is16Bit = (flags & 0x01) !== 0;
-
-    let heartRate: number;
-    if (is16Bit && value.byteLength >= 3) {
-      heartRate = value.getUint16(1, true); // Little endian
-    } else {
-      heartRate = value.getUint8(1);
-    }
-
+    const { heartRate, rrIntervals } = parseHeartRateMeasurement(value);
     const { zone, zoneName, zoneColor } = this.calculateZone(heartRate);
 
     if (this.onDataCallback) {
@@ -194,6 +381,7 @@ export class BluetoothHeartRateService {
         zoneName,
         zoneColor,
         deviceName: this.getDeviceName(),
+        rrIntervals,
       });
     }
   };

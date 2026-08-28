@@ -63,5 +63,23 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true;
     }
+
+    // Klokkesynkronisering (NTP-forenklet): hver klient skriver/leser sitt eget
+    // clock_sync/{clientId}-dokument for å måle offset mot serverklokken før felles
+    // start i grupperom. Ingen personopplysninger, men dokumentene er ikke eier-bundet
+    // (klient-id er en tilfeldig streng, ikke en auth-uid), så vi stoler ikke på
+    // isOwner/isAuthenticated her slik som for rooms. I stedet begrenses tilgangen
+    // strukturelt: kun direkte get (ingen list, så samlingen ikke kan skrapes), og
+    // create/update må inneholde nøyaktig ett felt («ts») satt til serverens eget
+    // klokkeslett (serverTimestamp() evalueres til request.time i reglene) — en klient
+    // kan altså ikke skrive noe annet enn «hva er klokken nå», hverken til seg selv
+    // eller andres dokumenter.
+    match /clock_sync/{clientId} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if request.resource.data.keys().hasOnly(['ts'])
+        && request.resource.data.ts == request.time;
+      allow delete: if false;
+    }
   }
 }
