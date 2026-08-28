@@ -23,11 +23,20 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
   // reset-framen ved å sammenligne med forrige renders progress (dokumentert
   // React-mønster for "lagre info fra forrige render": oppdater state under selve
   // rendringen, ikke i en effect – unngår en synlig ekstra frame) og slår av
-  // transisjonen KUN for den ene framen. Fremover-bevegelse innad i en fase beholder
-  // den jevne 1s-transisjonen.
+  // transisjonen for reset-framen. isResetFrame må ligge i EGEN state (ikke som en
+  // plain const utledet av prevProgress før den oppdateres) – ellers forkaster React
+  // det pågående rendersteget når setPrevProgress kalles under render og re-kjører
+  // med prevProgress allerede lik clampedProgress, slik at en plain
+  // `clampedProgress < prevProgress`-const alltid ville lest false i committed
+  // resultat (funksjonell no-op, oppdaget ved DOM-probe i code review). Merk: IKKE
+  // bytt til en useRef-mutasjon her – det bryter under StrictMode sin doble
+  // dev-rendring. At flagget blir stående sant gjennom nyfasens gatede første
+  // sekund er ufarlig (offset er uendret helt til neste gatede commit uansett, som
+  // slår flagget tilbake til false i samme committed pass).
   const [prevProgress, setPrevProgress] = useState(clampedProgress);
-  const isResetFrame = clampedProgress < prevProgress;
+  const [isResetFrame, setIsResetFrame] = useState(false);
   if (clampedProgress !== prevProgress) {
+    setIsResetFrame(clampedProgress < prevProgress);
     setPrevProgress(clampedProgress);
   }
 
