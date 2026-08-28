@@ -5,6 +5,8 @@
 **Branch:** `feat/q1-teknisk-spor`
 **Utsatt:** AudioBuffer-migrering og AudioDirector (lyd-tråden er eksplisitt utsatt av Eirik 28.08); Fokusmodus (trenger visuell feedback-løkke med Eirik — egen batch).
 
+**Oppfølging til lyd-batchen (funnet i review av Oppgave 2):** Resync-cuen i `catchUpExpiredPhases` bruker alltid standard-stien (`audioService`/`speechService`) — brukere med aktiv trenerpersona får standard pip + talesyntese ved oppvåkning. Persona-bevisst cue-utvalg hører hjemme i AudioDirector (som sentraliserer nettopp denne prioriteringen); også `round_rest`-grenen i `playResyncCue` mangler testdekning (krever flerrunde-workout i test).
+
 **Felles krav for alle oppgaver:**
 - TypeScript strict mode, ingen `any` uten god grunn, funksjonell stil
 - Vitest for tester; `npm test` og `npx tsc -p tsconfig.app.json --noEmit` skal være grønne før commit
