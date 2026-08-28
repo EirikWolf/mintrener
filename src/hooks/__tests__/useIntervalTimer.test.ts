@@ -5,11 +5,20 @@ import { TABATA_WORKOUT } from '../../data/mockWorkouts';
 import { audioService } from '../../services/audioService';
 import { wakeLockService } from '../../services/wakeLockService';
 import { speechService } from '../../services/speechService';
+import { audioClipService } from '../../services/audioClipService';
 import * as coachPersonaService from '../../services/coachPersonaService';
+
+// jsdom kan ikke fetche relative lyd-URL-er – demp preload-varslene fra
+// buffer-motoren i alle hook-testene (preload er fyr-og-glem-optimalisering)
+function silenceAudioPreloads(): void {
+  vi.spyOn(audioClipService, 'preloadClips').mockImplementation(() => {});
+  vi.spyOn(coachPersonaService, 'preloadPersonaAudio').mockImplementation(() => {});
+}
 
 describe('useIntervalTimer Hook', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    silenceAudioPreloads();
   });
 
   it('initialiserer Tabata-økt med riktige verdier (4:00 totaltid, 10s klargjøring)', () => {
@@ -184,6 +193,7 @@ describe('useIntervalTimer Hook – catch-up ved dvale/lomme (Oppgave 2)', () =>
     // implementasjoner (fra src/test/setup.ts) på tvers av testene i denne filen,
     // og en global restore ville fjernet dem permanent etter første test.
     performanceNowSpy = vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+    silenceAudioPreloads();
   });
 
   afterEach(() => {
@@ -328,5 +338,153 @@ describe('useIntervalTimer Hook – catch-up ved dvale/lomme (Oppgave 2)', () =>
     // Ingen mellomliggende faser skal ha trigget egne lydkall under catch-up
     expect(workStartSpy).toHaveBeenCalledTimes(0);
     expect(restStartSpy).toHaveBeenCalledTimes(0);
+  });
+});
+
+describe('useIntervalTimer Hook – persona-sekvensering og persona-bevisst resync (Oppgave 9+10)', () => {
+  // Samme scaffolding som catch-up-testene over: fake timers driver tick-kadensen,
+  // performance.now-spionen simulerer tidshopp (dvale).
+  const START_MS = 2_000_000;
+  let nowMs = START_MS;
+  let performanceNowSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    nowMs = START_MS;
+    vi.useFakeTimers();
+    performanceNowSpy = vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+    silenceAudioPreloads();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    performanceNowSpy.mockRestore();
+    coachPersonaService.setActiveCoachPersona('standard');
+  });
+
+  it('prepare med persona og cachede buffere: intro + øvelsesnavn spilles som ÉN kjede, ingen 2300ms-timeout', async () => {
+    coachPersonaService.setActiveCoachPersona('hardcore');
+    const introSeqSpy = vi
+      .spyOn(coachPersonaService, 'playIntroThenExercise')
+      .mockResolvedValue(true);
+    const personaCueSpy = vi.spyOn(coachPersonaService, 'playPersonaCue').mockResolvedValue(true);
+    const clipSpy = vi.spyOn(audioClipService, 'playClipOrFallback').mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useIntervalTimer({ workout: TABATA_WORKOUT }));
+    await act(async () => {
+      await result.current.startWorkout();
+    });
+
+    expect(introSeqSpy).toHaveBeenCalledTimes(1);
+    expect(introSeqSpy).toHaveBeenCalledWith('kneboy');
+    expect(personaCueSpy).not.toHaveBeenCalledWith('intro');
+
+    // Den gamle gjettede setTimeout(2300)-stien skal IKKE være aktiv
+    act(() => {
+      vi.advanceTimersByTime(2500);
+    });
+    expect(clipSpy).not.toHaveBeenCalled();
+  });
+
+  it('prepare med persona uten cachede buffere: degradert sti med intro-cue + setTimeout(2300) beholdes', async () => {
+    coachPersonaService.setActiveCoachPersona('hardcore');
+    vi.spyOn(coachPersonaService, 'playIntroThenExercise').mockResolvedValue(false);
+    const personaCueSpy = vi.spyOn(coachPersonaService, 'playPersonaCue').mockResolvedValue(true);
+    const clipSpy = vi.spyOn(audioClipService, 'playClipOrFallback').mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useIntervalTimer({ workout: TABATA_WORKOUT }));
+    await act(async () => {
+      await result.current.startWorkout();
+    });
+
+    expect(personaCueSpy).toHaveBeenCalledWith('intro');
+    expect(clipSpy).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(2300);
+    });
+    expect(clipSpy).toHaveBeenCalledWith('exercise-kneboy', 'Knebøy');
+  });
+
+  it('persona-resync etter dvale: persona-riktig øvelses-cue nøyaktig én gang, ingen standard pip/TTS', async () => {
+    coachPersonaService.setActiveCoachPersona('hardcore');
+    vi.spyOn(coachPersonaService, 'playIntroThenExercise').mockResolvedValue(true);
+    const clipSpy = vi.spyOn(audioClipService, 'playClipOrFallback').mockResolvedValue(undefined);
+    const restStartSpy = vi.spyOn(audioService, 'playRestStart');
+    const workStartSpy = vi.spyOn(audioService, 'playWorkStart');
+    const announceRestSpy = vi.spyOn(speechService, 'announceRest');
+    const announceWorkSpy = vi.spyOn(speechService, 'announceWork');
+
+    const { result } = renderHook(() => useIntervalTimer({ workout: TABATA_WORKOUT }));
+    await act(async () => {
+      await result.current.startWorkout();
+    });
+    clipSpy.mockClear();
+    restStartSpy.mockClear();
+    workStartSpy.mockClear();
+
+    // 95s-hopp lander i pausen etter øvelse index 2 (se catch-up-testen over):
+    // neste øvelse er index 3 «Utfall forover»
+    nowMs = START_MS + 95_000;
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+
+    expect(result.current.state.phase).toBe('rest');
+    expect(result.current.state.currentItemIndex).toBe(2);
+
+    // Nøyaktig ÉN cue – personaens øvelsesannonsering, ikke standard beep+TTS
+    expect(clipSpy).toHaveBeenCalledTimes(1);
+    expect(clipSpy).toHaveBeenCalledWith('exercise-utfall-forover', 'Neste: Utfall forover');
+    expect(restStartSpy).not.toHaveBeenCalled();
+    expect(workStartSpy).not.toHaveBeenCalled();
+    expect(announceRestSpy).not.toHaveBeenCalled();
+    expect(announceWorkSpy).not.toHaveBeenCalled();
+  });
+
+  it('resync som lander i round_rest (flerrunde-økt): standard-cue annonserer første øvelse i neste runde', async () => {
+    // TABATA har bare 1 runde – round_rest-grenen krever en flerrunde-økt
+    const multiRoundWorkout = {
+      id: 'multi-test',
+      name: 'Flerrunde-test',
+      description: 'To runder med runde-pause',
+      type: 'custom' as const,
+      prepareDurationSeconds: 10,
+      rounds: 2,
+      roundRestDurationSeconds: 30,
+      voiceTone: 'rolig' as const,
+      items: [
+        {
+          id: 'mr1',
+          exercise: { id: 'kneboy', name: 'Knebøy' },
+          workDurationSeconds: 20,
+          restDurationSeconds: 10,
+        },
+      ],
+    };
+
+    const restStartSpy = vi.spyOn(audioService, 'playRestStart');
+    const announceRestSpy = vi.spyOn(speechService, 'announceRest');
+
+    const { result } = renderHook(() => useIntervalTimer({ workout: TABATA_WORKOUT }));
+    await act(async () => {
+      await result.current.startWorkout(multiRoundWorkout);
+    });
+    restStartSpy.mockClear();
+    announceRestSpy.mockClear();
+
+    // Tidslinje: prepare 0-10, work 10-30, rest 30-40, round_rest 40-70.
+    // t=50s → 10s inn i round_rest, 20s igjen.
+    nowMs = START_MS + 50_000;
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+
+    expect(result.current.state.status).toBe('running');
+    expect(result.current.state.phase).toBe('round_rest');
+    expect(restStartSpy).toHaveBeenCalledTimes(1);
+    expect(announceRestSpy).toHaveBeenCalledTimes(1);
+    // round_rest-grenen annonserer FØRSTE øvelse (neste runde starter forfra)
+    expect(announceRestSpy).toHaveBeenCalledWith('Knebøy', 'rolig');
   });
 });

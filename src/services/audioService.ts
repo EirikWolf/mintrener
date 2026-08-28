@@ -6,7 +6,12 @@ class AudioService {
   private ctx: AudioContext | null = null;
   private isUnlocked = false;
 
-  private getContext(): AudioContext {
+  /**
+   * Appens ENE AudioContext, lazily opprettet. Offentlig fordi audioBufferEngine
+   * deler den – to kontekster ville gitt separate klokker og doblet ressursbruken,
+   * og sample-nøyaktig skedulering krever felles `currentTime`.
+   */
+  public getContext(): AudioContext {
     if (!this.ctx) {
       const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.ctx = new AudioContextClass();

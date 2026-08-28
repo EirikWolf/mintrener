@@ -1,4 +1,10 @@
+import { audioBufferEngine } from './audioBufferEngine';
+
 export type CoachPersonaId = 'standard' | 'haugesund' | 'romsdal' | 'hardcore' | 'boyband';
+
+export type PersonaCueName = 'intro' | 'start_321' | 'halfway' | 'last5' | 'finish';
+
+const PERSONA_CUES: PersonaCueName[] = ['intro', 'start_321', 'halfway', 'last5', 'finish'];
 
 export interface CoachPersona {
   id: CoachPersonaId;
@@ -100,22 +106,30 @@ export function setActiveCoachPersona(id: CoachPersonaId): void {
 
 const cueAudioCache: Record<string, HTMLAudioElement> = {};
 
+/**
+ * Full URL til en persona-cue. Persona-cuer ligger utenfor audioManifest.json;
+ * URL-en brukes derfor direkte som nøkkel i audioBufferEngine sitt cache.
+ * Returnerer null for personaer uten cuesPath (standard = ren talesyntese).
+ */
+export function getPersonaCueUrl(cue: PersonaCueName, personaId?: CoachPersonaId): string | null {
+  const id = personaId || getActiveCoachPersona();
+  const persona = COACH_PERSONAS.find((p) => p.id === id);
+  return persona?.cuesPath ? `${persona.cuesPath}/${cue}.mp3` : null;
+}
+
 export function preloadPersonaAudio(personaId?: CoachPersonaId): void {
   if (typeof Audio === 'undefined') return;
   const id = personaId || getActiveCoachPersona();
   const persona = COACH_PERSONAS.find((p) => p.id === id);
   if (!persona || !persona.cuesPath) return;
 
-  const cues: Array<'intro' | 'start_321' | 'halfway' | 'last5' | 'finish'> = [
-    'intro',
-    'start_321',
-    'halfway',
-    'last5',
-    'finish',
-  ];
+  const cueUrls = PERSONA_CUES.map((cue) => `${persona.cuesPath}/${cue}.mp3`);
 
-  cues.forEach((cue) => {
-    const url = `${persona.cuesPath}/${cue}.mp3`;
+  // Varm buffer-motoren (primærstien) – dekodede AudioBuffere gir latensfri,
+  // sample-nøyaktig avspilling og mulighet for kjeding (intro + øvelsesnavn)
+  void audioBufferEngine.preload(cueUrls);
+
+  cueUrls.forEach((url) => {
     if (!cueAudioCache[url]) {
       try {
         const audio = new Audio(url);
@@ -129,6 +143,8 @@ export function preloadPersonaAudio(personaId?: CoachPersonaId): void {
 }
 
 export function stopCurrentPersonaAudio(): void {
+  // Buffer-kjeder fades ut i motoren (ingen harde kutt midt i et ord)
+  audioBufferEngine.stop();
   try {
     if (activeAudioElement) {
       if (typeof activeAudioElement.pause === 'function') {
@@ -175,7 +191,7 @@ export async function playPersonaPreview(id: CoachPersonaId): Promise<HTMLAudioE
 }
 
 export async function playPersonaCue(
-  cue: 'intro' | 'start_321' | 'halfway' | 'last5' | 'finish',
+  cue: PersonaCueName,
   personaIdOverride?: CoachPersonaId
 ): Promise<boolean> {
   const activeId = personaIdOverride || getActiveCoachPersona();
@@ -189,6 +205,14 @@ export async function playPersonaCue(
   }
 
   const cueUrl = `${persona.cuesPath}/${cue}.mp3`;
+
+  // Buffer-motoren først: dekodet cue starter uten HTMLAudio-latens.
+  // Fyr-og-glem – kalleren trenger bare å vite at cuen faktisk startet.
+  if (audioBufferEngine.has(cueUrl)) {
+    stopCurrentPersonaAudio();
+    void audioBufferEngine.playSequence([cueUrl]).catch(() => {});
+    return true;
+  }
 
   try {
     if (typeof Audio === 'undefined') return false;
@@ -212,4 +236,25 @@ export async function playPersonaCue(
   } catch (err) {
     return false;
   }
+}
+
+/**
+ * Spiller personaens intro og øvelsesannonseringen som ÉN sample-nøyaktig
+ * bufferkjede – erstatter den gamle sekvenseringen som GJETTET introens
+ * varighet med setTimeout(2300). Returnerer false (uten å spille noe) når
+ * personaen er standard eller bufferne ikke er dekodet ennå, slik at kalleren
+ * kan bruke sin degraderte fallback-sti.
+ */
+export async function playIntroThenExercise(exerciseId: string): Promise<boolean> {
+  if (getActiveCoachPersona() === 'standard') return false;
+
+  const introUrl = getPersonaCueUrl('intro');
+  const exerciseKey = 'exercise-' + exerciseId;
+  if (!introUrl || !audioBufferEngine.has(introUrl) || !audioBufferEngine.has(exerciseKey)) {
+    return false;
+  }
+
+  stopCurrentPersonaAudio();
+  void audioBufferEngine.playSequence([introUrl, exerciseKey]).catch(() => {});
+  return true;
 }

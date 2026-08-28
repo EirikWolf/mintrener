@@ -1,5 +1,6 @@
 import { speechService } from './speechService';
 import { audioDuckingService } from './audioDuckingService';
+import { audioBufferEngine } from './audioBufferEngine';
 import { VoiceTone } from '../schemas/profileSchema';
 import rawManifest from '../data/audioManifest.json';
 
@@ -18,6 +19,21 @@ export class AudioClipService {
     _tone: VoiceTone = 'rolig',
     rate: number = 1.05
   ): Promise<void> {
+    // Buffer-motoren først: sample-nøyaktig start uten HTMLAudio-latens.
+    // Ved false (ikke dekodet ennå / ukjent nøkkel) beholdes den gamle kjeden
+    // HTMLAudio → talesyntese uendret som fallback.
+    try {
+      // Ny annonsering erstatter en pågående: pause HTMLAudio-sporet før
+      // motoren spiller, ellers kan to stemmer overlappe i oppvarmingsvinduet
+      // der bare noen klipp rakk å bli dekodet
+      this.stopActiveAudioElement();
+      if (await audioBufferEngine.playSequence([clipKey])) {
+        return;
+      }
+    } catch (err) {
+      console.warn(`AudioBuffer-avspilling feilet for "${clipKey}", bruker fallback:`, err);
+    }
+
     const audioUrl = AUDIO_MANIFEST[clipKey];
 
     if (audioUrl) {
@@ -34,10 +50,12 @@ export class AudioClipService {
   }
 
   /**
-   * Forhåndslaster en liste klipp inn i cachen. Nøkler uten manifest-oppslag
-   * ignoreres stille – avspilling har egen talesyntese-fallback uansett.
+   * Forhåndslaster en liste klipp. Primært dekodes de til AudioBuffere i motoren
+   * (fjerner første-avspillingskostnaden helt); HTMLAudio-cachen varmes i tillegg
+   * slik at fallback-stien også er klar hvis dekoding feiler (f.eks. offline).
    */
   public preloadClips(clipKeys: string[]): void {
+    void audioBufferEngine.preload(clipKeys);
     clipKeys.forEach((key) => {
       const url = AUDIO_MANIFEST[key];
       if (!url || this.audioCache.has(url)) return;
@@ -51,13 +69,25 @@ export class AudioClipService {
     });
   }
 
+  /** Pauser og nullstiller et aktivt HTMLAudio-spor (ny annonsering erstatter pågående). */
+  private stopActiveAudioElement(): void {
+    if (!this.activeAudio) return;
+    try {
+      this.activeAudio.pause();
+      this.activeAudio.currentTime = 0;
+    } catch {
+      // Allerede stoppet / ikke støttet i miljøet
+    }
+    this.activeAudio = null;
+  }
+
   private playAudioFile(url: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        if (this.activeAudio) {
-          this.activeAudio.pause();
-          this.activeAudio.currentTime = 0;
-        }
+        this.stopActiveAudioElement();
+        // Symmetrisk med motor-stien over: stopp en eventuell bufferkjede før
+        // HTMLAudio spiller, så de to lydstiene aldri overlapper
+        audioBufferEngine.stop();
 
         let audio = this.audioCache.get(url);
         if (!audio) {

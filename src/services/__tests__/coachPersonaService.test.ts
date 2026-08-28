@@ -4,6 +4,8 @@ import {
   getActiveCoachPersona,
   setActiveCoachPersona,
   playPersonaCue,
+  playIntroThenExercise,
+  getPersonaCueUrl,
   stopCurrentPersonaAudio
 } from '../coachPersonaService';
 
@@ -42,5 +44,22 @@ describe('coachPersonaService', () => {
 
   it('stops current persona audio gracefully without error', () => {
     expect(() => stopCurrentPersonaAudio()).not.toThrow();
+  });
+
+  it('bygger cue-URL fra personaens cuesPath, og null for standard (uten cuesPath)', () => {
+    expect(getPersonaCueUrl('intro', 'hardcore')).toBe('/audio/personas/hardcore/intro.mp3');
+    expect(getPersonaCueUrl('start_321', 'romsdal')).toBe('/audio/personas/romsdal/start_321.mp3');
+    expect(getPersonaCueUrl('intro', 'standard')).toBeNull();
+  });
+
+  it('playIntroThenExercise returnerer false for standard persona', async () => {
+    setActiveCoachPersona('standard');
+    await expect(playIntroThenExercise('kneboy')).resolves.toBe(false);
+  });
+
+  it('playIntroThenExercise returnerer false når bufferne ikke er dekodet (degradert sti)', async () => {
+    setActiveCoachPersona('hardcore');
+    // Ingen preload har skjedd i denne testen – motoren har tomt cache
+    await expect(playIntroThenExercise('kneboy')).resolves.toBe(false);
   });
 });
