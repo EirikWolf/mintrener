@@ -227,10 +227,11 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
         {/* 1. Navn & Runder */}
         <div className="bg-zinc-900/80 border border-zinc-800/80 rounded-2xl p-3 space-y-2.5 shadow-sm">
           <div>
-            <label className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">
+            <label htmlFor="workout-builder-name" className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">
               Øktens navn
             </label>
             <input
+              id="workout-builder-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}

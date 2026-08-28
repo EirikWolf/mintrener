@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   bluetoothHeartRateService,
@@ -12,12 +12,39 @@ interface HeartRateWidgetProps {
 
 export const HeartRateWidget: React.FC<HeartRateWidgetProps> = ({ onHeartRateUpdate }) => {
   const [data, setData] = useState<HeartRateData | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
+  // Widgeten kan unmountes og remountes midt i en aktiv BLE-tilkobling — siden
+  // fokusmodus (Oppgave 8) skjuler hele toppraden under en økt og viser den
+  // igjen ved fullført/idle. Selve tilkoblingen (singleton-tjenesten) lever
+  // videre uavhengig av React-treet, så vi initialiserer fra tjenestens
+  // faktiske tilstand i stedet for å anta «ikke tilkoblet» ved hver remount.
+  const [isConnected, setIsConnected] = useState(() => bluetoothHeartRateService.isConnected());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const isSupported = bluetoothHeartRateService.isSupported();
+
+  // Ved remount mens tilkoblingen allerede lever: koble de nye callbackene til
+  // tjenesten (uten ny paring), slik at widgeten fortsetter å motta puls-
+  // oppdateringer og disconnect-varsler etter at komponenten skiftes ut.
+  useEffect(() => {
+    if (bluetoothHeartRateService.isConnected()) {
+      bluetoothHeartRateService.reattach(
+        (hrData) => {
+          setData(hrData);
+          setIsConnected(true);
+          if (onHeartRateUpdate) {
+            onHeartRateUpdate(hrData.heartRate);
+          }
+        },
+        () => {
+          setIsConnected(false);
+          setData(null);
+        }
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onHeartRateUpdate]);
 
   const handleConnect = async () => {
     setIsConnecting(true);

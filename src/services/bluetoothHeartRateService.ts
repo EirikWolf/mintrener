@@ -215,6 +215,18 @@ export class BluetoothHeartRateService {
     return !!this.server && this.server.connected;
   }
 
+  /**
+   * Bytter ut lagrede callbacks uten å koble fra eller be om ny enhet.
+   * Trengs fordi HeartRateWidget kan unmountes/remountes midt i en aktiv
+   * BLE-tilkobling (fokusmodus skjuler/viser widgeten når en økt starter/
+   * fullføres) — selve tilkoblingen lever videre i denne singleton-tjenesten,
+   * men den forrige komponentinstansens callbacks peker på avmontert state.
+   */
+  public reattach(onData: (data: HeartRateData) => void, onDisconnect?: () => void) {
+    this.onDataCallback = onData;
+    this.onDisconnectCallback = onDisconnect || null;
+  }
+
   public getDeviceName(): string {
     return this.device?.name || 'Pulsbelte / Klokke';
   }
