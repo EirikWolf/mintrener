@@ -114,4 +114,24 @@ describe('tickerService – Worker-metronom', () => {
 
     expect(FakeWorker.instances).toHaveLength(0);
   });
+
+  it('faller tilbake til setInterval hvis worker-oppretting feiler', () => {
+    class ThrowingWorker {
+      constructor() {
+        throw new Error('Worker ikke tilgjengelig i dette miljøet');
+      }
+    }
+    vi.stubGlobal('Worker', ThrowingWorker);
+    vi.useFakeTimers();
+
+    const onTick = vi.fn();
+    const ticker = createTicker(onTick, 100);
+
+    expect(() => ticker.start()).not.toThrow();
+    vi.advanceTimersByTime(250);
+    expect(onTick).toHaveBeenCalledTimes(2);
+
+    ticker.stop();
+    vi.useRealTimers();
+  });
 });
