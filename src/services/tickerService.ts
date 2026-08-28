@@ -32,10 +32,29 @@ function createFallbackTicker(onTick: () => void, intervalMs: number): Ticker {
 function createWorkerTicker(onTick: () => void, intervalMs: number): Ticker {
   let worker: Worker | undefined;
   let fallback: Ticker | undefined;
+  let isRunning = false;
+
+  // new Worker() kaster nesten aldri synkront i ekte nettlesere – feil ved
+  // script-henting/parsing (f.eks. en utdatert PWA-utrulling der den hashede
+  // worker-chunken 404-er) dukker i stedet opp asynkront som en 'error'-hendelse.
+  // Uten denne fangeren ville ticker levert null ticks og timeren fryse stille
+  // (bortsett fra den enkeltstående visibilitychange-ticken ved oppvåkning).
+  function switchToFallback() {
+    if (!isRunning || fallback) return; // allerede stoppet, eller allerede byttet
+    if (worker) {
+      worker.onmessage = null;
+      worker.onerror = null;
+      worker.terminate();
+      worker = undefined;
+    }
+    fallback = createFallbackTicker(onTick, intervalMs);
+    fallback.start();
+  }
 
   return {
     start() {
       if (worker || fallback) return; // idempotent
+      isRunning = true;
 
       try {
         // Vite-mønsteret for bundlede workers: URL-konstruktøren gjør at Vite kan
@@ -44,6 +63,10 @@ function createWorkerTicker(onTick: () => void, intervalMs: number): Ticker {
           type: 'module',
         });
         worker.onmessage = () => onTick();
+        worker.onerror = () => {
+          console.warn('Timer-worker feilet asynkront, faller tilbake til setInterval');
+          switchToFallback();
+        };
         worker.postMessage({ cmd: 'start', intervalMs });
       } catch (err) {
         console.warn('Kunne ikke opprette timer-worker, faller tilbake til setInterval:', err);
@@ -53,7 +76,10 @@ function createWorkerTicker(onTick: () => void, intervalMs: number): Ticker {
       }
     },
     stop() {
+      isRunning = false;
       if (worker) {
+        worker.onmessage = null;
+        worker.onerror = null;
         worker.postMessage({ cmd: 'stop' });
         worker.terminate();
         worker = undefined;

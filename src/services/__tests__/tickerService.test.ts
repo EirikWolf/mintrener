@@ -55,6 +55,7 @@ describe('tickerService – Worker-metronom', () => {
   class FakeWorker {
     static instances: FakeWorker[] = [];
     onmessage: ((event: { data: string }) => void) | null = null;
+    onerror: ((event: unknown) => void) | null = null;
     postMessage = vi.fn();
     terminate = vi.fn();
 
@@ -113,6 +114,67 @@ describe('tickerService – Worker-metronom', () => {
     createTicker(vi.fn(), 100);
 
     expect(FakeWorker.instances).toHaveLength(0);
+  });
+
+  it('dobbel start() oppretter ikke en ny worker', () => {
+    const ticker = createTicker(vi.fn(), 100);
+
+    ticker.start();
+    ticker.start();
+
+    expect(FakeWorker.instances).toHaveLength(1);
+  });
+
+  it('konstruerer worker med en URL som peker mot timerTick.worker (regresjonsvern for sti)', () => {
+    const ticker = createTicker(vi.fn(), 100);
+
+    ticker.start();
+
+    expect(FakeWorker.instances).toHaveLength(1);
+    expect(FakeWorker.instances[0].url.toString()).toContain('timerTick.worker');
+  });
+
+  it('faller tilbake til setInterval hvis worker-oppretting feiler asynkront (onerror)', () => {
+    vi.useFakeTimers();
+
+    const onTick = vi.fn();
+    const ticker = createTicker(onTick, 100);
+
+    ticker.start();
+    const worker = FakeWorker.instances[0];
+
+    // Simuler asynkron feil (f.eks. stale PWA-utrulling der worker-chunken 404-er)
+    worker.onerror?.(new Event('error'));
+
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(250);
+    expect(onTick).toHaveBeenCalledTimes(2);
+
+    ticker.stop();
+    vi.useRealTimers();
+  });
+
+  it('onerror etter stop() starter ikke en fallback-ticker', () => {
+    vi.useFakeTimers();
+
+    const onTick = vi.fn();
+    const ticker = createTicker(onTick, 100);
+
+    ticker.start();
+    const worker = FakeWorker.instances[0];
+    // Fang referansen til feilhåndtereren før stop() nuller den ut, for å simulere
+    // en 'error'-hendelse som var i ferd med å avfyres idet stop() kjørte
+    const errorHandler = worker.onerror;
+    ticker.stop();
+    onTick.mockClear();
+
+    errorHandler?.(new Event('error'));
+    vi.advanceTimersByTime(500);
+
+    expect(onTick).not.toHaveBeenCalled();
+
+    vi.useRealTimers();
   });
 
   it('faller tilbake til setInterval hvis worker-oppretting feiler', () => {
