@@ -10,6 +10,7 @@ import { saveInterruptedSession, clearInterruptedSession, InterruptedSession } f
 import { createTicker } from '../services/tickerService';
 import {
   playPersonaCue,
+  playIntroThenExercise,
   getActiveCoachPersona,
   stopCurrentPersonaAudio,
   preloadPersonaAudio
@@ -147,14 +148,24 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
         duration = w?.prepareDurationSeconds || 5;
         if (!silent && stateRef.current.speechEnabled) {
           if (persona !== 'standard') {
-            playPersonaCue('intro');
-            if (duration >= 6) {
-              const firstEx = items[0]?.exercise;
-              setTimeout(() => {
-                if (stateRef.current.phase === 'prepare' && stateRef.current.status === 'running') {
-                  if (firstEx) audioClipService.playClipOrFallback('exercise-' + firstEx.id, firstEx.name);
-                }
-              }, 2300);
+            const firstEx = items[0]?.exercise;
+            if (duration >= 6 && firstEx) {
+              // Intro + øvelsesnavn som ÉN sample-nøyaktig bufferkjede – introens
+              // faktiske varighet styrer skjøten, ingen gjetting
+              void playIntroThenExercise(firstEx.id).then((played) => {
+                if (played) return;
+                // Degradert sti: bufferne er ikke dekodet ennå (første økt rett
+                // etter oppstart / offline) – spill intro via Audio-element og
+                // gjett introens varighet med setTimeout, som før migreringen
+                playPersonaCue('intro');
+                setTimeout(() => {
+                  if (stateRef.current.phase === 'prepare' && stateRef.current.status === 'running') {
+                    audioClipService.playClipOrFallback('exercise-' + firstEx.id, firstEx.name);
+                  }
+                }, 2300);
+              });
+            } else {
+              playPersonaCue('intro');
             }
           } else {
             speechService.announcePrepare(items[0]?.exercise?.name, tone);
@@ -298,9 +309,39 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     }
   }, [setupPhase]);
 
+  // Persona-variant av resync-cuen: samme annonsering som setupPhase ville gitt
+  // for landingsfasen (øvelsesklipp i personaens verden), slik at brukere med
+  // aktiv trenerpersona ikke plutselig får standard pip + talesyntese ved
+  // oppvåkning. Nøyaktig én cue, som i standard-stien.
+  const playPersonaResyncCue = useCallback(() => {
+    const items = stateRef.current.workout?.items || [];
+    const idx = stateRef.current.currentItemIndex;
+    const landingPhase = stateRef.current.phase;
+
+    if (landingPhase === 'work') {
+      const ex = items[idx]?.exercise;
+      if (stateRef.current.speechEnabled && ex) {
+        audioClipService.playClipOrFallback('exercise-' + ex.id, ex.name);
+      }
+      vibrationService.workStart(stateRef.current.vibrateEnabled);
+    } else {
+      // rest eller round_rest – annonser neste øvelse, som setupPhase gjør
+      const nextEx = landingPhase === 'round_rest' ? items[0]?.exercise : items[idx + 1]?.exercise;
+      if (stateRef.current.speechEnabled && nextEx) {
+        audioClipService.playClipOrFallback('exercise-' + nextEx.id, 'Neste: ' + nextEx.name);
+      }
+      vibrationService.restStart(stateRef.current.vibrateEnabled);
+    }
+  }, []);
+
   // Spill én resynkroniserings-cue etter stille catch-up: gjenbruker eksisterende
   // lyd/tale/vibrasjons-tjenester (ikke nye lydstier), basert på landingsfasen.
   const playResyncCue = useCallback(() => {
+    if (getActiveCoachPersona() !== 'standard') {
+      playPersonaResyncCue();
+      return;
+    }
+
     const w = stateRef.current.workout;
     const items = w?.items || [];
     const tone = w?.voiceTone || 'rolig';
@@ -322,7 +363,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       }
       vibrationService.restStart(stateRef.current.vibrateEnabled);
     }
-  }, []);
+  }, [playPersonaResyncCue]);
 
   // Håndter en eller flere utløpte faser i én tick. Ved normal drift (fanen synlig,
   // overshoot ~0) beholdes dagens oppførsel uendret: ett avansement med full lyd.
