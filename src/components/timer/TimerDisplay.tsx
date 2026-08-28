@@ -272,7 +272,9 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             {isVoiceControlActive && (
               <button
                 onClick={() => voiceCommandService.toggleListening()}
-                aria-label="Håndfri stemmestyring aktiv (trykk for å pause)"
+                role="switch"
+                aria-checked={isVoiceControlActive}
+                aria-label="Håndfri stemmestyring"
                 className="p-2 rounded-full text-indigo-400 bg-indigo-950/80 ring-1 ring-indigo-400/60 animate-pulse transition-all active:scale-95"
               >
                 <Mic className="w-4 h-4" />

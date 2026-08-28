@@ -233,11 +233,12 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
 
                     {/* Tilbakemeldingsfelt */}
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-zinc-400 flex items-center gap-1">
+                      <label htmlFor={`curator-feedback-${key}`} className="text-[10px] font-bold text-zinc-400 flex items-center gap-1">
                         <MessageSquare className="w-3 h-3 text-zinc-400" />
                         Hva må forbedres på dette bildet?
                       </label>
                       <textarea
+                        id={`curator-feedback-${key}`}
                         rows={2}
                         value={cur?.feedback || ''}
                         onChange={(e) => saveFeedback(key, e.target.value, cur?.status || 'mangler')}
