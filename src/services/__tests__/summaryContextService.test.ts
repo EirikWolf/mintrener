@@ -61,7 +61,7 @@ describe('buildEffectiveHistory', () => {
     expect(effective).toHaveLength(1);
   });
 
-  it('dobbelttellker ikke ved re-kjøring etter at id-en bekreftes (simulerer effekt-rerun)', () => {
+  it('dobbelteller ikke ved re-kjøring etter at id-en bekreftes (simulerer effekt-rerun)', () => {
     // Første kjøring: workoutLogId ikke satt ennå
     const historyBeforeSave: CompletedWorkoutLog[] = [];
     const firstRun = buildEffectiveHistory(historyBeforeSave, session, undefined);
