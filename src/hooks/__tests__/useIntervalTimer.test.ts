@@ -8,6 +8,15 @@ import { speechService } from '../../services/speechService';
 import { audioClipService } from '../../services/audioClipService';
 import * as coachPersonaService from '../../services/coachPersonaService';
 
+// A5: telemetryService importerer ../firebase, som initialiserer ekte Firebase
+// Auth ved modul-load og kaster (auth/invalid-api-key) uten .env.local. Hooken
+// kaller kun recordPerfTelemetry fire-and-forget – mock hele modulen slik at
+// denne testfilen aldri berører firebase.ts (samme mønster som
+// clockSyncService.test.ts bruker for ../firebase direkte).
+vi.mock('../../services/telemetryService', () => ({
+  recordPerfTelemetry: vi.fn().mockResolvedValue(undefined),
+}));
+
 // jsdom kan ikke fetche relative lyd-URL-er – demp preload-varslene fra
 // buffer-motoren i alle hook-testene (preload er fyr-og-glem-optimalisering)
 function silenceAudioPreloads(): void {

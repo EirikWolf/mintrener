@@ -110,7 +110,7 @@ service cloud.firestore {
 
     // Generell regel for samlingen: alle kan lese (vises i UI), ingen kan
     // slette, og skriving tillates KUN via de spesifikke dokument-matchene
-    // under (overview/ratings/exercises) — andre dokument-id-er avvises.
+    // under (overview/ratings/exercises/perf) — andre dokument-id-er avvises.
     match /global_stats/{statId} {
       allow read: if true;
       allow delete: if false;
@@ -174,6 +174,40 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).removedKeys().size() == 0
         && request.resource.data.diff(resource.data).affectedKeys().size() <= 41
         && request.resource.data.size() <= 500;
+    }
+
+    // Ytelsestelemetri (A5, audit § 9.4/§ 7.3): long tasks/treningsminutt og
+    // faseovergangs-lydavvik, aggregert per økt fra perfMonitorService via
+    // telemetryService.recordPerfTelemetry. p95 kan ikke aggregeres med rene
+    // increment()-er, så klienten sender i stedet ett økt-inkrement (`sessions`),
+    // en heltalls long-task-teller, en stikkprøve-teller (avgrenset til
+    // MAX_AUDIO_SAMPLES=200 per økt i klienten), og ÉN av tre bøtte-inkrementer
+    // for øktens p95 — samme pragmatiske linje som exercises-dokumentet: kjent
+    // felt-allowlist + serverstemplet lastUpdated + begrensede deltaer per felt.
+    match /global_stats/perf {
+      allow create: if request.resource.data.keys().hasOnly(
+          ['sessions', 'longTasks', 'audioDeviationSamples',
+           'deviationUnder20Ms', 'deviation20to50Ms', 'deviationOver50Ms', 'lastUpdated'])
+        && request.resource.data.lastUpdated == request.time
+        && counterInitOk('sessions', 1)
+        // Romslig øvre grense — en enkelt økt med vedvarende hovedtråd-jank
+        // kunne i teorien produsere svært mange entries, men ikke ubegrenset
+        && counterInitOk('longTasks', 5000)
+        && counterInitOk('audioDeviationSamples', 200)
+        && counterInitOk('deviationUnder20Ms', 1)
+        && counterInitOk('deviation20to50Ms', 1)
+        && counterInitOk('deviationOver50Ms', 1);
+
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+          ['sessions', 'longTasks', 'audioDeviationSamples',
+           'deviationUnder20Ms', 'deviation20to50Ms', 'deviationOver50Ms', 'lastUpdated'])
+        && request.resource.data.lastUpdated == request.time
+        && counterDeltaOk('sessions', 1)
+        && counterDeltaOk('longTasks', 5000)
+        && counterDeltaOk('audioDeviationSamples', 200)
+        && counterDeltaOk('deviationUnder20Ms', 1)
+        && counterDeltaOk('deviation20to50Ms', 1)
+        && counterDeltaOk('deviationOver50Ms', 1);
     }
 
     // Klokkesynkronisering (NTP-forenklet): hver klient skriver/leser sitt eget

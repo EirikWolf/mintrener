@@ -80,6 +80,15 @@ beforeEach(async () => {
       for_tungt: 2,
       lastUpdated: new Date(),
     });
+    await setDoc(doc(db, 'global_stats', 'perf'), {
+      sessions: 3,
+      longTasks: 2,
+      audioDeviationSamples: 40,
+      deviationUnder20Ms: 2,
+      deviation20to50Ms: 1,
+      deviationOver50Ms: 0,
+      lastUpdated: new Date(),
+    });
     await setDoc(doc(db, 'users', 'alice'), { displayName: 'Alice' });
     await setDoc(doc(db, 'clock_sync', 'client-abc'), { ts: new Date() });
   });
@@ -206,6 +215,43 @@ describe('global_stats', () => {
       setDoc(
         doc(db, 'global_stats', 'ratings'),
         { for_tungt: increment(1), lastUpdated: serverTimestamp() },
+        { merge: true }
+      )
+    );
+  });
+});
+
+describe('global_stats/perf (A5 ytelsestelemetri, regresjonsvern)', () => {
+  it('POSITIV: gyldig økt-inkrement går gjennom (recordPerfTelemetry-formen)', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertSucceeds(
+      setDoc(
+        doc(db, 'global_stats', 'perf'),
+        {
+          sessions: increment(1),
+          longTasks: increment(4),
+          audioDeviationSamples: increment(180),
+          deviationUnder20Ms: increment(1),
+          lastUpdated: serverTimestamp(),
+        },
+        { merge: true }
+      )
+    );
+  });
+
+  it('NEGATIV: kan IKKE erstatte perf med vilkårlige data (ikke increment, mangler lastUpdated)', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertFails(
+      setDoc(doc(db, 'global_stats', 'perf'), { sessions: 999999, longTasks: 0 })
+    );
+  });
+
+  it('NEGATIV: kan IKKE skrive ukjente felt til perf', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertFails(
+      setDoc(
+        doc(db, 'global_stats', 'perf'),
+        { hacked: 'yes', sessions: increment(1), lastUpdated: serverTimestamp() },
         { merge: true }
       )
     );
