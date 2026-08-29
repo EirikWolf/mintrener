@@ -130,7 +130,10 @@ export async function fetchCustomWorkouts(userId?: string | null): Promise<Worko
     const snap = await getDocs(ref);
     const remote = snap.docs.map((d) => d.data() as WorkoutTemplate);
 
-    // Slå sammen unike økter
+    // Slå sammen unike økter. Merk: tilbakeskrivingen under persisterer den
+    // skjemafiltrerte lokal-listen — elementer droppet av valideringen (med
+    // console.warn i getLocalCustomWorkouts) fjernes altså permanent. Bevisst:
+    // etter at kategori-feltet ble gjort tolerant er dét kun ekte søppel.
     const map = new Map<string, WorkoutTemplate>();
     local.forEach((w) => map.set(w.id, w));
     remote.forEach((w) => map.set(w.id, w));
@@ -151,7 +154,8 @@ export async function deleteCustomWorkout(
   workoutId: string,
   userId?: string | null
 ): Promise<void> {
-  // 1. Slett lokalt
+  // 1. Slett lokalt. Tilbakeskrivingen persisterer den skjemafiltrerte listen
+  // (se kommentar i fetchCustomWorkouts) — bevisst, og varslet ved lesing.
   const localList = getLocalCustomWorkouts().filter((w) => w.id !== workoutId);
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(localList));
 

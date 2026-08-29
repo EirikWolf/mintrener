@@ -85,6 +85,40 @@ describe('Share Workout Service (Deep-linking)', () => {
     expect(getErrorToast()).toBeNull();
   });
 
+  it('runde-turer builder-økter med norske kategorier uten avvisning (BLOCKER-regresjon)', () => {
+    const builderWorkout: WorkoutTemplate = {
+      id: 'custom-1756400000000',
+      name: 'Min bygde økt',
+      description: '',
+      type: 'custom',
+      prepareDurationSeconds: 10,
+      rounds: 3,
+      roundRestDurationSeconds: 0,
+      items: [
+        {
+          id: 'item-1',
+          exercise: { id: 'kb-sving', name: 'Kettlebell-svinger', category: 'frivekt' },
+          workDurationSeconds: 30,
+          restDurationSeconds: 15,
+        },
+      ],
+    };
+    const urlStr = generateShareUrl(builderWorkout);
+    const encoded = new URL(urlStr).searchParams.get('w');
+
+    vi.stubGlobal('location', {
+      origin: 'https://mintrener.web.app',
+      pathname: '/',
+      href: urlStr,
+      search: `?w=${encoded}`,
+    });
+
+    const parsed = getSharedWorkoutFromUrl();
+    expect(parsed).not.toBeNull();
+    expect(parsed?.items[0].exercise.category).toBe('frivekt');
+    expect(getErrorToast()).toBeNull();
+  });
+
   it('avviser payload med feil form (skjemavalidering) og viser norsk feilmelding', () => {
     const hostile = {
       id: 'x',

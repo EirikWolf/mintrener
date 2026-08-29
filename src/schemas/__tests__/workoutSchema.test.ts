@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  WorkoutExerciseSchema,
   WorkoutTemplateSchema,
   InterruptedSessionSchema,
   CompletedWorkoutLogSchema,
@@ -67,6 +68,64 @@ describe('WorkoutTemplateSchema', () => {
       ],
     };
     expect(WorkoutTemplateSchema.safeParse(withOptionals).success).toBe(true);
+  });
+
+  it('aksepterer builder-økter med bibliotekets NORSKE kategorier i alle skjemaer (BLOCKER-regresjon: datatap)', () => {
+    // WorkoutBuilderView/MicroWorkoutModal skriver ExerciseItem.kategori
+    // (kroppsvekt/kettlebell/frivekt/mobilitet/kondisjon/annet) rett inn i
+    // Exercise.category. Skjemaet MÅ tolerere disse — ellers forkastes ekte
+    // maler ved lasting og tilbakeskrivingene sletter dem permanent.
+    const norskeKategorier = ['kroppsvekt', 'frivekt', 'mobilitet', 'kondisjon', 'annet'];
+    for (const kategori of norskeKategorier) {
+      const exercise = { id: 'ex-1', name: 'Øvelse', category: kategori };
+      expect(WorkoutExerciseSchema.safeParse(exercise).success).toBe(true);
+    }
+
+    const builderWorkout = {
+      id: 'custom-1756400000000',
+      name: 'Min bygde økt',
+      description: '',
+      type: 'custom',
+      prepareDurationSeconds: 10,
+      rounds: 3,
+      roundRestDurationSeconds: 0,
+      items: [
+        {
+          id: 'item-1',
+          exercise: { id: 'kb-sving', name: 'Kettlebell-svinger', nameEn: 'KB Swings', category: 'frivekt' },
+          workDurationSeconds: 30,
+          restDurationSeconds: 15,
+        },
+        {
+          id: 'item-2',
+          exercise: { id: 'kneboy', name: 'Knebøy', category: 'kroppsvekt' },
+          workDurationSeconds: 30,
+          restDurationSeconds: 15,
+        },
+      ],
+    };
+    const templateResult = WorkoutTemplateSchema.safeParse(builderWorkout);
+    expect(templateResult.success).toBe(true);
+    if (templateResult.success) {
+      // Kategorien skal bevares som metadata, ikke strippes
+      expect(templateResult.data.items[0].exercise.category).toBe('frivekt');
+    }
+
+    expect(
+      InterruptedSessionSchema.safeParse({
+        workout: builderWorkout,
+        phase: 'work',
+        currentRound: 2,
+        currentItemIndex: 1,
+        totalElapsedSeconds: 95,
+        savedAt: Date.now(),
+      }).success
+    ).toBe(true);
+  });
+
+  it('avviser fortsatt kategori som ikke er en streng', () => {
+    const badExercise = { id: 'ex-1', name: 'Øvelse', category: { nested: true } };
+    expect(WorkoutExerciseSchema.safeParse(badExercise).success).toBe(false);
   });
 
   it('avviser manglende navn', () => {

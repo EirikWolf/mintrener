@@ -98,4 +98,40 @@ describe('firestoreService — lokal historikk med skjemavalidering', () => {
     await saveCompletedWorkout('user-123', newLogData);
     expect(getErrorToast()).toBeNull();
   });
+
+  it('dobbel feil (lokal + synk): toasten forteller hele sannheten, ikke bare synk-delen', async () => {
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new Error('QuotaExceededError');
+      });
+    vi.mocked(setDoc).mockRejectedValue(new Error('offline'));
+
+    try {
+      await saveCompletedWorkout('user-123', newLogData);
+    } finally {
+      setItemSpy.mockRestore();
+    }
+
+    // «lagret på enheten, men …» ville vært løgn — begge lagringene feilet
+    expect(getErrorToast()?.message).toMatch(/verken/i);
+    expect(getErrorToast()?.message).not.toMatch(/ble lagret/i);
+  });
+
+  it('kun lokal feil (anonym bruker): toasten melder lokal-feilen', async () => {
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new Error('QuotaExceededError');
+      });
+
+    try {
+      await saveCompletedWorkout(null, newLogData);
+    } finally {
+      setItemSpy.mockRestore();
+    }
+
+    expect(getErrorToast()?.message).toMatch(/lokalt/i);
+    expect(getErrorToast()?.message).not.toMatch(/sky/i);
+  });
 });

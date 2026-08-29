@@ -4,7 +4,10 @@ export interface Exercise {
   id: string;
   name: string;
   nameEn?: string;
-  category?: 'bodyweight' | 'kettlebell' | 'dumbbell' | 'cardio' | 'mobility';
+  // Ren metadata som kopieres gjennom (deling/visning) — ingen logikk brancher
+  // på verdien. I praksis engelske verdier i preset-data (bodyweight/cardio/…)
+  // og bibliotekets norske kategorier (kroppsvekt/frivekt/…) fra builderen.
+  category?: string;
   description?: string;
 }
 

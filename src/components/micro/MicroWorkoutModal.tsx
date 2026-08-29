@@ -66,7 +66,7 @@ export const MicroWorkoutModal: React.FC<MicroWorkoutModalProps> = ({
             id: selectedExercise.id,
             name: selectedExercise.navn.nb,
             nameEn: selectedExercise.navn.en,
-            category: selectedExercise.kategori as any,
+            category: selectedExercise.kategori,
           },
           workDurationSeconds: selectedDuration,
           restDurationSeconds: 0,

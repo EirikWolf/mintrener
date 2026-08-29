@@ -18,7 +18,11 @@ export const WorkoutExerciseSchema = z.object({
   id: z.string().min(1).max(100),
   name: z.string().min(1).max(200),
   nameEn: z.string().max(200).optional(),
-  category: z.enum(['bodyweight', 'kettlebell', 'dumbbell', 'cardio', 'mobility']).optional(),
+  // Bevisst tolerant (review-BLOCKER): feltet er ren gjennomkopiert metadata
+  // (ingen logikk brancher på det), og builderen skriver bibliotekets NORSKE
+  // kategorier (kroppsvekt/frivekt/…) mens eldre data har engelske. En streng
+  // enum her ville forkastet ekte økter → permanent datatap ved tilbakeskriving.
+  category: z.string().max(100).optional(),
   description: z.string().max(2000).optional(),
 });
 

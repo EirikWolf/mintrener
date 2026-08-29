@@ -105,7 +105,7 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
         id: exercise.id,
         name: exercise.navn.nb,
         nameEn: exercise.navn.en,
-        category: exercise.kategori as any,
+        category: exercise.kategori,
       },
       workDurationSeconds:
         exercise.defaultDurationSeconds ||

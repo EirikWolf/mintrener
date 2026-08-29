@@ -92,16 +92,18 @@ export async function saveCompletedWorkout(
 
   // 1. Lagre lokalt (skjemavalidert lesing: korrupt eksisterende historikk
   // skal ikke hindre at DENNE økten blir lagret)
+  let localOk = true;
   try {
     const list = readLocalHistory();
     list.unshift(newLog);
     localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(list));
   } catch (err) {
+    localOk = false;
     console.warn('Kunne ikke lagre lokal historikk:', err);
-    showErrorToast('Kunne ikke lagre økten lokalt på enheten.');
   }
 
   // 2. Lagre i Firestore hvis innlogget (bruk samme ID som lokalt)
+  let syncFailed = false;
   if (userId) {
     try {
       const docRef = doc(db, 'users', userId, 'history', newLog.id);
@@ -109,12 +111,21 @@ export async function saveCompletedWorkout(
         ...newLog,
         timestamp: serverTimestamp(),
       });
-      return newLog.id;
     } catch (err) {
-      // Feil-toast (revisjon § 2.4): tidligere ble dette svelget i console
+      syncFailed = true;
       console.warn('Kunne ikke synke historikk til Firestore:', err);
-      showErrorToast('Økten ble lagret på enheten, men kunne ikke synkes til skyen.');
     }
+  }
+
+  // Én toast som forteller hele sannheten (revisjon § 2.4 + review B2):
+  // ved dobbel feil må ikke synk-meldingen («lagret på enheten, men …»)
+  // overskrive den alvorligere lokal-feilen.
+  if (!localOk && syncFailed) {
+    showErrorToast('Kunne ikke lagre økten — verken lokalt eller til skyen.');
+  } else if (!localOk) {
+    showErrorToast('Kunne ikke lagre økten lokalt på enheten.');
+  } else if (syncFailed) {
+    showErrorToast('Økten ble lagret på enheten, men kunne ikke synkes til skyen.');
   }
 
   return newLog.id;
@@ -128,7 +139,10 @@ export async function updateWorkoutRating(
   logId: string,
   rating: 'for_lett' | 'passe' | 'for_tungt'
 ): Promise<void> {
-  // 1. Oppdater lokalt
+  // 1. Oppdater lokalt. Tilbakeskrivingen persisterer den skjemafiltrerte
+  // listen — innslag droppet av valideringen (med console.warn i
+  // readLocalHistory) fjernes permanent. Bevisst: kun ekte søppel etter at
+  // skjemaet ble gjort tolerant for metadata-avvik.
   try {
     const list = readLocalHistory();
     const idx = list.findIndex((it) => it.id === logId);
@@ -170,7 +184,9 @@ export async function getUserWorkoutHistory(userId?: string | null): Promise<Com
       ...d.data(),
     })) as CompletedWorkoutLog[];
 
-    // Slå sammen unike logger
+    // Slå sammen unike logger. Tilbakeskrivingen under persisterer den
+    // skjemafiltrerte lokal-listen (varslet ved lesing) — se kommentar i
+    // updateWorkoutRating.
     const map = new Map<string, CompletedWorkoutLog>();
     localList.forEach((l) => map.set(l.id, l));
     remote.forEach((l) => map.set(l.id, l));
