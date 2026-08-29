@@ -7,6 +7,16 @@ import { wakeLockService } from '../../services/wakeLockService';
 import { speechService } from '../../services/speechService';
 import { audioClipService } from '../../services/audioClipService';
 import * as coachPersonaService from '../../services/coachPersonaService';
+import { recordPerfTelemetry } from '../../services/telemetryService';
+
+// A5: telemetryService importerer ../firebase, som initialiserer ekte Firebase
+// Auth ved modul-load og kaster (auth/invalid-api-key) uten .env.local. Hooken
+// kaller kun recordPerfTelemetry fire-and-forget – mock hele modulen slik at
+// denne testfilen aldri berører firebase.ts (samme mønster som
+// clockSyncService.test.ts bruker for ../firebase direkte).
+vi.mock('../../services/telemetryService', () => ({
+  recordPerfTelemetry: vi.fn().mockResolvedValue(undefined),
+}));
 
 // jsdom kan ikke fetche relative lyd-URL-er – demp preload-varslene fra
 // buffer-motoren i alle hook-testene (preload er fyr-og-glem-optimalisering)
@@ -131,6 +141,37 @@ describe('useIntervalTimer Hook', () => {
     expect(completeSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('A5: økt som fullføres rapporterer ytelsesmåling nøyaktig én gang', async () => {
+    const { result } = renderHook(() => useIntervalTimer({ workout: TABATA_WORKOUT }));
+
+    await act(async () => {
+      await result.current.startWorkout();
+    });
+
+    // Hopp over prepare (1)
+    act(() => {
+      result.current.skipNext();
+    });
+
+    // 7 første øvelser (arbeid + hvile)
+    for (let i = 0; i < 7; i++) {
+      act(() => {
+        result.current.skipNext(); // arbeid
+      });
+      act(() => {
+        result.current.skipNext(); // hvile
+      });
+    }
+
+    // 8. øvelse (siste arbeid) – fullfører økten
+    act(() => {
+      result.current.skipNext();
+    });
+
+    expect(result.current.state.status).toBe('completed');
+    expect(recordPerfTelemetry).toHaveBeenCalledTimes(1);
+  });
+
   it('nullstiller økten lydløst uten å trigge tale', () => {
     const prepareSpy = vi.spyOn(speechService, 'announcePrepare');
 
@@ -142,6 +183,21 @@ describe('useIntervalTimer Hook', () => {
 
     expect(result.current.state.status).toBe('idle');
     expect(prepareSpy).not.toHaveBeenCalled();
+  });
+
+  it('A5: startet, deretter avbrutt (reset) økt rapporterer ALDRI ytelsesmåling', async () => {
+    const { result } = renderHook(() => useIntervalTimer({ workout: TABATA_WORKOUT }));
+
+    await act(async () => {
+      await result.current.startWorkout();
+    });
+
+    act(() => {
+      result.current.resetWorkout();
+    });
+
+    expect(result.current.state.status).toBe('idle');
+    expect(recordPerfTelemetry).not.toHaveBeenCalled();
   });
 
   it('starter direkte med ny økt og annonserer riktig første øvelse og tone', async () => {

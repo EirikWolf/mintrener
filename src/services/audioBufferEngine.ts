@@ -6,6 +6,7 @@
 
 import { audioService } from './audioService';
 import { audioDuckingService } from './audioDuckingService';
+import { perfMonitorService } from './perfMonitorService';
 import rawManifest from '../data/audioManifest.json';
 
 const AUDIO_MANIFEST: Record<string, string> = rawManifest as Record<string, string>;
@@ -173,6 +174,23 @@ export class AudioBufferEngine {
       ctx.currentTime + SCHEDULE_LEAD_S
     );
     const nodes = buffers.map((buffer, i) => this.scheduleClip(ctx, buffer, schedule[i], crossfadeS));
+
+    // A5 (audit § 9.4/§ 7.3): "faseovergangs-lydavvik". Proxy-semantikk (dette
+    // er IKKE driver-/høyttalerlatens, som JS ikke kan observere): schedule[0].start
+    // var beregnet som ctx.currentTime + SCHEDULE_LEAD_S FØR skeduleringsløkken over
+    // kjørte. Hvis hovedtråden var jankete mellom det tidspunktet og nå, har
+    // ctx.currentTime rukket å løpe forbi den planlagte lead-tiden – og source.start(t)
+    // med et t som allerede har passert, spilles øyeblikkelig i stedet for presist på
+    // t. Avviket målt her er derfor nøyaktig den skeduleringsside-forsinkelsen appen
+    // selv kontrollerer (render-gating/hovedtråd-arbeid), målt synkront rett etter
+    // siste source.start()-kall for FØRSTE klipp i kjeden. Guardet: motoren skal
+    // aldri avhenge hardt av overvåkingstjenesten.
+    try {
+      const deviationMs = Math.max(0, ctx.currentTime - schedule[0].start) * 1000;
+      perfMonitorService.recordAudioDeviation(deviationMs);
+    } catch {
+      // Overvåking er en ren måling og skal aldri kunne velte avspilling
+    }
 
     audioDuckingService.startDucking();
     return new Promise<boolean>((resolve) => {

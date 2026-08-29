@@ -3,6 +3,7 @@ import type { Mock } from 'vitest';
 import { AudioBufferEngine, computeSequenceSchedule } from '../audioBufferEngine';
 import { audioService } from '../audioService';
 import { audioDuckingService } from '../audioDuckingService';
+import { perfMonitorService } from '../perfMonitorService';
 
 // jsdom har ikke Web Audio – all kontakt med AudioContext mockes ved grensen
 // via en smal strukturell mock som audioService.getContext() spionere returnerer.
@@ -338,6 +339,22 @@ describe('AudioBufferEngine.playSequence / stop', () => {
     expect(sources[1].start.mock.calls[0][0]).toBeCloseTo(12.02, 6);
 
     // Fullfør avspillingen slik at promiset løses
+    sources[1].onended?.();
+    await expect(pending).resolves.toBe(true);
+  });
+
+  it('A5: registrerer en lydavviks-stikkprøve hos perfMonitorService ved skedulering', async () => {
+    const deviationSpy = vi.spyOn(perfMonitorService, 'recordAudioDeviation').mockImplementation(() => {});
+    const { sources } = await preloadTwoClips(10);
+
+    const pending = engine.playSequence(['exercise-burpees', 'exercise-planke']);
+
+    // Mock-konteksten sin currentTime avanserer ikke under selve skeduleringen,
+    // så avviket (proxy for hovedtråd-jank mellom skedulering og start()) skal
+    // måles til ~0 her – se JSDoc i audioBufferEngine.playSequence.
+    expect(deviationSpy).toHaveBeenCalledTimes(1);
+    expect(deviationSpy.mock.calls[0][0]).toBeCloseTo(0, 6);
+
     sources[1].onended?.();
     await expect(pending).resolves.toBe(true);
   });

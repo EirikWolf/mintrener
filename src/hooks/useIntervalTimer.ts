@@ -8,6 +8,8 @@ import { audioClipService } from '../services/audioClipService';
 import { motionTrackerService, MotionMetrics } from '../services/motionTrackerService';
 import { saveInterruptedSession, clearInterruptedSession, InterruptedSession } from '../services/sessionRecoveryService';
 import { createTicker } from '../services/tickerService';
+import { perfMonitorService } from '../services/perfMonitorService';
+import { recordPerfTelemetry } from '../services/telemetryService';
 import {
   playPersonaCue,
   playIntroThenExercise,
@@ -276,6 +278,13 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
         setStatus('completed');
         stateRef.current.status = 'completed';
         clearInterruptedSession();
+        // A5 (audit § 9.4/§ 7.3): brakketterer øktmålingen startet i startWorkout
+        // og sender rapporten fire-and-forget – telemetri skal aldri blokkere
+        // eller forsinke fullførings-UI-en.
+        const perfReport = perfMonitorService.stopWorkoutMonitoring();
+        if (perfReport) {
+          void recordPerfTelemetry(perfReport);
+        }
       }
     },
     [workout]
@@ -614,6 +623,11 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       stateRef.current.workout = targetWorkout;
       setActiveWorkout(targetWorkout);
 
+      // A5 (audit § 9.4/§ 7.3): brakketterer denne ene treningsøkten for
+      // ytelsesmåling (long tasks/min + lydavvik) – se stopWorkoutMonitoring
+      // i setupPhase('complete') og resetWorkout.
+      perfMonitorService.startWorkoutMonitoring();
+
       preloadPersonaAudio();
       // Forhåndslast øktens øvelsesannonseringer så første avspilling ikke betaler
       // nettverks- og dekodekostnaden midt i en faseovergang
@@ -672,6 +686,10 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
   }, []);
 
   const resetWorkout = useCallback(() => {
+    // A5: reset er en avbrutt økt – stopp målingen, men forkast rapporten
+    // bevisst (ingen recordPerfTelemetry). Trygt no-op hvis økten allerede
+    // ble avsluttet via setupPhase('complete') eller aldri startet.
+    perfMonitorService.stopWorkoutMonitoring();
     setStatus('idle');
     stopCurrentPersonaAudio();
     wakeLockService.releaseLock();

@@ -1,6 +1,7 @@
 import { db } from './firebase';
 import { doc, setDoc, getDoc, increment, serverTimestamp, FieldValue } from 'firebase/firestore';
 import { WorkoutTemplate } from '../types/workout';
+import type { PerfSessionReport } from './perfMonitorService';
 
 const TELEMETRY_STORAGE_KEY = 'mintrener_telemetry_enabled';
 
@@ -64,6 +65,78 @@ export async function recordShareLinkOpen(): Promise<void> {
     );
   } catch (err) {
     console.warn('Kunne ikke registrere lenkeåpning:', err);
+  }
+}
+
+// Bøttegrenser (ms) for lydavviks-histogrammet i global_stats/perf. p95 kan ikke
+// aggregeres på tvers av økter med rene increment()-operasjoner (Firestore har
+// ingen server-side persentil-funksjon), så hver klient klassifiserer i stedet
+// SIN øktrapports p95 i én av tre bøtter – forholdstallet (f.eks. andel økter
+// under 20 ms-målet) er beregnbart fra bøttetellerne i etterkant.
+function deviationBucketField(
+  deviationMs: number | null
+): 'deviationUnder20Ms' | 'deviation20to50Ms' | 'deviationOver50Ms' | null {
+  if (deviationMs === null) return null;
+  if (deviationMs < 20) return 'deviationUnder20Ms';
+  if (deviationMs < 50) return 'deviation20to50Ms';
+  return 'deviationOver50Ms';
+}
+
+// Øvre grense (minutter) for activeMinutes-inkrementet per økt – speiler
+// deltagrensen i firestore.rules. 600 min = 10 timer, en romslig tak for én
+// enkelt treningsøkt (jf. overview sin 14400s/4t-grense for totalSecondsTrained).
+const MAX_ACTIVE_MINUTES_PER_SESSION = 600;
+
+/**
+ * Sender én økts ytelsesrapport (A5: long tasks/treningsminutt + faseoverganger-
+ * lydavvik) til global_stats/perf, anonymt og samtykke-gatet som resten av
+ * telemetrien. Skriveformen (increment-only, kjent felt-allowlist) speiler den
+ * herdede firestore.rules — se `match /global_stats/perf` der.
+ *
+ * `longTaskSessions` og `activeMinutes` telles KUN når
+ * `report.longTaskMonitoringSupported` er true. Uten dette skjevfordeler
+ * enheter uten long-task-støtte (iOS Safari, trolig en stor andel av
+ * enhetsparken) metrikken usynlig optimistisk: de ville ha bidratt en
+ * strukturell 0 til telleren (longTasks) mens de fortsatt telte med i en
+ * nevner (sessions) beregnet på ALLE økter. Ved å telle nevneren
+ * (`longTaskSessions`/`activeMinutes`) kun for økter som faktisk KUNNE
+ * observere long tasks, dekker teller og nevner samme populasjon –
+ * `longTasksPerMinute`-scorekortmetrikken må divideres med
+ * `longTaskSessions`/`activeMinutes`, ikke med `sessions`.
+ */
+export async function recordPerfTelemetry(report: PerfSessionReport): Promise<void> {
+  if (!getTelemetryConsent() || !db) {
+    return;
+  }
+
+  try {
+    const perfRef = doc(db, 'global_stats', 'perf');
+    const bucketField = deviationBucketField(report.audioDeviationP95Ms);
+
+    const payload: Record<string, FieldValue> = {
+      sessions: increment(1),
+      // Long tasks telles alltid som heltall (increment krever et numerisk delta,
+      // og brøkdels-hendelser gir ingen mening for en tellevariabel)
+      longTasks: increment(Math.max(0, Math.round(report.longTaskCount))),
+      lastUpdated: serverTimestamp(),
+    };
+    if (report.longTaskMonitoringSupported) {
+      payload.longTaskSessions = increment(1);
+      payload.activeMinutes = increment(
+        Math.min(MAX_ACTIVE_MINUTES_PER_SESSION, Math.max(0, Math.round(report.durationMinutes)))
+      );
+    }
+    if (report.audioSampleCount > 0) {
+      payload.audioDeviationSamples = increment(report.audioSampleCount);
+    }
+    if (bucketField) {
+      payload[bucketField] = increment(1);
+    }
+
+    await setDoc(perfRef, payload, { merge: true });
+  } catch (err) {
+    // Ytelsestelemetri skal aldri feile eller forstyrre kjerneopplevelsen
+    console.warn('Ytelsestelemetri ble hoppet over:', err);
   }
 }
 
