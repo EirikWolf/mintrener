@@ -7,6 +7,7 @@ import { savePersonalRecord } from '../../services/personalRecordService';
 import { recordWorkoutTelemetry } from '../../services/telemetryService';
 import { calculateWeeklyProgress, WeeklyGoalProgress } from '../../services/weeklyGoalService';
 import { computeStreakDays } from '../../services/streakService';
+import { buildEffectiveHistory } from '../../services/summaryContextService';
 import { localAiCoach } from '../../services/localAiCoachService';
 import { Trophy, RotateCcw, Flame, CheckCircle2, ThumbsUp, Smile, Medal, Sparkles } from 'lucide-react';
 
@@ -48,37 +49,31 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
   // Hent lokal historikk for å gi Astrid kontekst om ukesmål og streak.
   // MERK: App.tsx sin egen "lagre fullført økt"-effekt (som skriver denne
   // økten til lokal historikk) kan kjøre etter denne effekten - React kjører
-  // barn-effekter før foreldre-effekter i samme commit. Vi sjekker derfor om
-  // nyeste oppføring allerede samsvarer med denne økten, og teller den med
-  // manuelt hvis ikke, slik at "nådd ukesmål"/streak blir riktig med en gang.
+  // barn-effekter før foreldre-effekter i samme commit, og selve skrivingen
+  // skjer først når den asynkrone lagringen fullfører. `workoutLogId` settes
+  // av App.tsx idet lagringen er ferdig, så effekten kjører på nytt da id-en
+  // ankommer. buildEffectiveHistory avgjør (med eksakt id-match, ikke en
+  // heuristikk) om økten allerede er inkludert i historikken, og stabler inn
+  // en midlertidig oppføring for den hvis ikke - se summaryContextService.ts.
   useEffect(() => {
     try {
       const raw = localStorage.getItem(LOCAL_HISTORY_KEY);
       const history: CompletedWorkoutLog[] = raw ? JSON.parse(raw) : [];
 
-      const mostRecent = history[0];
-      const alreadyIncluded =
-        !!mostRecent &&
-        mostRecent.workoutName === workout.name &&
-        mostRecent.durationSeconds === totalElapsedSeconds &&
-        Date.now() - new Date(mostRecent.completedAt).getTime() < 15000;
+      const effectiveHistory = buildEffectiveHistory(
+        history,
+        { workoutName: workout.name, durationSeconds: totalElapsedSeconds },
+        workoutLogId
+      );
 
-      const progress = calculateWeeklyProgress(history);
-      const completedThisWeek = progress.completedThisWeek + (alreadyIncluded ? 0 : 1);
-      setWeeklyGoal({
-        goal: progress.goal,
-        completedThisWeek,
-        percentage: Math.min(100, Math.round((completedThisWeek / progress.goal) * 100)),
-        isGoalMet: completedThisWeek >= progress.goal,
-      });
+      setWeeklyGoal(calculateWeeklyProgress(effectiveHistory));
 
-      const dates = history.map((log) => new Date(log.completedAt).toISOString().split('T')[0]);
-      if (!alreadyIncluded) dates.unshift(new Date().toISOString().split('T')[0]);
+      const dates = effectiveHistory.map((log) => new Date(log.completedAt).toISOString().split('T')[0]);
       setStreakDays(computeStreakDays(dates));
     } catch {
       // Lokal historikk utilgjengelig - Astrid faller tilbake på generisk feedback
     }
-  }, [workout, totalElapsedSeconds]);
+  }, [workout, totalElapsedSeconds, workoutLogId]);
 
   // Astrids tilbakemelding - regenereres reaktivt når PR-status eller
   // brukerens vurdering av økten endrer seg. Puls er ikke koblet til her:

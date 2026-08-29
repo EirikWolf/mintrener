@@ -4,6 +4,7 @@ import { getUserWorkoutHistory } from '../../services/firestoreService';
 import { WorkoutCalendarHeatmap } from './WorkoutCalendarHeatmap';
 import { exportAllDataAsJson, exportHistoryAsCsv } from '../../services/exportDataService';
 import { getWeeklyGoal } from '../../services/weeklyGoalService';
+import { computeStreakDays } from '../../services/streakService';
 import { useAuth } from '../../contexts/AuthContext';
 import { BadgeShowcaseModal } from './BadgeShowcaseModal';
 import { getAllUserBadges } from '../../services/badgeService';
@@ -51,33 +52,8 @@ export const WorkoutHistoryView: React.FC<WorkoutHistoryViewProps> = ({
     const totalSeconds = history.reduce((acc, log) => acc + log.durationSeconds, 0);
     const totalMinutes = Math.round(totalSeconds / 60);
 
-    // Beregn unike treningsdager og streak
-    const dates = Array.from(
-      new Set(
-        history.map((log) => new Date(log.completedAt).toISOString().split('T')[0])
-      )
-    ).sort().reverse();
-
-    let streak = 0;
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-
-    if (dates.includes(today) || dates.includes(yesterday)) {
-      streak = 1;
-      let checkDate = new Date(dates[0]);
-      for (let i = 1; i < dates.length; i++) {
-        const prev = new Date(dates[i]);
-        const diffDays = Math.round(
-          (checkDate.getTime() - prev.getTime()) / 86400000
-        );
-        if (diffDays === 1) {
-          streak++;
-          checkDate = prev;
-        } else {
-          break;
-        }
-      }
-    }
+    const dates = history.map((log) => new Date(log.completedAt).toISOString().split('T')[0]);
+    const streak = computeStreakDays(dates);
 
     return { totalWorkouts, totalMinutes, streak };
   }, [history]);

@@ -2,13 +2,10 @@
  * Beregner nåværende streak (antall dager på rad med minst én fullført økt),
  * regnet bakover fra i dag/i går.
  *
- * Bygger på samme algoritme som brukes inline i WorkoutHistoryView.tsx sin
- * `stats`-useMemo, men er trukket ut som en ren, testbar funksjon som tar
- * imot en liste med ISO-datoer (YYYY-MM-DD) i stedet for hele
- * historikkobjekter. WorkoutHistoryView.tsx er bevisst IKKE migrert til å
- * bruke denne i denne omgangen (Oppgave A4), for å holde endringen fokusert
- * på Astrid-feedbacken i WorkoutSummary. Duplikeringen bør ryddes opp i som
- * egen oppfølging.
+ * Ren, testbar funksjon som tar imot en liste med ISO-datoer (YYYY-MM-DD)
+ * i stedet for hele historikkobjekter. Brukes både av WorkoutSummary.tsx
+ * (rett etter fullført økt) og WorkoutHistoryView.tsx (statistikkoversikt)
+ * - én kilde til sannhet for streak-formelen (Oppgave A4-oppfølging).
  */
 export function computeStreakDays(dates: string[]): number {
   const uniqueDates = Array.from(new Set(dates)).sort().reverse();
