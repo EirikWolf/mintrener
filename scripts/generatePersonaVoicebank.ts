@@ -12,7 +12,11 @@
  *
  * Bruk:
  *   npx tsx scripts/generatePersonaVoicebank.ts [--dry-run] [--persona <id>]
- *     [--only <cueId|exerciseId>] [--force] [--skip-recorded] [--reprocess]
+ *     [--only <cueId|exerciseId>] [--force] [--skip-recorded] [--reprocess] [--refetch]
+ *
+ * Flaggvalg: --force re-prosesserer output (cache gjenbrukes), --reprocess er
+ * kun ffmpeg fra cache (uten nettverk/token), --refetch henter ny TTS (ny
+ * stokastisk take) selv om cachen er fersk.
  */
 
 import fs from 'node:fs';
@@ -31,6 +35,7 @@ import {
   buildTtsFfmpegArgs,
   cacheIsFresh,
   decideTtsAction,
+  persistRawCache,
   isRetryableHttpStatus,
   parseCliArgs,
   parseManifest,
@@ -175,6 +180,7 @@ async function runTtsTask(task: TtsTask, token: string, opts: CliOptions): Promi
     outputExists: fs.existsSync(outputPath),
     force: opts.force,
     reprocess: opts.reprocess,
+    refetch: opts.refetch,
   });
 
   if (action === 'skip-existing') {
@@ -194,14 +200,10 @@ async function runTtsTask(task: TtsTask, token: string, opts: CliOptions): Promi
       console.log(`🎙️ [${task.personaId}/${task.id}] "${shorten(task.text)}" (${task.lang})`);
       const buffer = await fetchTtsWithRetries(task, token);
       // Rå-cachen er permanent: neste etterbehandlings-iterasjon koster null
-      // GPU-tid. Sidecaren gjør at manuskript-endringer re-henter automatisk.
+      // GPU-tid. Sidecaren gjør at manuskript-endringer re-henter automatisk;
+      // persistRawCache skriver i kræsjtrygg rekkefølge (sidecar slettes først).
       fs.mkdirSync(path.dirname(cachePath), { recursive: true });
-      fs.writeFileSync(cachePath, buffer);
-      fs.writeFileSync(
-        sidecarPath,
-        JSON.stringify({ text: task.text, lang: task.lang }),
-        'utf-8',
-      );
+      persistRawCache(cachePath, sidecarPath, buffer, { text: task.text, lang: task.lang }, fs);
     } else {
       console.log(`📦 [${task.personaId}/${task.id}] etterbehandler fra rå-cache`);
     }

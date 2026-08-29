@@ -103,6 +103,8 @@ export interface CliOptions extends TaskFilters {
   readonly force: boolean;
   /** Regenerér output fra rå-cachen med ffmpeg-kjeden — uten nettverk/token. */
   readonly reprocess: boolean;
+  /** Tving ny TTS-henting (ny stokastisk take) selv om cachen er fersk. */
+  readonly refetch: boolean;
 }
 
 /**
@@ -119,11 +121,19 @@ export function parseCliArgs(argv: readonly string[]): CliOptions {
     }
     return value;
   };
+  const reprocess = argv.includes('--reprocess');
+  const refetch = argv.includes('--refetch');
+  if (reprocess && refetch) {
+    throw new Error(
+      'Flaggene --refetch og --reprocess kan ikke kombineres: --reprocess er kun lokal ffmpeg fra cache, --refetch henter ny TTS.',
+    );
+  }
   return {
     dryRun: argv.includes('--dry-run'),
     force: argv.includes('--force'),
     skipRecorded: argv.includes('--skip-recorded'),
-    reprocess: argv.includes('--reprocess'),
+    reprocess,
+    refetch,
     persona: valueOf('--persona'),
     only: valueOf('--only'),
   };
@@ -137,6 +147,8 @@ export type TtsAction =
 
 /**
  * Bestemmer hva som skal skje med en TTS-oppgave (cache-kontrakten):
+ * - --refetch henter alltid ny TTS (ny stokastisk take) og re-prosesserer,
+ *   uansett cache/output. (Kombinasjon med --reprocess avvises i parseCliArgs.)
  * - --reprocess leser alltid fra cache og rører aldri nettet; manglende
  *   cache-fil er da en feil.
  * - Ellers: eksisterende output uten --force → hopp over hele oppgaven.
@@ -148,7 +160,9 @@ export function decideTtsAction(state: {
   readonly outputExists: boolean;
   readonly force: boolean;
   readonly reprocess: boolean;
+  readonly refetch?: boolean;
 }): TtsAction {
+  if (state.refetch) return 'fetch-then-process';
   if (state.reprocess) {
     return state.cacheExists ? 'process-from-cache' : 'missing-cache';
   }
@@ -302,6 +316,30 @@ export interface CacheSidecar {
   readonly lang: string;
 }
 
+/** Minimal I/O-flate for persistRawCache — fs oppfyller den direkte. */
+export interface RawCacheIo {
+  rmSync(path: string, opts: { force: boolean }): void;
+  writeFileSync(path: string, data: Uint8Array | string): void;
+}
+
+/**
+ * Skriver rå-cache + sidecar i kræsjtrygg rekkefølge: sidecaren slettes FØR
+ * mp3-skrivingen og skrives på nytt ETTERPÅ. Et kræsj midt i mp3-skrivingen
+ * etterlater dermed aldri en trunkert cache-fil med matchende sidecar —
+ * neste kjøring ser manglende sidecar og re-henter.
+ */
+export function persistRawCache(
+  cachePath: string,
+  sidecarPath: string,
+  audio: Uint8Array,
+  sidecar: CacheSidecar,
+  io: RawCacheIo,
+): void {
+  io.rmSync(sidecarPath, { force: true });
+  io.writeFileSync(cachePath, audio);
+  io.writeFileSync(sidecarPath, JSON.stringify(sidecar));
+}
+
 /**
  * Er cache-fila fortsatt gyldig for oppgaven? Sidecaren (<cachefil>.json)
  * bærer tekst+språk klippet ble generert med; avvik (redigert manuskript,
@@ -340,8 +378,8 @@ export const TTS_POST = {
   TRIM_END: 'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.06',
   /** ~10 ms fade mot klikk; ligger som fade-inn mens lyden er reversert. */
   FADE: 'afade=t=in:st=0:d=0.01',
-  /** QA-3: demper skarpe s-lyder. */
-  DEESSER: 'deesser',
+  /** QA-3: demper skarpe s-lyder. NB: uten i= er deesser en no-op (default 0). */
+  DEESSER: 'deesser=i=0.15',
   /** QA-3: «skarp» — senker diskanten litt. */
   TREBLE: 'treble=g=-2.5:f=7500',
   /** QA-3: «tørr» — litt varme i bunn. */

@@ -13,6 +13,7 @@ import {
   buildRecordedFfmpegArgs,
   cacheIsFresh,
   decideTtsAction,
+  persistRawCache,
   RECORDED_SOURCES,
   parseManifest,
   parseCliArgs,
@@ -245,7 +246,8 @@ describe('buildTtsFfmpegArgs (etterbehandling v2 for TTS-klipp)', () => {
   });
 
   it('QA-3: mykgjøring (deesser/treble/bass) etter trim, loudnorm sist', () => {
-    expect(filter).toContain('deesser');
+    // deesser uten i= er en no-op i ffmpeg 8.x (default-intensitet 0)
+    expect(filter).toContain('deesser=i=0.15');
     expect(filter).toContain('treble=g=-2.5:f=7500');
     expect(filter).toContain('bass=g=1:f=180');
     expect(filter.indexOf('deesser')).toBeGreaterThan(filter.lastIndexOf('areverse'));
@@ -334,6 +336,49 @@ describe('decideTtsAction (cache-oppførsel)', () => {
       decideTtsAction({ cacheExists: false, outputExists: true, force: false, reprocess: true }),
     ).toBe('missing-cache');
   });
+
+  it('--refetch tvinger ny TTS-henting selv med fersk cache og eksisterende output', () => {
+    expect(
+      decideTtsAction({
+        cacheExists: true,
+        outputExists: true,
+        force: false,
+        reprocess: false,
+        refetch: true,
+      }),
+    ).toBe('fetch-then-process');
+    expect(
+      decideTtsAction({
+        cacheExists: false,
+        outputExists: false,
+        force: false,
+        reprocess: false,
+        refetch: true,
+      }),
+    ).toBe('fetch-then-process');
+  });
+});
+
+describe('persistRawCache (sidecar-atomisitet)', () => {
+  it('sletter sidecaren FØR mp3-skrivingen, og skriver den sist', () => {
+    const ops: string[] = [];
+    const io = {
+      rmSync: (p: string) => ops.push(`rm:${p}`),
+      writeFileSync: (p: string) => ops.push(`write:${p}`),
+    };
+    persistRawCache(
+      'cache/intro.mp3',
+      'cache/intro.mp3.json',
+      Buffer.from('lyd'),
+      { text: 'Trø te!', lang: 'no' },
+      io,
+    );
+    expect(ops).toEqual([
+      'rm:cache/intro.mp3.json',
+      'write:cache/intro.mp3',
+      'write:cache/intro.mp3.json',
+    ]);
+  });
 });
 
 describe('parseManifest', () => {
@@ -387,6 +432,7 @@ describe('parseCliArgs', () => {
       force: true,
       skipRecorded: true,
       reprocess: false,
+      refetch: false,
       persona: 'haugesund',
       only: 'intro',
     });
@@ -398,6 +444,15 @@ describe('parseCliArgs', () => {
       reprocess: true,
       persona: 'romsdal',
     });
+  });
+
+  it('parser --refetch', () => {
+    expect(parseCliArgs(['--refetch']).refetch).toBe(true);
+    expect(parseCliArgs([]).refetch).toBe(false);
+  });
+
+  it('avviser kombinasjonen --refetch + --reprocess', () => {
+    expect(() => parseCliArgs(['--refetch', '--reprocess'])).toThrow(/kombiner/);
   });
 
   it('kaster hvis --persona mangler verdi', () => {
