@@ -908,9 +908,13 @@ function mirrorRest(ctx: DirectorCtx, event: PhaseStartedEvent, fitted: FittedAn
  * neste-øvelse-annonseringen DERETTER: i ÉN sample-nøyaktig kjede når begge er
  * cachet, ellers etter kjedeslutt via playChainThen — aldri overlappende tale.
  * Ucachet cue, eller tale av (cuen er stemme og respekterer tale-bryteren):
- * dagens tone + annonsering, uendret. Det samme gjelder når Ø4-degraderingen
- * skrellet cuen av for å få øvelsesnavnet fram: da markerer tonen pausestarten
- * i cuens sted.
+ * dagens tone + annonsering, uendret.
+ *
+ * BØR-4 (produkteiers avgjørelse): når Ø4-degraderingen skrelte cuen av av
+ * TIMING-hensyn — ikke fordi den manglet — fyres tonen IKKE. Den ville kommet
+ * synkront rett før playSequence, altså som et pip oppå navnets første ~200 ms,
+ * der brukeren tidligere fikk stemme. Fasebyttet er allerede markert av
+ * go-tilropet på grensen, og stillhet er bedre enn et pip oppå navnet.
  */
 function mirrorPersonaRest(
   ctx: DirectorCtx,
@@ -920,7 +924,7 @@ function mirrorPersonaRest(
 ): void {
   const chain = fitted.chain;
   const prefixKeys = chain.cue !== null ? [chain.cue] : [];
-  if (prefixKeys.length === 0) {
+  if (prefixKeys.length === 0 && !fitted.cueDroppedForTiming) {
     audioService.playRestStart(snap.soundEnabled);
   }
   if (snap.speechEnabled && nextExercise) {
