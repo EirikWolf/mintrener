@@ -35,7 +35,7 @@ export interface PerfSessionReport {
   audioDeviationP95Ms: number | null;
   /** Antall lydavviks-stikkprøver denne rapporten bygger på (maks MAX_AUDIO_SAMPLES). */
   audioSampleCount: number;
-  /** Om PerformanceObserver('longtask') var tilgjengelig i dette miljøet ved øktstart. */
+  /** Om PerformanceObserver('longtask') var tilgjengelig i dette miljøet ved tjeneste-opprettelse. */
   longTaskMonitoringSupported: boolean;
 }
 

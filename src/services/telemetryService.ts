@@ -82,11 +82,27 @@ function deviationBucketField(
   return 'deviationOver50Ms';
 }
 
+// Øvre grense (minutter) for activeMinutes-inkrementet per økt – speiler
+// deltagrensen i firestore.rules. 600 min = 10 timer, en romslig tak for én
+// enkelt treningsøkt (jf. overview sin 14400s/4t-grense for totalSecondsTrained).
+const MAX_ACTIVE_MINUTES_PER_SESSION = 600;
+
 /**
  * Sender én økts ytelsesrapport (A5: long tasks/treningsminutt + faseoverganger-
  * lydavvik) til global_stats/perf, anonymt og samtykke-gatet som resten av
  * telemetrien. Skriveformen (increment-only, kjent felt-allowlist) speiler den
  * herdede firestore.rules — se `match /global_stats/perf` der.
+ *
+ * `longTaskSessions` og `activeMinutes` telles KUN når
+ * `report.longTaskMonitoringSupported` er true. Uten dette skjevfordeler
+ * enheter uten long-task-støtte (iOS Safari, trolig en stor andel av
+ * enhetsparken) metrikken usynlig optimistisk: de ville ha bidratt en
+ * strukturell 0 til telleren (longTasks) mens de fortsatt telte med i en
+ * nevner (sessions) beregnet på ALLE økter. Ved å telle nevneren
+ * (`longTaskSessions`/`activeMinutes`) kun for økter som faktisk KUNNE
+ * observere long tasks, dekker teller og nevner samme populasjon –
+ * `longTasksPerMinute`-scorekortmetrikken må divideres med
+ * `longTaskSessions`/`activeMinutes`, ikke med `sessions`.
  */
 export async function recordPerfTelemetry(report: PerfSessionReport): Promise<void> {
   if (!getTelemetryConsent() || !db) {
@@ -104,6 +120,12 @@ export async function recordPerfTelemetry(report: PerfSessionReport): Promise<vo
       longTasks: increment(Math.max(0, Math.round(report.longTaskCount))),
       lastUpdated: serverTimestamp(),
     };
+    if (report.longTaskMonitoringSupported) {
+      payload.longTaskSessions = increment(1);
+      payload.activeMinutes = increment(
+        Math.min(MAX_ACTIVE_MINUTES_PER_SESSION, Math.max(0, Math.round(report.durationMinutes)))
+      );
+    }
     if (report.audioSampleCount > 0) {
       payload.audioDeviationSamples = increment(report.audioSampleCount);
     }

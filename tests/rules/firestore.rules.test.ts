@@ -83,6 +83,8 @@ beforeEach(async () => {
     await setDoc(doc(db, 'global_stats', 'perf'), {
       sessions: 3,
       longTasks: 2,
+      longTaskSessions: 2,
+      activeMinutes: 25,
       audioDeviationSamples: 40,
       deviationUnder20Ms: 2,
       deviation20to50Ms: 1,
@@ -231,6 +233,28 @@ describe('global_stats/perf (A5 ytelsestelemetri, regresjonsvern)', () => {
           sessions: increment(1),
           longTasks: increment(4),
           audioDeviationSamples: increment(180),
+          deviationUnder20Ms: increment(1),
+          lastUpdated: serverTimestamp(),
+        },
+        { merge: true }
+      )
+    );
+  });
+
+  it('POSITIV: økt UTEN long-task-støtte (iOS Safari) går gjennom uten longTaskSessions/activeMinutes (utelatt valgfritt felt)', async () => {
+    // Speiler recordPerfTelemetry når report.longTaskMonitoringSupported er false:
+    // sessions/longTasks(0)/lydavvik sendes fortsatt, men longTaskSessions og
+    // activeMinutes utelates HELT (ikke satt til 0) – nevneren for
+    // long-tasks-per-minutt-metrikken skal kun telle økter som faktisk kunne
+    // observere long tasks.
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertSucceeds(
+      setDoc(
+        doc(db, 'global_stats', 'perf'),
+        {
+          sessions: increment(1),
+          longTasks: increment(0),
+          audioDeviationSamples: increment(50),
           deviationUnder20Ms: increment(1),
           lastUpdated: serverTimestamp(),
         },
