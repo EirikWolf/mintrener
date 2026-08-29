@@ -2,6 +2,22 @@ import { WorkoutTemplate, TimerState, IntervalPhase } from '../types/workout';
 import { EngineEvent } from '../types/engineEvents';
 import { InterruptedSession } from './sessionRecoveryService';
 
+// Terskel (sekunder) for å skille normal tick-drift (fanen synlig) fra en reell
+// oppvåkning etter dvale/lomme – under denne kjøres vanlig enkelt-avansement.
+const CATCH_UP_THRESHOLD_S = 1.5;
+// Sikkerhetsgrense på antall stille faser catchUpExpiredPhases kan spole gjennom i
+// én tick. Ved (ekstremt usannsynlig) treff på grensen droppes resten av overshoot
+// bevisst – tilstanden forblir konsistent, men timeren går da bak veggklokken til
+// neste tick fanger opp resten.
+const MAX_CATCH_UP_PHASES = 500;
+
+// Terskel (ms) for å skille normalt veggklokke/motorklokke-avvik (NTP-korrigering,
+// GC-pause, liten klokkedrift) fra en reell dvale-periode der performance.now har
+// frosset mens Date.now fortsatte – kjent oppførsel på iOS/macOS Safari og enkelte
+// Android-nettlesere (audit § 2.1). Under denne terskelen er avviket "støy" og
+// motorklokke-basert catch-up (CATCH_UP_THRESHOLD_S) håndterer det som normalt.
+const SLEEP_REANCHOR_THRESHOLD_MS = 2000;
+
 /**
  * Intern tilstand = dagens `stateRef.current`-form fra useIntervalTimer (én
  * representasjon; `precise*`-speilene og React-state-speilet utgår i motoren —
@@ -47,6 +63,12 @@ export class TimerEngine {
   // oppdaterer den i α-senere task); activeWorkout er normalt alltid gyldig.
   private propWorkout: WorkoutTemplate;
   private readonly eventHandlers = new Set<(e: EngineEvent) => void>();
+  private readonly snapshotListeners = new Set<() => void>();
+  // Identitets-cache for snapshot-kanalen (A3-gatingen flyttet til snapshot-
+  // identitet, spec § 3): samme objekt returneres til nøkkelen — de rendrings-
+  // verdige feltene — endres. Workout-referansen sammenlignes separat siden den
+  // ikke lar seg stringifisere meningsfullt i nøkkelen.
+  private snapshotCache: { key: string; workout: WorkoutTemplate; value: TimerState } | null = null;
   // Injisert persistens-callback (persistenceSubscriber kobler i α4). Default
   // no-op slik at motoren aldri rører localStorage selv.
   private onPersist: (session: PersistPayload) => void = () => {};
@@ -77,6 +99,10 @@ export class TimerEngine {
       lastTickWallMs: 0,
       lastTickPerfMs: 0,
     };
+    // α5 sender getSnapshot/subscribe UBUNDET til useSyncExternalStore — bind her
+    // slik at metodereferansene er trygge uten .bind på kallstedet.
+    this.getSnapshot = this.getSnapshot.bind(this);
+    this.subscribe = this.subscribe.bind(this);
   }
 
   private emit(event: EngineEvent): void {
@@ -239,13 +265,40 @@ export class TimerEngine {
     return sum;
   }
 
+  // Rendringsverdige felter (A3-gatingen): hele sekunder i stedet for presise
+  // flyttall — phaseProgress/desimaler endres hver tick, men snapshotet skal kun
+  // bytte identitet når det VISTE tallet endres. Math.ceil(phaseRemaining) og
+  // Math.floor(totalElapsed) er nøyaktig hookens gating-porter (setPhaseRemaining/
+  // setTotalElapsed-betingelsene i tick).
+  private computeSnapshotKey(): string {
+    const s = this.state;
+    return [
+      s.status, s.phase, s.currentRound, s.currentItemIndex, s.phaseDuration,
+      Math.ceil(s.phaseRemaining), Math.floor(s.totalElapsed),
+      s.isLocked, s.soundEnabled, s.vibrateEnabled, s.wakeLockEnabled,
+      s.speechEnabled, s.motionReps,
+    ].join('|');
+  }
+
   /**
-   * Immutabelt snapshot, materialisert per kall. NB: identitets-cachen (ny
-   * identitet KUN ved rendringsverdig endring) kommer først i α3 — ikke koble
-   * useSyncExternalStore mot denne før da (hvert kall gir nå nytt objekt, som
-   * ville gitt evig re-render).
+   * Immutabelt snapshot med identitets-cache: nytt objekt KUN når noe rendrings-
+   * verdig endres (hel-sekund, fase, status, indekser, toggles). Dette erstatter
+   * A3-render-gatingen fra hooken — motoren regner alltid presist internt,
+   * snapshot-identiteten er gating-mekanismen (spec § 3). Trygg som
+   * useSyncExternalStore-kilde (bundet i konstruktøren).
    */
   getSnapshot(): TimerState {
+    const key = this.computeSnapshotKey();
+    const cache = this.snapshotCache;
+    if (cache && cache.key === key && cache.workout === this.state.activeWorkout) {
+      return cache.value;
+    }
+    const value = this.materializeSnapshot();
+    this.snapshotCache = { key, workout: this.state.activeWorkout, value };
+    return value;
+  }
+
+  private materializeSnapshot(): TimerState {
     const s = this.state;
     const workoutItems = s.activeWorkout?.items || [];
     const currentItem = workoutItems[s.currentItemIndex] || workoutItems[0];
@@ -286,8 +339,26 @@ export class TimerEngine {
     };
   }
 
-  subscribe(_listener: () => void): () => void {
-    throw new Error('ikke implementert');
+  /** Snapshot-kanalen (React): varsles kun når snapshot-identiteten vil endres. */
+  subscribe(listener: () => void): () => void {
+    this.snapshotListeners.add(listener);
+    return () => {
+      this.snapshotListeners.delete(listener);
+    };
+  }
+
+  // Varsle snapshot-lyttere kun når identiteten faktisk vil endres. Cachen
+  // oppdateres lazy i getSnapshot, så en stale cache kan i teorien gi ett
+  // overflødig varsel — ufarlig: React leser snapshot på hvert varsel og
+  // re-rendrer bare ved ny identitet.
+  private notifySnapshotIfChanged(): void {
+    const cache = this.snapshotCache;
+    if (cache && cache.key === this.computeSnapshotKey() && cache.workout === this.state.activeWorkout) {
+      return;
+    }
+    for (const listener of [...this.snapshotListeners]) {
+      listener();
+    }
   }
 
   subscribeEvents(handler: (e: EngineEvent) => void): () => void {
@@ -302,9 +373,167 @@ export class TimerEngine {
     this.onPersist = cb;
   }
 
+  // A6 (portert fra hook-ticken): mål veggklokke/motorklokke-drift FØR ankrene
+  // overskrives med denne tickens verdier – IKKE etterpå. Ved oppvåkning fra dvale
+  // er workerens ventende tick og visibilitychange-hendelsen begge makrotasks med
+  // uspesifisert rekkefølge; et etter-ankring-mønster ville latt en «vanlig» tick
+  // som vinner racet skjule hele dvale-perioden for reanker-sjekken. Kun positiv
+  // drift over terskelen betyr at motorklokken (performance.now) har «sovet» mens
+  // Date.now fortsatte – negativ/liten drift (f.eks. veggklokke justert bakover av
+  // NTP) skal IKKE flytte tidsstemplene, ellers hopper timeren feilaktig fremover.
+  private reanchorOnWallClockDrift(nowPerf: number, wallNow: number): void {
+    const s = this.state;
+    const drift = (wallNow - s.lastTickWallMs) - (nowPerf - s.lastTickPerfMs);
+    if (drift > SLEEP_REANCHOR_THRESHOLD_MS) {
+      s.phaseStartTime -= drift;
+      s.workoutStartTime -= drift;
+    }
+    s.lastTickWallMs = wallNow;
+    s.lastTickPerfMs = nowPerf;
+  }
+
+  // Cue-gating portert fra hook-ticken. AVVIK-BY-DESIGN (α3→α4): hooken sjekket
+  // persona (og speechEnabled for halfway) FØR cuen ble spilt — motoren er
+  // persona-agnostisk og emitter alltid-når-gatet; adapteren (α4) filtrerer på
+  // persona/speech. Observabel adferd bevares siden kun adapteren spiller lyd.
+  private emitTickCues(phaseElapsed: number, remaining: number): void {
+    const s = this.state;
+    const wholeSecondsLeft = Math.ceil(remaining);
+    const phaseElapsedSec = Math.floor(phaseElapsed);
+    const halfwaySec = Math.floor(s.phaseDuration / 2);
+
+    // Halvveis-cue — samme gating som hooken: firedCues, kun work, kun faser >= 15s.
+    if (
+      s.phase === 'work' &&
+      s.phaseDuration >= 15 &&
+      phaseElapsedSec === halfwaySec &&
+      !s.firedCues.has('halfway')
+    ) {
+      s.firedCues.add('halfway');
+      this.emit({ type: 'phase:halfway' });
+    }
+
+    // 3-2-1-nedtelling per helsekund. wholeSecondsLeft >= 1 ER remaining > 0-vakten
+    // fra a1dc749 (ceil(remaining) >= 1 ⇔ remaining > 0): ingen emisjon på en
+    // allerede utløpt fase rett før catchUpExpiredPhases spoler stille forbi den.
+    if (
+      wholeSecondsLeft <= 3 &&
+      wholeSecondsLeft >= 1 &&
+      wholeSecondsLeft !== s.lastCountdownBeep &&
+      s.phaseDuration >= 4
+    ) {
+      s.lastCountdownBeep = wholeSecondsLeft;
+      this.emit({ type: 'countdown', secondsLeft: wholeSecondsLeft as 1 | 2 | 3 });
+    }
+  }
+
   tick(): void {
-    // α3: drift-reanker, catch-up, cue-/persist-gating og snapshot-gating porteres hit.
-    throw new Error('ikke implementert');
+    const s = this.state;
+    // Hook-ticken kjørte kun mens status === 'running' (ticker-effekten var gatet
+    // på status og visibility-handleren sjekket den) — motoren tar samme gate
+    // internt slik at bindingen (α5) kan kalle tick() ubetinget fra visibilitychange.
+    if (s.status !== 'running') return;
+
+    const now = this.now();
+    this.reanchorOnWallClockDrift(now, Date.now());
+
+    const phaseElapsed = (now - s.phaseStartTime) / 1000;
+    const remaining = Math.max(0, s.phaseDuration - phaseElapsed);
+    s.phaseRemaining = remaining;
+    s.totalElapsed = Math.max(0, (now - s.workoutStartTime) / 1000);
+
+    this.emitTickCues(phaseElapsed, remaining);
+
+    const wholeSecondsLeft = Math.ceil(remaining);
+    if (remaining <= 0) {
+      // Utløpt fase: stille fast-forward ved store tidshopp (dvale/lomme),
+      // normalt enkelt-avansement med full hendelse ellers.
+      this.catchUpExpiredPhases();
+    } else if (
+      s.status === 'running' &&
+      wholeSecondsLeft % 2 === 0 &&
+      wholeSecondsLeft !== s.lastSessionSaveSecond
+    ) {
+      // Lagre maks én gang per partallssekund – ikke ved hver 100ms-tick
+      // (synkron localStorage-I/O hos persistenceSubscriber).
+      s.lastSessionSaveSecond = wholeSecondsLeft;
+      this.onPersist({
+        workout: s.activeWorkout,
+        phase: s.phase,
+        currentRound: s.currentRound,
+        currentItemIndex: s.currentItemIndex,
+        totalElapsedSeconds: Math.floor(s.totalElapsed),
+      });
+    }
+
+    this.notifySnapshotIfChanged();
+  }
+
+  // Håndter en eller flere utløpte faser i én tick — portert ordrett fra hooken.
+  // Ved normal drift (overshoot ~0) beholdes dagens oppførsel: ett avansement med
+  // full hendelse. Ved oppvåkning etter dvale spoles alle utløpte faser stille
+  // gjennom, landingsfasen får korrekt gjenværende tid pluss én resync-hendelse –
+  // i stedet for en kaskade av hendelser, én per utløpt fase.
+  private catchUpExpiredPhases(): void {
+    const s = this.state;
+    const phaseElapsed = (this.now() - s.phaseStartTime) / 1000;
+    const overshoot = Math.max(0, phaseElapsed - s.phaseDuration);
+
+    if (overshoot < CATCH_UP_THRESHOLD_S) {
+      this.advanceToNextPhase();
+      return;
+    }
+
+    let restOvershoot = overshoot;
+    let skippedSilently = 0;
+    let iterations = 0;
+
+    // Fullføring kaller alltid setupPhase(..., false) (se advanceToNextPhase), så
+    // status blir 'completed' idet loopen når 'complete' – while-betingelsen under
+    // avslutter da loopen naturlig, uten noe eget complete-tilfelle her.
+    while (s.status === 'running' && iterations < MAX_CATCH_UP_PHASES) {
+      iterations++;
+      this.advanceToNextPhase(true);
+      skippedSilently++;
+
+      const newDuration = s.phaseDuration;
+      if (restOvershoot >= newDuration) {
+        // Denne fasens hele varighet er også spist opp av overshoot – fortsett til neste.
+        restOvershoot -= newDuration;
+        continue;
+      }
+
+      // Landet korrekt inni denne fasen: bakdater phaseStartTime slik at gjenværende
+      // tid blir riktig fremover (uten dette ville fasen fremstå som nylig startet).
+      s.phaseStartTime = this.now() - restOvershoot * 1000;
+      break;
+    }
+
+    if (skippedSilently >= 1 && s.status === 'running') {
+      this.emitResync(skippedSilently);
+    }
+  }
+
+  // playResyncCue sin TRIGGER-logikk portert: selve lyden ble resync-hendelsen
+  // (adapteren i α4 gjenskaper persona-/standard-forgreningene fra payloaden).
+  private emitResync(skippedPhases: number): void {
+    const s = this.state;
+    const items = s.activeWorkout?.items || [];
+    const idx = s.currentItemIndex;
+    const landingPhase = s.phase;
+    // Samme wrap-regel som phase:started: round_rest annonserer items[0] (neste
+    // runde starter forfra), rest annonserer items[idx+1] — jf. hookens
+    // playResyncCue/playPersonaResyncCue-forgreninger.
+    const nextExercise =
+      (landingPhase === 'round_rest' ? items[0]?.exercise : items[idx + 1]?.exercise) ?? null;
+    this.emit({
+      type: 'resync',
+      skippedPhases,
+      landingPhase,
+      exercise: items[idx]?.exercise ?? null,
+      nextExercise,
+      tone: s.activeWorkout?.voiceTone || 'rolig',
+    });
   }
 
   start(workout?: WorkoutTemplate): void {
@@ -332,6 +561,7 @@ export class TimerEngine {
 
     this.emit({ type: 'workout:started', workout: targetWorkout });
     this.setupPhase('prepare', 1, 0, false, targetWorkout);
+    this.notifySnapshotIfChanged();
   }
 
   pause(): void {
@@ -347,6 +577,7 @@ export class TimerEngine {
       currentItemIndex: this.state.currentItemIndex,
       totalElapsedSeconds: Math.floor(this.state.totalElapsed),
     });
+    this.notifySnapshotIfChanged();
   }
 
   resume(): void {
@@ -356,10 +587,16 @@ export class TimerEngine {
     const nowPerf = this.now();
     const currentRemaining = this.state.phaseRemaining;
     this.state.phaseStartTime = nowPerf - (this.state.phaseDuration - currentRemaining) * 1000;
+    // TILSIKTET ADFERDSENDRING (spec § 3, den ENESTE i B3-α): bakdater også
+    // workoutStartTime fra presis forløpt tid (symmetrisk med phaseStartTime-
+    // linjen over) — hooken lot den stå urørt, så tick etter restore+resume
+    // regnet totalElapsed som tid-siden-sidelast i stedet for faktisk økt-tid.
+    this.state.workoutStartTime = nowPerf - this.state.totalElapsed * 1000;
     this.state.lastTickWallMs = Date.now();
     this.state.lastTickPerfMs = nowPerf;
     this.state.status = 'running';
     this.emit({ type: 'workout:resumed', endsAt: nowPerf + currentRemaining * 1000 });
+    this.notifySnapshotIfChanged();
   }
 
   reset(): void {
@@ -374,11 +611,13 @@ export class TimerEngine {
     this.state.totalElapsed = 0;
     this.state.phaseRemaining = this.state.activeWorkout?.prepareDurationSeconds || 5;
     this.state.phaseDuration = this.state.activeWorkout?.prepareDurationSeconds || 5;
+    this.notifySnapshotIfChanged();
   }
 
   skipNext(): void {
     if (this.state.status === 'completed') return;
     this.advanceToNextPhase();
+    this.notifySnapshotIfChanged();
   }
 
   previous(): void {
@@ -398,33 +637,69 @@ export class TimerEngine {
     } else if (currentPhase === 'round_rest') {
       this.setupPhase('work', r, w.items.length - 1);
     }
+    this.notifySnapshotIfChanged();
   }
 
-  restore(_session: InterruptedSession): void {
-    throw new Error('ikke implementert');
+  restore(session: InterruptedSession): void {
+    // Portert fra hookens restoreSession: stille setupPhase (fasen starter
+    // forfra) + status paused. activeWorkout røres bevisst ikke — hooken lot
+    // workout-propen eie den også ved restore.
+    this.setupPhase(session.phase, session.currentRound, session.currentItemIndex, true);
+    this.state.totalElapsed = session.totalElapsedSeconds;
+    // TILSIKTET ADFERDSENDRING (spec § 3, den ENESTE i B3-α): bakdater
+    // workoutStartTime fra gjenopprettet forløpt tid, slik at
+    // saveInterruptedSession ikke rapporterer tid-siden-sidelast — se også
+    // den symmetriske linjen i resume().
+    this.state.workoutStartTime = this.now() - session.totalElapsedSeconds * 1000;
+    this.state.status = 'paused';
+    this.notifySnapshotIfChanged();
   }
 
-  setWorkout(_w: WorkoutTemplate): void {
-    throw new Error('ikke implementert');
+  /**
+   * Prop-sync fra hook-bindingen — kun i idle (plan-låst semantikk, jf. «dagens
+   * prop-sync-semantikk»): hooken nullstilte fasefeltene bare i idle; utenfor
+   * idle beholdes kjørende økt urørt (propWorkout-speilet oppdateres uansett som
+   * setupPhase-fallback).
+   */
+  setWorkout(w: WorkoutTemplate): void {
+    if (this.propWorkout === w) return;
+    this.propWorkout = w;
+    if (this.state.status !== 'idle') return;
+    this.state.activeWorkout = w;
+    this.state.phase = 'prepare';
+    this.state.currentRound = 1;
+    this.state.currentItemIndex = 0;
+    this.state.phaseDuration = w.prepareDurationSeconds;
+    this.state.phaseRemaining = w.prepareDurationSeconds;
+    this.state.totalElapsed = 0;
+    this.notifySnapshotIfChanged();
   }
 
-  setSoundEnabled(_v: boolean): void {
-    throw new Error('ikke implementert');
+  setSoundEnabled(v: boolean): void {
+    this.state.soundEnabled = v;
+    this.notifySnapshotIfChanged();
   }
 
-  setVibrateEnabled(_v: boolean): void {
-    throw new Error('ikke implementert');
+  setVibrateEnabled(v: boolean): void {
+    this.state.vibrateEnabled = v;
+    this.notifySnapshotIfChanged();
   }
 
-  setWakeLockEnabled(_v: boolean): void {
-    throw new Error('ikke implementert');
+  setWakeLockEnabled(v: boolean): void {
+    // wakeLockService.request/releaseLock eies av hook-bindingen (α5) — motoren
+    // er rammeverksfri og holder kun flagget.
+    this.state.wakeLockEnabled = v;
+    this.notifySnapshotIfChanged();
   }
 
-  setSpeechEnabled(_v: boolean): void {
-    throw new Error('ikke implementert');
+  setSpeechEnabled(v: boolean): void {
+    // speechService.setEnabled eies av hook-bindingen (α5).
+    this.state.speechEnabled = v;
+    this.notifySnapshotIfChanged();
   }
 
-  setLocked(_v: boolean): void {
-    throw new Error('ikke implementert');
+  setLocked(v: boolean): void {
+    this.state.isLocked = v;
+    this.notifySnapshotIfChanged();
   }
 }
