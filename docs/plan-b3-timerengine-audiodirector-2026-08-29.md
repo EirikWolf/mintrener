@@ -233,6 +233,17 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
 
 **Planrettelse (fra alpha3-review):** Motoren emitter `phase:deadlineChanged` fra og med alpha3-fiksen på to steder: (a) etter catch-up-bakdateringen av landingsfasen (den emitterte `phase:started.endsAt` er da foreldet med restOvershoot — deadlineChanged rett etterpaa baerer korrekt frist), og (b) etter drift-reanker i tick. beta2 konsumerer; ingen beta-task skal legge til emisjonen selv.
 
+**Planrettelse 2 (fra β2-funn — flerkjedemodell, implementeres som Task β2.5 FØR β4):**
+β1 arvet playSequence sin én-kjede-semantikk («ny sekvens kansellerer planlagt»), men Director skedulerer FLERE samtidige kjeder (start_321 endAt=T + go startAt=T + last5 startAt=T−5000, pluss reaktive avspillinger i samme fase). Ny modell i `audioBufferEngine`:
+- Intern kjede-liste (`ActiveChain[]`) i stedet for singular `activeChain`.
+- `playSequence` (reaktiv): stopper kun HØRBARE kjeder (startet, ikke endt) — «én stemme om gangen» håndheves ved avspilling; skedulerte fremtidskjeder bevares.
+- `scheduleSequence`: additiv — stopper ALDRI noe. Director eier ikke-overlappende ankre.
+- `stop(fadeOutS?)`: stopper alt (hørbart fades; skedulert kanselleres stille).
+- Ny `cancelScheduled()`: kansellerer kun ikke-startede kjeder.
+- Ducking: refcount/first-audible→duck, none-audible→unduck (par-balansert på tvers av kjeder).
+- Director-mapping oppdateres: `deadlineChanged`/skip → `cancelScheduled()` + reskeduler; pause/reset → `stop()`.
+Eksisterende β1-tester som pinner «ny sekvens kansellerer skedulert» oppdateres til ny kontrakt (begrunnet i test-kommentar); epoch-mekanismen gjelder per kjede.
+
 ### Task β2: AudioDirector-kjernen
 
 **Files:** Create `src/services/audioDirector.ts`, `src/services/__tests__/audioDirector.test.ts`
