@@ -39,3 +39,6 @@ firebase-debug.log
 temp_*.json
 *.tsbuildinfo
 audition/
+
+# Rå-cache for TTS-nedlastinger (permanent lokalt, aldri i repoet)
+audio/raw-cache/

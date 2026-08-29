@@ -9,7 +9,10 @@ import { fileURLToPath } from 'node:url';
 import {
   buildTaskList,
   buildClonePayload,
-  buildFfmpegArgs,
+  buildTtsFfmpegArgs,
+  buildRecordedFfmpegArgs,
+  cacheIsFresh,
+  decideTtsAction,
   RECORDED_SOURCES,
   parseManifest,
   parseCliArgs,
@@ -160,7 +163,7 @@ describe('RECORDED_SOURCES', () => {
 });
 
 describe('buildClonePayload', () => {
-  it('bygger clone-payload med reference_audio_filename = seedFile', () => {
+  it('bygger clone-payload med reference_audio_filename = seedFile (default norsk)', () => {
     const payload = buildClonePayload('Gje gass!', 'mintrener-seed-haugesund.wav');
     expect(payload).toEqual({
       text: 'Gje gass!',
@@ -170,23 +173,166 @@ describe('buildClonePayload', () => {
       output_format: 'mp3',
     });
   });
+
+  it('respekterer eksplisitt språkoverstyring (ttsLang)', () => {
+    const payload = buildClonePayload('Mountain Climbers', 'seed.wav', 'en');
+    expect(payload.language).toBe('en');
+    expect(payload.text).toBe('Mountain Climbers');
+  });
 });
 
-describe('buildFfmpegArgs', () => {
-  it('inkluderer input, output, silenceremove, afade og loudnorm', () => {
-    const args = buildFfmpegArgs('in.mp3', 'out.mp3');
+describe('språkoverstyring (ttsLang)', () => {
+  it('mountain-climbers bærer engelsk tekst og lang=en i alle personas', () => {
+    const tasks = buildTaskList(manifest, { only: 'mountain-climbers' });
+    expect(tasks).toHaveLength(4);
+    for (const t of tasks) {
+      expect(t.kind === 'tts' ? t.text : null).toBe('Mountain Climbers');
+      expect(t.kind === 'tts' ? t.lang : null).toBe('en');
+    }
+  });
+
+  it('alle andre TTS-oppgaver (cues og øvelser) er norske', () => {
+    const others = buildTaskList(manifest, {}).filter(
+      (t): t is TtsTask => t.kind === 'tts' && t.id !== 'mountain-climbers',
+    );
+    expect(others).toHaveLength(140);
+    expect(others.every((t) => t.lang === 'no')).toBe(true);
+  });
+});
+
+describe('cacheIsFresh (sidecar-invalidering av rå-cachen)', () => {
+  const task = { text: 'Mountain Climbers', lang: 'en' };
+
+  it('gyldig sidecar med samme tekst og språk er fersk', () => {
+    const sidecar = JSON.stringify({ text: 'Mountain Climbers', lang: 'en' });
+    expect(cacheIsFresh(sidecar, task)).toBe(true);
+  });
+
+  it('avvikende tekst eller språk invaliderer cachen', () => {
+    expect(cacheIsFresh(JSON.stringify({ text: 'Mauntn klaimers', lang: 'no' }), task)).toBe(false);
+    expect(cacheIsFresh(JSON.stringify({ text: 'Mountain Climbers', lang: 'no' }), task)).toBe(false);
+  });
+
+  it('manglende eller korrupt sidecar invaliderer (legacy-cache re-hentes)', () => {
+    expect(cacheIsFresh(null, task)).toBe(false);
+    expect(cacheIsFresh('ikke json{', task)).toBe(false);
+  });
+});
+
+describe('buildTtsFfmpegArgs (etterbehandling v2 for TTS-klipp)', () => {
+  const args = buildTtsFfmpegArgs('in.mp3', 'out.mp3');
+  const filter = args[args.indexOf('-af') + 1] ?? '';
+
+  it('inkluderer input og output', () => {
     expect(args).toContain('in.mp3');
     expect(args[args.length - 1]).toBe('out.mp3');
-    const filter = args[args.indexOf('-af') + 1] ?? '';
-    expect(filter).toContain('silenceremove');
-    expect(filter).toContain('afade');
-    expect(filter).toContain('loudnorm=I=-16:TP=-1.5:LRA=11');
+  });
+
+  it('QA-2: denoiser (afftdn) med highpass, FØR trimmingen', () => {
+    expect(filter).toContain('highpass=f=75');
+    expect(filter).toContain('afftdn=nr=12:nf=-42');
+    expect(filter.indexOf('afftdn')).toBeLessThan(filter.indexOf('silenceremove'));
+  });
+
+  it('QA-1: start-trim bevarer 100 ms pre-roll, slutt-trim 60 ms', () => {
+    expect(filter).toContain(
+      'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.1',
+    );
+    expect(filter).toContain(
+      'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.06',
+    );
+    expect(filter).toContain('afade=t=in:st=0:d=0.01');
+  });
+
+  it('QA-3: mykgjøring (deesser/treble/bass) etter trim, loudnorm sist', () => {
+    expect(filter).toContain('deesser');
+    expect(filter).toContain('treble=g=-2.5:f=7500');
+    expect(filter).toContain('bass=g=1:f=180');
+    expect(filter.indexOf('deesser')).toBeGreaterThan(filter.lastIndexOf('areverse'));
+    expect(filter.indexOf('loudnorm=I=-16:TP=-1.5:LRA=11')).toBeGreaterThan(
+      filter.indexOf('bass='),
+    );
+    expect(filter.endsWith('loudnorm=I=-16:TP=-1.5:LRA=11')).toBe(true);
   });
 
   it('overskriver uten prompt og leser aldri stdin', () => {
-    const args = buildFfmpegArgs('a.mp3', 'b.mp3');
     expect(args).toContain('-y');
     expect(args).toContain('-nostdin');
+  });
+});
+
+describe('buildRecordedFfmpegArgs (skånsom kjede for innspilte spor)', () => {
+  const args = buildRecordedFfmpegArgs('in.mp3', 'out.mp3');
+  const filter = args[args.indexOf('-af') + 1] ?? '';
+
+  it('beholder trim + fade + loudnorm', () => {
+    expect(filter).toContain('silenceremove');
+    expect(filter).toContain('afade');
+    expect(filter).toContain('loudnorm=I=-16:TP=-1.5:LRA=11');
+    expect(args[args.length - 1]).toBe('out.mp3');
+  });
+
+  it('har INGEN denoise/EQ — produserte vokalspor skal ikke farges', () => {
+    expect(filter).not.toContain('afftdn');
+    expect(filter).not.toContain('deesser');
+    expect(filter).not.toContain('treble');
+    expect(filter).not.toContain('bass');
+    expect(filter).not.toContain('highpass');
+  });
+});
+
+describe('rå-cache', () => {
+  it('TTS-oppgaver får cacheRelPath under audio/raw-cache/<persona>/', () => {
+    const tasks = buildTaskList(manifest, {});
+    const intro = tasks.find((t) => t.personaId === 'haugesund' && t.id === 'intro');
+    expect(intro && intro.kind === 'tts' ? intro.cacheRelPath : null).toBe(
+      'audio/raw-cache/haugesund/intro.mp3',
+    );
+    const burpees = tasks.find((t) => t.personaId === 'boyband' && t.id === 'burpees');
+    expect(burpees && burpees.kind === 'tts' ? burpees.cacheRelPath : null).toBe(
+      'audio/raw-cache/boyband/exercise-burpees.mp3',
+    );
+  });
+});
+
+describe('decideTtsAction (cache-oppførsel)', () => {
+  it('cache-treff hopper over TTS-kallet', () => {
+    expect(
+      decideTtsAction({ cacheExists: true, outputExists: false, force: false, reprocess: false }),
+    ).toBe('process-from-cache');
+  });
+
+  it('cache-treff + --force regenererer output fra cache, uten nytt TTS-kall', () => {
+    expect(
+      decideTtsAction({ cacheExists: true, outputExists: true, force: true, reprocess: false }),
+    ).toBe('process-from-cache');
+  });
+
+  it('eksisterende output uten --force hopper over hele oppgaven', () => {
+    expect(
+      decideTtsAction({ cacheExists: true, outputExists: true, force: false, reprocess: false }),
+    ).toBe('skip-existing');
+    expect(
+      decideTtsAction({ cacheExists: false, outputExists: true, force: false, reprocess: false }),
+    ).toBe('skip-existing');
+  });
+
+  it('uten cache og uten output hentes TTS fra nettet', () => {
+    expect(
+      decideTtsAction({ cacheExists: false, outputExists: false, force: false, reprocess: false }),
+    ).toBe('fetch-then-process');
+  });
+
+  it('--reprocess bruker alltid cache (aldri nettverk), også når output finnes', () => {
+    expect(
+      decideTtsAction({ cacheExists: true, outputExists: true, force: false, reprocess: true }),
+    ).toBe('process-from-cache');
+  });
+
+  it('--reprocess uten cache-fil er en feil', () => {
+    expect(
+      decideTtsAction({ cacheExists: false, outputExists: true, force: false, reprocess: true }),
+    ).toBe('missing-cache');
   });
 });
 
@@ -240,8 +386,17 @@ describe('parseCliArgs', () => {
       dryRun: true,
       force: true,
       skipRecorded: true,
+      reprocess: false,
       persona: 'haugesund',
       only: 'intro',
+    });
+  });
+
+  it('parser --reprocess', () => {
+    expect(parseCliArgs(['--reprocess']).reprocess).toBe(true);
+    expect(parseCliArgs(['--reprocess', '--persona', 'romsdal'])).toMatchObject({
+      reprocess: true,
+      persona: 'romsdal',
     });
   });
 
@@ -294,6 +449,8 @@ describe('fetchTtsWithRetries — retry-klassifisering (mock fetch)', () => {
     text: 'Trø te!',
     seedFile: 'mintrener-seed-haugesund.wav',
     outputRelPath: 'public/audio/personas/haugesund/intro.mp3',
+    cacheRelPath: 'audio/raw-cache/haugesund/intro.mp3',
+    lang: 'no',
   };
 
   const fakeResponse = (status: number, body: ArrayBuffer | string) => ({
