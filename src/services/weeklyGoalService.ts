@@ -18,12 +18,20 @@ function readGoalLog(): GoalLogEntry[] {
   } catch { return []; }
 }
 
-/** Målet som gjaldt ved gitt ukestart. Uker før loggens start: gjeldende mål. */
+/**
+ * Målet som gjaldt ved gitt ukestart.
+ * Uker ELDRE enn loggens første linje dømmes etter første linjes mål (det
+ * historiske ankeret er beste estimat for hele fortiden) — aldri etter
+ * gjeldende mål, ellers ville en målheving re-dømt historikken og kollapset
+ * streaken retroaktivt. Gjeldende mål brukes kun ved tom logg.
+ */
 export function getGoalForWeek(targetWeekKey: string): number {
-  const applicable = readGoalLog()
-    .filter((e) => e.weekKey <= targetWeekKey) // 'YYYY-MM-DD' sorterer leksikalsk = kronologisk
+  const log = readGoalLog()
+    // 'YYYY-MM-DD' sorterer leksikalsk = kronologisk
     .sort((a, b) => (a.weekKey < b.weekKey ? -1 : a.weekKey > b.weekKey ? 1 : 0));
-  return applicable.length > 0 ? applicable[applicable.length - 1].goal : getWeeklyGoal();
+  if (log.length === 0) return getWeeklyGoal();
+  const applicable = log.filter((e) => e.weekKey <= targetWeekKey);
+  return applicable.length > 0 ? applicable[applicable.length - 1].goal : log[0].goal;
 }
 
 export interface WeeklyGoalProgress {

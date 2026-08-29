@@ -43,6 +43,11 @@ export interface WeekStreakResult {
   currentWeeks: number;
   bestWeeks: number;
   insuranceInBank: 0 | 1;
+  /**
+   * Ukenøkler der en slinguke ble forbrukt — akkumulert over ALLE historiske
+   * serier, også serier som senere røk (døde serier). Kun for visning/telemetri;
+   * ikke en egenskap ved den nåværende serien alene.
+   */
   insuranceUsedWeekKeys: string[];
   currentWeekCompleted: boolean;
   /** Milepæler (fra WEEK_STREAK_MILESTONES) som currentWeeks har nådd. */
@@ -54,7 +59,8 @@ export interface WeekStreakResult {
  * Regler (spec § 2.1 + planpresisering 2):
  *  - Fullført uke = antall økter i uka >= goalForWeek(ukenøkkel).
  *  - 1 slinguke opptjenes per 4. PÅFØLGENDE fullførte uke, maks 1 i banken.
- *  - Røket uke forbruker bank automatisk (streaken fortsetter); tom bank → nullstill.
+ *  - Røket uke forbruker bank automatisk: serien BEVARES uendret (teller ikke +1);
+ *    tom bank → nullstill.
  *  - Inneværende uke kan øke (hvis alt fullført) men aldri bryte.
  */
 export function computeWeekStreak(
@@ -83,7 +89,10 @@ export function computeWeekStreak(
       consecutiveSinceEarn += 1;
       if (consecutiveSinceEarn >= 4) { bank = 1; consecutiveSinceEarn = 0; }
     } else if (bank === 1) {
-      bank = 0; used.push(wk); streak += 1; consecutiveSinceEarn = 0;
+      // Produkteiers valg 2026-08-29: forsikret uke BEVARER serien uten å telle
+      // +1 — milepæler nås kun av faktiske treningsuker. Opptjeningstelleren
+      // nullstilles likevel: ny slinguke krever 4 påfølgende FULLFØRTE uker.
+      bank = 0; used.push(wk); consecutiveSinceEarn = 0;
     } else {
       streak = 0; consecutiveSinceEarn = 0;
     }

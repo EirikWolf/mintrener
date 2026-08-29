@@ -71,6 +71,15 @@ describe('getGoalForWeek', () => {
     expect(getGoalForWeek(weekKey(new Date(2026, 0, 7)))).toBe(3);         // inneværende: gammelt mål
     expect(getGoalForWeek(addWeeksToKey(weekKey(new Date(2026, 0, 7)), 1))).toBe(5); // neste: nytt
   });
+  it('endring i uke N påvirker ikke uke N-1 (historisk anker, ikke nytt mål)', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 0, 7)); // onsdag, uke 2026-01-05
+    setWeeklyGoal(5);
+    // Uker ELDRE enn loggens første linje skal dømmes etter første linjes mål
+    // (det gamle), aldri etter gjeldende mål — ellers ville en målheving
+    // re-dømt hele historikken og kollapset streaken retroaktivt.
+    expect(getGoalForWeek('2025-12-29')).toBe(3);
+    expect(getGoalForWeek('2024-06-03')).toBe(3);
+  });
   it('flere endringer: siste logglinje med weekKey <= spurt uke vinner', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 0, 7)); setWeeklyGoal(5);

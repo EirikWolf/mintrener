@@ -36,14 +36,16 @@ describe('computeWeekStreak', () => {
     expect(r.currentWeeks).toBe(3);
     expect(r.currentWeekCompleted).toBe(true);
   });
-  it('slinguke: opptjenes etter 4 fullførte uker (maks 1), forbrukes automatisk på én røket uke', () => {
-    // uke 1-4 fullført (opptjener 1), uke 5 røket (forbrukes), uke 6 fullført → streak 6
+  it('slinguke: opptjenes etter 4 fullførte uker (maks 1), forbrukes automatisk på én røket uke — serien STÅR, teller ikke +1', () => {
+    // uke 1-4 fullført (opptjener 1), uke 5 røket (forsikres — serien bevares uendret),
+    // uke 6 fullført → streak 5 (produkteiers valg 2026-08-29: forsikret uke teller ikke)
     const h = [
       ...week(2026, 1, 5, 3), ...week(2026, 1, 12, 3), ...week(2026, 1, 19, 3), ...week(2026, 1, 26, 3),
       /* uke 2026-02-02: 0 økter */ ...week(2026, 2, 9, 3),
     ];
     const r = computeWeekStreak(h, goal3, new Date(2026, 1, 18)); // ons i uka etter 2026-02-09
-    expect(r.currentWeeks).toBe(6);
+    expect(r.currentWeeks).toBe(5);
+    expect(r.bestWeeks).toBe(5);
     expect(r.insuranceInBank).toBe(0);
     expect(r.insuranceUsedWeekKeys).toEqual(['2026-02-02']);
   });
@@ -55,7 +57,22 @@ describe('computeWeekStreak', () => {
     ];
     const r = computeWeekStreak(h, goal3, new Date(2026, 1, 25));
     expect(r.currentWeeks).toBe(1);   // kun 2026-02-16-uka
-    expect(r.bestWeeks).toBe(5);      // 4 + forsikret uke
+    expect(r.bestWeeks).toBe(4);      // 4 faktiske treningsuker; forsikret uke teller ikke
+  });
+  it('maks 1 i banken: 8 fullførte uker opptjener ALDRI bank nummer to', () => {
+    // 8 fullførte uker (bank opptjent ved uke 4, uke 5-8 kan ikke fylle på over maks 1),
+    // så to røkne uker: første forsikres (serien står på 8), andre bryter — beviser maks 1.
+    const h = [
+      ...week(2026, 1, 5, 3), ...week(2026, 1, 12, 3), ...week(2026, 1, 19, 3), ...week(2026, 1, 26, 3),
+      ...week(2026, 2, 2, 3), ...week(2026, 2, 9, 3), ...week(2026, 2, 16, 3), ...week(2026, 2, 23, 3),
+      /* 03-02: røket (forsikres), 03-09: røket (bank tom → brudd) */
+    ];
+    const r = computeWeekStreak(h, goal3, new Date(2026, 2, 18)); // ons i uka 2026-03-16
+    expect(r.currentWeeks).toBe(0);
+    expect(r.bestWeeks).toBe(8);
+    expect(r.insuranceInBank).toBe(0);
+    // Nøkler fra ALLE historiske serier — også serier som senere røk
+    expect(r.insuranceUsedWeekKeys).toEqual(['2026-03-02']);
   });
   it('uker FØR første økt noensinne teller ikke som brudd', () => {
     const h = week(2026, 3, 9, 3); // første og eneste uke = forrige uke
