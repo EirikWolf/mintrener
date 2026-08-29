@@ -117,6 +117,25 @@ export function getPersonaCueUrl(cue: PersonaCueName, personaId?: CoachPersonaId
   return persona?.cuesPath ? `${persona.cuesPath}/${cue}.mp3` : null;
 }
 
+/**
+ * Nøkkel (= URL) for et vilkårlig persona-klipp — cue-navn ('halfway',
+ * 'bro-neste', 'go-2', …) ELLER øvelsesnøkkel ('exercise-<id>'). Følger dagens
+ * cuesPath-konvensjon: /audio/personas/<persona>/<navn>.mp3 — samme oppslag
+ * som getPersonaCueUrl, men uten PersonaCueName-begrensningen (go- og bro-
+ * cuene er nye i β). Dette er manifest-SØMMEN: β5 bytter oppslagskilden til det
+ * genererte personaAudioManifest.json uten at kallerne (AudioDirector) endres —
+ * kallere skal aldri bygge persona-stier selv. Null for personaer uten
+ * cuesPath (standard = ren talesyntese).
+ */
+export function getPersonaClipKey(
+  cueOrExerciseId: string,
+  personaId?: CoachPersonaId
+): string | null {
+  const id = personaId || getActiveCoachPersona();
+  const persona = COACH_PERSONAS.find((p) => p.id === id);
+  return persona?.cuesPath ? `${persona.cuesPath}/${cueOrExerciseId}.mp3` : null;
+}
+
 export function preloadPersonaAudio(personaId?: CoachPersonaId): void {
   if (typeof Audio === 'undefined') return;
   const id = personaId || getActiveCoachPersona();
@@ -142,9 +161,8 @@ export function preloadPersonaAudio(personaId?: CoachPersonaId): void {
   });
 }
 
-export function stopCurrentPersonaAudio(): void {
-  // Buffer-kjeder fades ut i motoren (ingen harde kutt midt i et ord)
-  audioBufferEngine.stop();
+/** Pauser og nullstiller et aktivt HTMLAudio-spor (delt av begge stopp-variantene). */
+function stopActiveAudioElement(): void {
   try {
     if (activeAudioElement) {
       if (typeof activeAudioElement.pause === 'function') {
@@ -156,6 +174,30 @@ export function stopCurrentPersonaAudio(): void {
   } catch {
     activeAudioElement = null;
   }
+}
+
+/**
+ * FULL stopp: hørbar tale fades ut OG skedulerte lookahead-kjeder kanselleres.
+ * Forbeholdt pause/reset-stiene (Directorens workout:paused/workout:reset) og
+ * forhåndsvisningen i innstillingene — der skal ALT planlagt bort.
+ */
+export function stopCurrentPersonaAudio(): void {
+  // Buffer-kjeder fades ut i motoren (ingen harde kutt midt i et ord)
+  audioBufferEngine.stop();
+  stopActiveAudioElement();
+}
+
+/**
+ * Planrettelse 3: stopper kun HØRBAR persona-lyd (HTMLAudio-elementet +
+ * hørbare bufferkjeder). Directorens skedulerte lookahead-ankre
+ * (start_321/go/last5) overlever — en reaktiv cue (halfway, intro-kjeden,
+ * degradert intro) skal aldri kansellere planlagt grenselyd. Brukes av de
+ * reaktive cue-stiene under; full stopCurrentPersonaAudio() er forbeholdt
+ * pause/reset.
+ */
+export function stopAudiblePersonaAudio(): void {
+  audioBufferEngine.stopAudible();
+  stopActiveAudioElement();
 }
 
 export async function playPersonaPreview(id: CoachPersonaId): Promise<HTMLAudioElement | null> {
@@ -209,14 +251,15 @@ export async function playPersonaCue(
   // Buffer-motoren først: dekodet cue starter uten HTMLAudio-latens.
   // Fyr-og-glem – kalleren trenger bare å vite at cuen faktisk startet.
   if (audioBufferEngine.has(cueUrl)) {
-    stopCurrentPersonaAudio();
+    // Audible-only (Planrettelse 3): en reaktiv cue skal ikke drepe skedulert lookahead
+    stopAudiblePersonaAudio();
     void audioBufferEngine.playSequence([cueUrl]).catch(() => {});
     return true;
   }
 
   try {
     if (typeof Audio === 'undefined') return false;
-    stopCurrentPersonaAudio();
+    stopAudiblePersonaAudio();
     let audio = cueAudioCache[cueUrl];
     if (!audio) {
       audio = new Audio(cueUrl);
@@ -254,7 +297,9 @@ export async function playIntroThenExercise(exerciseId: string): Promise<boolean
     return false;
   }
 
-  stopCurrentPersonaAudio();
+  // Audible-only (Planrettelse 3): prepare-lookaheaden (start_321/go) er
+  // typisk allerede skedulert når intro-kjeden starter — den skal overleve.
+  stopAudiblePersonaAudio();
   void audioBufferEngine.playSequence([introUrl, exerciseKey]).catch(() => {});
   return true;
 }
