@@ -435,3 +435,171 @@ describe('AudioBufferEngine.playSequence / stop', () => {
     expect(() => engine.stop()).not.toThrow();
   });
 });
+
+describe('AudioBufferEngine – tidsbro (setTimeBridge / toAudioTime)', () => {
+  let engine: AudioBufferEngine;
+
+  beforeEach(() => {
+    engine = new AudioBufferEngine();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('setTimeBridge måler offset slik at toAudioTime = engineMs/1000 + offset', () => {
+    const { ctx } = createMockContext({}, 100);
+    vi.spyOn(audioService, 'getContext').mockReturnValue(ctx as unknown as AudioContext);
+
+    engine.setTimeBridge(5000); // offset = ctx.currentTime(100) - 5000/1000 = 95
+
+    expect(engine.toAudioTime(5000)).toBeCloseTo(100, 6);
+    expect(engine.toAudioTime(6000)).toBeCloseTo(101, 6);
+    expect(engine.toAudioTime(0)).toBeCloseTo(95, 6);
+  });
+
+  it('toAudioTime kaster hvis broen aldri er satt', () => {
+    expect(() => engine.toAudioTime(1000)).toThrow();
+  });
+});
+
+describe('AudioBufferEngine.scheduleSequence (absolutt anker + tidsbro)', () => {
+  let engine: AudioBufferEngine;
+  let duckStartSpy: Mock;
+  let duckStopSpy: Mock;
+
+  beforeEach(() => {
+    engine = new AudioBufferEngine();
+    duckStartSpy = vi.spyOn(audioDuckingService, 'startDucking').mockImplementation(() => {}) as unknown as Mock;
+    duckStopSpy = vi.spyOn(audioDuckingService, 'stopDucking').mockImplementation(() => {}) as unknown as Mock;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  // ctx.currentTime = 10, motor-bro satt ved engineNowMs = 1000 (1s)
+  // => offset = 10 - 1 = 9, altså toAudioTime(engineMs) = engineMs/1000 + 9.
+  async function setupBridgedEngine(currentTime = 10, engineNowMs = 1000) {
+    const mock = createMockContext(
+      {
+        '/audio/exercises/burpees.mp3': 2.0,
+        '/audio/exercises/planke.mp3': 3.0,
+      },
+      currentTime
+    );
+    vi.spyOn(audioService, 'getContext').mockReturnValue(mock.ctx as unknown as AudioContext);
+    stubFetchOk();
+    await engine.preload(['exercise-burpees', 'exercise-planke']);
+    engine.setTimeBridge(engineNowMs);
+    return mock;
+  }
+
+  it('endAt-anker: første kilde starter på toAudioTime(endAt) - kjedevarighet', async () => {
+    const { sources } = await setupBridgedEngine();
+
+    // chainDuration = 2.0 + 3.0 - 0.01*(2-1) = 4.99
+    // toAudioTime(20000) = 20000/1000 + 9 = 29 => startAt = 29 - 4.99 = 24.01
+    const pending = engine.scheduleSequence(['exercise-burpees', 'exercise-planke'], { endAt: 20000 });
+
+    expect(sources).toHaveLength(2);
+    expect(sources[0].start.mock.calls[0][0]).toBeCloseTo(24.01, 6);
+    expect(sources[1].start.mock.calls[0][0]).toBeCloseTo(24.01 + 2.0 - 0.01, 6);
+
+    sources[1].onended?.();
+    await expect(pending).resolves.toBe(true);
+  });
+
+  it('startAt-anker: kilden starter på toAudioTime(startAt)', async () => {
+    const { sources } = await setupBridgedEngine();
+
+    // toAudioTime(15000) = 15 + 9 = 24
+    const pending = engine.scheduleSequence(['exercise-burpees'], { startAt: 15000 });
+
+    expect(sources).toHaveLength(1);
+    expect(sources[0].start.mock.calls[0][0]).toBeCloseTo(24, 6);
+
+    sources[0].onended?.();
+    await expect(pending).resolves.toBe(true);
+  });
+
+  it('for trangt vindu: false uten å skedulere noe eller starte ducking', async () => {
+    const { ctx } = await setupBridgedEngine();
+
+    // toAudioTime(1020) = 1.02 + 9 = 10.02 < ctx.currentTime(10) + SCHEDULE_LEAD_S(0.03) = 10.03
+    const played = await engine.scheduleSequence(['exercise-burpees'], { startAt: 1020 });
+
+    expect(played).toBe(false);
+    expect(ctx.createBufferSource).not.toHaveBeenCalled();
+    expect(duckStartSpy).not.toHaveBeenCalled();
+  });
+
+  it('anker i fortiden: false uten sideeffekter', async () => {
+    const { ctx } = await setupBridgedEngine();
+
+    // toAudioTime(0) = 0 + 9 = 9, som ligger før ctx.currentTime (10)
+    const played = await engine.scheduleSequence(['exercise-burpees'], { startAt: 0 });
+
+    expect(played).toBe(false);
+    expect(ctx.createBufferSource).not.toHaveBeenCalled();
+    expect(duckStartSpy).not.toHaveBeenCalled();
+  });
+
+  it('ukjent nøkkel: false uten sideeffekter (samme kontrakt som playSequence)', async () => {
+    const { ctx } = await setupBridgedEngine();
+
+    const played = await engine.scheduleSequence(['exercise-burpees', 'ukjent'], { startAt: 15000 });
+
+    expect(played).toBe(false);
+    expect(ctx.createBufferSource).not.toHaveBeenCalled();
+  });
+
+  it('uten tidsbro: false uten sideeffekter (nekter å gjette anker)', async () => {
+    const mock = createMockContext(
+      { '/audio/exercises/burpees.mp3': 2.0 },
+      10
+    );
+    vi.spyOn(audioService, 'getContext').mockReturnValue(mock.ctx as unknown as AudioContext);
+    stubFetchOk();
+    await engine.preload(['exercise-burpees']);
+    // Ingen setTimeBridge()-kall her
+
+    const played = await engine.scheduleSequence(['exercise-burpees'], { startAt: 15000 });
+
+    expect(played).toBe(false);
+    expect(mock.ctx.createBufferSource).not.toHaveBeenCalled();
+  });
+
+  it('stop() kansellerer en skedulert-men-ikke-startet kjede (epoch)', async () => {
+    const { sources } = await setupBridgedEngine();
+
+    const pending = engine.scheduleSequence(['exercise-burpees'], { startAt: 15000 });
+    expect(sources).toHaveLength(1);
+
+    engine.stop();
+
+    expect(sources[0].stop).toHaveBeenCalledTimes(1);
+    // Kjeden telles som "spilt" (stop() sin kontrakt) selv om avspilling aldri
+    // faktisk nådde audioContext-klokken – ducking ryddes uansett via finishChain.
+    expect(duckStopSpy).toHaveBeenCalledTimes(1);
+    await expect(pending).resolves.toBe(true);
+  });
+
+  it('en ny sekvens kansellerer en tidligere skedulert-men-ikke-startet kjede', async () => {
+    const { sources } = await setupBridgedEngine();
+
+    const first = engine.scheduleSequence(['exercise-burpees'], { startAt: 15000 });
+    expect(sources).toHaveLength(1);
+
+    const second = engine.scheduleSequence(['exercise-planke'], { startAt: 16000 });
+    expect(sources).toHaveLength(2);
+    expect(sources[0].stop).toHaveBeenCalledTimes(1);
+
+    await expect(first).resolves.toBe(true);
+    sources[1].onended?.();
+    await expect(second).resolves.toBe(true);
+  });
+});

@@ -69,6 +69,9 @@ interface ChainNode {
 interface ActiveChain {
   nodes: ChainNode[];
   resolve: (played: boolean) => void;
+  // Kun satt for scheduleSequence-kjeder hvis avspilling ligger frem i tid –
+  // se scheduleSequence for hvorfor ducking der er skedulert i stedet for øyeblikkelig.
+  duckTimer?: ReturnType<typeof setTimeout>;
 }
 
 export class AudioBufferEngine {
@@ -80,9 +83,38 @@ export class AudioBufferEngine {
   // kan oppdage at et stopp (eksternt, eller fra en nyere sekvens) traff i
   // await-vinduet – stop/skedulering er ellers ikke atomisk over den awaiten
   private stopEpoch = 0;
+  // Offset (sekunder) mellom motorens klokke (TimerEngine.now(), ms) og
+  // AudioContext.currentTime, målt én gang ved setTimeBridge(). Null = ikke
+  // brodd ennå – da nekter scheduleSequence heller enn å gjette et anker.
+  private bridgeOffsetS: number | null = null;
 
   public has(key: string): boolean {
     return this.buffers.has(key);
+  }
+
+  /**
+   * Måler og lagrer offset mellom motorklokken (engine.now(), ms) og
+   * AudioContext-klokken (sekunder), slik at absolutte motor-tidsstempler
+   * (fasegrenser fra TimerEngine) kan oversettes til lyd-skedulering med
+   * samme klokke som source.start() bruker. Kalles av Director ved
+   * workout:started – én måling per økt er nok siden begge klokker går
+   * med samme rate (kun forskjellig epoke).
+   */
+  public setTimeBridge(engineNowMs: number): void {
+    const ctx = audioService.getContext();
+    this.bridgeOffsetS = ctx.currentTime - engineNowMs / 1000;
+  }
+
+  /**
+   * Oversetter et absolutt motor-tidsstempel (ms) til AudioContext-tid (sekunder).
+   * Kaster hvis broen ikke er satt – kallere (scheduleSequence) skal sjekke
+   * broen eksplisitt FØR de kaller denne, ikke stole på en fallback-gjetning.
+   */
+  public toAudioTime(engineMs: number): number {
+    if (this.bridgeOffsetS === null) {
+      throw new Error('AudioBufferEngine: toAudioTime kalt før setTimeBridge');
+    }
+    return engineMs / 1000 + this.bridgeOffsetS;
   }
 
   /**
@@ -203,6 +235,94 @@ export class AudioBufferEngine {
     });
   }
 
+  /**
+   * Som playSequence, men ankret i ABSOLUTT motor-tid i stedet for "nå + lead":
+   * `{ endAt }` regner ut startAt = toAudioTime(endAt) - kjedevarighet (summen av
+   * klippvarigheter minus crossfade-overlappene, jf. computeSequenceSchedule),
+   * `{ startAt }` går rett gjennom toAudioTime. Samme kontrakt som playSequence
+   * ellers: false uten sideeffekter ved ucachet nøkkel/manglende tidsbro/for
+   * trangt vindu (aldri gjetning – se toAudioTime), aldri reject, epoch- og
+   * context-state-gatet, kansellerbar via stop()/ny sekvens.
+   */
+  public async scheduleSequence(
+    keys: string[],
+    anchor: { endAt?: number; startAt?: number },
+    opts?: { crossfadeS?: number }
+  ): Promise<boolean> {
+    const buffers: AudioBuffer[] = [];
+    for (const key of keys) {
+      const buffer = this.buffers.get(key);
+      if (!buffer) return false;
+      buffers.push(buffer);
+    }
+    if (buffers.length === 0) return false;
+
+    // Uten bro kan et motor-anker ikke oversettes til lydklokketid – å gjette
+    // (f.eks. anta offset 0) ville gitt et vilkårlig avvik. Nekt heller.
+    if (this.bridgeOffsetS === null) return false;
+
+    const crossfadeS = opts?.crossfadeS ?? DEFAULT_CROSSFADE_S;
+    const durations = buffers.map((b) => b.duration);
+    // Kjedens totale varighet fra første klipps start til siste klipps slutt:
+    // (n-1) skjøter overlapper hver med crossfadeS, siste klipp bidrar fullt.
+    const chainDurationS = durations.reduce((sum, d) => sum + d, 0) - crossfadeS * (durations.length - 1);
+
+    const ctx = audioService.getContext();
+    const startAt =
+      anchor.startAt !== undefined
+        ? this.toAudioTime(anchor.startAt)
+        : this.toAudioTime(anchor.endAt as number) - chainDurationS;
+
+    // Samme sikkerhetsmargin som playSequence sin faste lead-tid: uten den
+    // rekker ikke skeduleringen (og evt. ducking-planlegging) å skje før
+    // avspilling skal starte. Fanger også anker i fortiden (startAt < nå).
+    if (startAt < ctx.currentTime + SCHEDULE_LEAD_S) return false;
+
+    this.stop();
+
+    if (ctx.state !== 'running') {
+      const epochBeforeResume = this.stopEpoch;
+      try {
+        await ctx.resume();
+      } catch {
+        // Avgjøres av state-sjekken under
+      }
+      // (Assertion til full union: se identisk kommentar i playSequence.)
+      if ((ctx.state as AudioContextState) !== 'running') return false;
+      if (this.stopEpoch !== epochBeforeResume) return true;
+    }
+
+    const schedule = computeSequenceSchedule(durations, crossfadeS, startAt);
+    const nodes = buffers.map((buffer, i) => this.scheduleClip(ctx, buffer, schedule[i], crossfadeS));
+
+    try {
+      const deviationMs = Math.max(0, ctx.currentTime - schedule[0].start) * 1000;
+      perfMonitorService.recordAudioDeviation(deviationMs);
+    } catch {
+      // Overvåking er en ren måling og skal aldri kunne velte avspilling
+    }
+
+    // Ducking her er skedulert (setTimeout) til faktisk avspillingsstart, IKKE
+    // øyeblikkelig som i playSequence: der er lead-tiden ~30 ms så "nå" og
+    // "avspilling starter" er samme øyeblikk for øret, men et scheduleSequence-
+    // anker kan ligge sekunder frem – øyeblikkelig ducking ville dempet
+    // bakgrunnslyd lenge før klippet faktisk høres. AudioContext-klokken har
+    // ingen "kjør callback ved tid X"-primitiv, så vegg-klokke-setTimeout er
+    // broen (og gjør oppførselen testbar med vi.useFakeTimers()). Kansellering
+    // (stop()/finishChain) rydder timeren – se der.
+    const duckDelayMs = Math.max(0, (startAt - ctx.currentTime) * 1000);
+    const duckTimer = setTimeout(() => audioDuckingService.startDucking(), duckDelayMs);
+
+    return new Promise<boolean>((resolve) => {
+      const chain: ActiveChain = { nodes, resolve, duckTimer };
+      this.activeChain = chain;
+      nodes[nodes.length - 1].source.onended = () => {
+        this.disconnectNodes(nodes);
+        this.finishChain(chain, true);
+      };
+    });
+  }
+
   // Deterministisk nedrigging av grafen (i stedet for GC-styrt opprydding)
   private disconnectNodes(nodes: ChainNode[]): void {
     nodes.forEach(({ gain }) => {
@@ -245,6 +365,12 @@ export class AudioBufferEngine {
   }
 
   private finishChain(chain: ActiveChain, played: boolean): void {
+    // Rydd en evt. skedulert duck-start (scheduleSequence) – uten dette ville
+    // en kjede kansellert FØR duckDelayMs likevel dempet bakgrunnslyd senere,
+    // lenge etter at avspillingen selv ble avbrutt.
+    if (chain.duckTimer !== undefined) {
+      clearTimeout(chain.duckTimer);
+    }
     if (this.activeChain === chain) {
       this.activeChain = null;
       audioDuckingService.stopDucking();
