@@ -130,6 +130,35 @@ describe('mediaSessionSubscriber (karakterisering, B3 α4)', () => {
     expect(mediaSessionService.updateMediaSession).toHaveBeenCalled();
   });
 
+  it('restore-uten-forutgående-start: workout:restored alene gir korrekt albumnavn ved paused, og forblir korrekt etter resume', () => {
+    // Dekker mappinggapet fra α4-rapporten: en økt gjenopprettet rett etter
+    // sideload (ingen workout:started har noensinne blitt emittert i denne
+    // abonnentens levetid) skal likevel vise riktig workout-navn.
+    const { engine, emitEvent, notify, snapshot } = createFakeEngine({ status: 'idle' });
+    createMediaSessionSubscriber(engine as any);
+    (mediaSessionService.updateMediaSession as any).mockClear();
+
+    emitEvent({ type: 'workout:restored', workout: TABATA_WORKOUT });
+    snapshot.status = 'paused';
+    snapshot.phase = 'work';
+    snapshot.currentRound = 1;
+    snapshot.totalRounds = 1;
+    notify();
+
+    expect(mediaSessionService.updateMediaSession).toHaveBeenCalledWith(
+      expect.objectContaining({ album: `${TABATA_WORKOUT.name} • Runde 1/1` })
+    );
+
+    // resume(): status går til running — albumnavnet skal fortsatt stå riktig
+    // uten at noen workout:started noensinne fyrte.
+    snapshot.status = 'running';
+    notify();
+
+    expect(mediaSessionService.updateMediaSession).toHaveBeenLastCalledWith(
+      expect.objectContaining({ album: `${TABATA_WORKOUT.name} • Runde 1/1` })
+    );
+  });
+
   it('completed → clearMediaSession', () => {
     const { engine, snapshot, notify } = createFakeEngine({ status: 'running' });
     createMediaSessionSubscriber(engine as any);

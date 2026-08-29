@@ -19,11 +19,11 @@ function phaseName(phase: TimerState['phase']): string {
 /**
  * Porter av MediaSession-effekten i TimerDisplay.tsx (B3 spec § 4/α4):
  * updateMediaSession ved running/paused, clearMediaSession ellers.
- * MAPPINGGAP (rapportert, ikke improvisert): TimerState har ingen
- * workout-referanse (kun engine-intern activeWorkout), så albumtittelens
- * workout-navn hentes fra workout:started-hendelsen i stedet for snapshotet
- * — dekker start/skip/resume, men IKKE restore() (motoren emitterer ingen
- * hendelse med workout-data der; se rapport for detaljer).
+ * TimerState har ingen workout-referanse (kun engine-intern activeWorkout),
+ * så albumtittelens workout-navn hentes fra hendelseskanalen i stedet for
+ * snapshotet: workout:started (start/skip/resume) OG workout:restored
+ * (restore() — planrettelse etter α4-rapportens mappinggap, se timerEngine.ts
+ * sin restore()) dekker til sammen alle stier som setter en aktiv økt.
  */
 export function createMediaSessionSubscriber(engine: MediaSessionSubscriberEngine): () => void {
   let workoutName = '';
@@ -35,7 +35,7 @@ export function createMediaSessionSubscriber(engine: MediaSessionSubscriberEngin
   let lastKey: string | null = null;
 
   const unsubEvents = engine.subscribeEvents((event) => {
-    if (event.type === 'workout:started') {
+    if (event.type === 'workout:started' || event.type === 'workout:restored') {
       workoutName = event.workout.name;
     }
   });

@@ -724,6 +724,20 @@ describe('TimerEngine – restore/resume (restoreSession-tidsfiksen)', () => {
     expect(started[0]).toMatchObject({ phase: 'work', silent: true });
   });
 
+  // Planrettelse (α4-rapport → koordinator): restore-stien emitterte
+  // tidligere ingen hendelse med workout-data — abonnenter som cacher
+  // workout-navnet fra hendelseskanalen (mediaSessionSubscriber m.fl.)
+  // hadde da ingenting å lese ved en restore uten forutgående start().
+  it('restore: emitterer nøyaktig én workout:restored med øktens workout', () => {
+    const { clock, engine, events } = createRigg();
+    clock.t = 500_000;
+    engine.restore(session());
+
+    const restored = events.filter((e) => e.type === 'workout:restored');
+    expect(restored).toHaveLength(1);
+    expect(restored[0]).toMatchObject({ workout: TABATA_WORKOUT });
+  });
+
   // DEN ENE TILSIKTEDE ADFERDSENDRINGEN (spec § 3): restore + resume bakdaterer
   // workoutStartTime fra gjenopprettet forløpt tid. Hooken lot workoutStartTime
   // stå (0 = sidelast), så første tick etter resume rapporterte tid-siden-

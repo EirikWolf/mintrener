@@ -20,4 +20,8 @@ export type EngineEvent =
   | { type: 'workout:paused' }
   | { type: 'workout:resumed'; endsAt: number }
   | { type: 'workout:reset' }
-  | { type: 'workout:completed'; tone: VoiceTone };
+  | { type: 'workout:completed'; tone: VoiceTone }
+  // restore-flyten bærer workout-data til abonnenter (MediaSession m.fl.) —
+  // emitteres i TILLEGG til restore-stiens stille phase:started, som ikke
+  // selv bærer navn/workout-referanse.
+  | { type: 'workout:restored'; workout: WorkoutTemplate };

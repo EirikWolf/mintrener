@@ -15,6 +15,10 @@ interface VibrationSubscriberEngine {
  * i setupPhase, pluss workStart/restStart fra playResyncCue/
  * playPersonaResyncCue (BEGGE grenene vibrerte i hooken, persona-uavhengig —
  * derfor ingen persona-sjekk her, i motsetning til legacyAudioAdapter).
+ * Resync-vibrasjonen står ikke i plan-dokumentets α4 Step-3-punktliste (den
+ * nevner kun countdown/phase:started/completed) — den listen er en
+ * oppsummering, ikke fasiten; hook-koden er fasiten, og den vibrerer på
+ * resync (godkjent av koordinator etter α4-rapport).
  */
 export function createVibrationSubscriber(engine: VibrationSubscriberEngine): () => void {
   return engine.subscribeEvents((event) => {

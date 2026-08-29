@@ -675,6 +675,16 @@ export class TimerEngine {
   }
 
   restore(session: InterruptedSession): void {
+    // Planrettelse (α4-rapport → koordinator): restore-stien emitterte
+    // tidligere INGEN hendelse med workout-data — kun det stille phase:started
+    // under, som ikke bærer navn/workout-referanse. Abonnenter som trenger
+    // workout-navnet (MediaSession m.fl.) fikk da ingenting å cache når en økt
+    // ble gjenopprettet uten en forutgående start() i samme abonnent-levetid.
+    // Emitteres FØR setupPhase/notifySnapshotIfChanged (begge synkrone, samme
+    // tick) slik at abonnenter rekker å cache navnet før snapshot-varselet
+    // nederst trigger deres lesing.
+    this.emit({ type: 'workout:restored', workout: session.workout });
+
     // Portert fra hookens restoreSession: stille setupPhase (fasen starter
     // forfra) + status paused. activeWorkout røres bevisst ikke — hooken lot
     // workout-propen eie den også ved restore.
