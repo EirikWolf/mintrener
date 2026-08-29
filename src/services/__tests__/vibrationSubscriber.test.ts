@@ -4,10 +4,11 @@
 // hendelsesdrevet abonnent, atskilt fra lyd (jf. spec § 4: «Vibrasjon [...]
 // blir [...] egne småabonnenter»).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createVibrationSubscriber } from '../vibrationSubscriber';
+import { createVibrationSubscriber, VibrationSubscriberEngine } from '../vibrationSubscriber';
 import { EngineEvent } from '../../types/engineEvents';
 import { TimerState } from '../../types/workout';
 import { vibrationService } from '../vibrationService';
+import * as coachPersonaService from '../coachPersonaService';
 
 function createFakeEngine(overrides: Partial<TimerState> = {}) {
   let handler: ((e: EngineEvent) => void) | null = null;
@@ -33,16 +34,17 @@ function createFakeEngine(overrides: Partial<TimerState> = {}) {
     motionReps: 0,
     ...overrides,
   };
-  return {
-    engine: {
-      subscribeEvents: (h: (e: EngineEvent) => void) => {
-        handler = h;
-        return () => {
-          handler = null;
-        };
-      },
-      getSnapshot: () => snapshot,
+  const engine: VibrationSubscriberEngine = {
+    subscribeEvents: (h: (e: EngineEvent) => void) => {
+      handler = h;
+      return () => {
+        handler = null;
+      };
     },
+    getSnapshot: () => snapshot,
+  };
+  return {
+    engine,
     emit: (e: EngineEvent) => handler?.(e),
   };
 }
@@ -55,24 +57,37 @@ describe('vibrationSubscriber (karakterisering, B3 α4)', () => {
     vi.spyOn(vibrationService, 'workStart').mockImplementation(() => {});
     vi.spyOn(vibrationService, 'restStart').mockImplementation(() => {});
     vi.spyOn(vibrationService, 'workoutComplete').mockImplementation(() => {});
+    // Fasit: countdown-vibrasjon satt inne i persona === 'standard'-blokken i
+    // hooken (review-fiks) — eksplisitt standard med mindre en test overstyrer.
+    vi.spyOn(coachPersonaService, 'getActiveCoachPersona').mockReturnValue('standard');
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('countdown → vibrationService.countdown(vibrateEnabled)', () => {
+  it('countdown, standard persona → vibrationService.countdown(vibrateEnabled)', () => {
     const { engine, emit } = createFakeEngine({ vibrateEnabled: true });
-    createVibrationSubscriber(engine as any);
+    createVibrationSubscriber(engine);
 
     emit({ type: 'countdown', secondsLeft: 3 });
 
     expect(vibrationService.countdown).toHaveBeenCalledWith(true);
   });
 
+  it('countdown, persona-modus → INGEN vibrasjon (samme if-blokk som pipet i hooken, review-fiks)', () => {
+    vi.spyOn(coachPersonaService, 'getActiveCoachPersona').mockReturnValue('hardcore');
+    const { engine, emit } = createFakeEngine({ vibrateEnabled: true });
+    createVibrationSubscriber(engine);
+
+    emit({ type: 'countdown', secondsLeft: 3 });
+
+    expect(vibrationService.countdown).not.toHaveBeenCalled();
+  });
+
   it('phase:started(work, ikke stille) → vibrationService.workStart(vibrateEnabled)', () => {
     const { engine, emit } = createFakeEngine({ vibrateEnabled: false });
-    createVibrationSubscriber(engine as any);
+    createVibrationSubscriber(engine);
 
     emit({
       type: 'phase:started', phase: 'work', round: 1, itemIndex: 0,
@@ -85,7 +100,7 @@ describe('vibrationSubscriber (karakterisering, B3 α4)', () => {
 
   it('phase:started(work, stille) → ingen vibrasjon', () => {
     const { engine, emit } = createFakeEngine();
-    createVibrationSubscriber(engine as any);
+    createVibrationSubscriber(engine);
 
     emit({
       type: 'phase:started', phase: 'work', round: 1, itemIndex: 0,
@@ -98,7 +113,7 @@ describe('vibrationSubscriber (karakterisering, B3 α4)', () => {
 
   it('phase:started(rest) → vibrationService.restStart(vibrateEnabled)', () => {
     const { engine, emit } = createFakeEngine({ vibrateEnabled: true });
-    createVibrationSubscriber(engine as any);
+    createVibrationSubscriber(engine);
 
     emit({
       type: 'phase:started', phase: 'rest', round: 1, itemIndex: 0,
@@ -111,7 +126,7 @@ describe('vibrationSubscriber (karakterisering, B3 α4)', () => {
 
   it('phase:started(round_rest) → vibrationService.restStart(vibrateEnabled)', () => {
     const { engine, emit } = createFakeEngine({ vibrateEnabled: true });
-    createVibrationSubscriber(engine as any);
+    createVibrationSubscriber(engine);
 
     emit({
       type: 'phase:started', phase: 'round_rest', round: 1, itemIndex: 0,
@@ -124,7 +139,7 @@ describe('vibrationSubscriber (karakterisering, B3 α4)', () => {
 
   it('phase:started(prepare) → ingen vibrasjon (hooken vibrerte aldri ved prepare)', () => {
     const { engine, emit } = createFakeEngine();
-    createVibrationSubscriber(engine as any);
+    createVibrationSubscriber(engine);
 
     emit({
       type: 'phase:started', phase: 'prepare', round: 1, itemIndex: 0,
@@ -138,7 +153,7 @@ describe('vibrationSubscriber (karakterisering, B3 α4)', () => {
 
   it('phase:started(complete, ikke stille) → vibrationService.workoutComplete(vibrateEnabled)', () => {
     const { engine, emit } = createFakeEngine({ vibrateEnabled: true });
-    createVibrationSubscriber(engine as any);
+    createVibrationSubscriber(engine);
 
     emit({
       type: 'phase:started', phase: 'complete', round: 1, itemIndex: 0,
@@ -151,7 +166,7 @@ describe('vibrationSubscriber (karakterisering, B3 α4)', () => {
 
   it('resync, landing work → vibrationService.workStart (portert fra playResyncCue/playPersonaResyncCue)', () => {
     const { engine, emit } = createFakeEngine({ vibrateEnabled: true });
-    createVibrationSubscriber(engine as any);
+    createVibrationSubscriber(engine);
 
     emit({
       type: 'resync', skippedPhases: 2, landingPhase: 'work',
@@ -164,7 +179,7 @@ describe('vibrationSubscriber (karakterisering, B3 α4)', () => {
 
   it('resync, landing rest/round_rest → vibrationService.restStart', () => {
     const { engine, emit } = createFakeEngine({ vibrateEnabled: true });
-    createVibrationSubscriber(engine as any);
+    createVibrationSubscriber(engine);
 
     emit({
       type: 'resync', skippedPhases: 2, landingPhase: 'round_rest',
@@ -177,7 +192,7 @@ describe('vibrationSubscriber (karakterisering, B3 α4)', () => {
 
   it('unsubscribe stopper videre reaksjon', () => {
     const { engine, emit } = createFakeEngine();
-    const unsub = createVibrationSubscriber(engine as any);
+    const unsub = createVibrationSubscriber(engine);
     unsub();
 
     emit({ type: 'countdown', secondsLeft: 1 });

@@ -2,7 +2,7 @@ import { TimerState } from '../types/workout';
 import { EngineEvent } from '../types/engineEvents';
 import { updateMediaSession, clearMediaSession } from './mediaSessionService';
 
-interface MediaSessionSubscriberEngine {
+export interface MediaSessionSubscriberEngine {
   subscribeEvents(handler: (e: EngineEvent) => void): () => void;
   subscribe(listener: () => void): () => void;
   getSnapshot(): TimerState;

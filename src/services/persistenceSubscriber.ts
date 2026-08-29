@@ -1,9 +1,9 @@
 import { EngineEvent } from '../types/engineEvents';
 import { InterruptedSession, saveInterruptedSession, clearInterruptedSession } from './sessionRecoveryService';
 
-type PersistPayload = Omit<InterruptedSession, 'savedAt'>;
+export type PersistPayload = Omit<InterruptedSession, 'savedAt'>;
 
-interface PersistenceSubscriberEngine {
+export interface PersistenceSubscriberEngine {
   subscribeEvents(handler: (e: EngineEvent) => void): () => void;
   setOnPersist(cb: (session: PersistPayload) => void): void;
 }
@@ -20,9 +20,17 @@ export function createPersistenceSubscriber(engine: PersistenceSubscriberEngine)
     saveInterruptedSession(session);
   });
 
-  return engine.subscribeEvents((event) => {
+  const unsubEvents = engine.subscribeEvents((event) => {
     if (event.type === 'workout:completed' || event.type === 'workout:reset') {
       clearInterruptedSession();
     }
   });
+
+  return () => {
+    unsubEvents();
+    // Motoren selv lever videre etter denne abonnentens opprydning (f.eks.
+    // React StrictMode-dobbeltmontering) — koble ut callbacken slik at et
+    // gammelt, avmontert abonnement ikke fortsetter å skrive til localStorage.
+    engine.setOnPersist(() => {});
+  };
 }

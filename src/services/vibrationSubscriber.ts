@@ -1,8 +1,9 @@
 import { TimerState } from '../types/workout';
 import { EngineEvent } from '../types/engineEvents';
 import { vibrationService } from './vibrationService';
+import { getActiveCoachPersona } from './coachPersonaService';
 
-interface VibrationSubscriberEngine {
+export interface VibrationSubscriberEngine {
   subscribeEvents(handler: (e: EngineEvent) => void): () => void;
   getSnapshot(): TimerState;
 }
@@ -13,8 +14,13 @@ interface VibrationSubscriberEngine {
  * fra legacyAudioAdapter). Samme gating på vibrateEnabled, samme hendelser
  * som utløste vibrasjon i hooken: per-fase workStart/restStart/workoutComplete
  * i setupPhase, pluss workStart/restStart fra playResyncCue/
- * playPersonaResyncCue (BEGGE grenene vibrerte i hooken, persona-uavhengig —
- * derfor ingen persona-sjekk her, i motsetning til legacyAudioAdapter).
+ * playPersonaResyncCue — DISSE to kildene (phase:started og resync) vibrerte
+ * persona-uavhengig i hooken (BEGGE grenene, ingen persona-sjekk), derfor
+ * ingen persona-sjekk her heller. countdown er ANNERLEDES: i hooken lå
+ * vibrationService.countdown() INNE i persona === 'standard'-blokken, samme
+ * if som pipet (useIntervalTimer.ts, 3-2-1-nedtellingsblokken) — persona-
+ * brukere fikk aldri denne pulsen. Gates derfor eksplisitt under (review-fiks,
+ * ikke en del av α4-rapportens opprinnelige — og feilaktige — antakelse).
  * Resync-vibrasjonen står ikke i plan-dokumentets α4 Step-3-punktliste (den
  * nevner kun countdown/phase:started/completed) — den listen er en
  * oppsummering, ikke fasiten; hook-koden er fasiten, og den vibrerer på
@@ -26,7 +32,11 @@ export function createVibrationSubscriber(engine: VibrationSubscriberEngine): ()
 
     switch (event.type) {
       case 'countdown':
-        vibrationService.countdown(enabled);
+        // Kun standard-modus — samme if-blokk som pipet i hooken (kollisjon
+        // med persona-stemmen unngås for begge signalene der).
+        if (getActiveCoachPersona() === 'standard') {
+          vibrationService.countdown(enabled);
+        }
         break;
       case 'phase:started':
         if (!event.silent) {

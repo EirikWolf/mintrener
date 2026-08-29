@@ -4,28 +4,29 @@
 // workout:completed/workout:reset (portering av clearInterruptedSession-
 // kallene i setupPhase('complete') og resetWorkout).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createPersistenceSubscriber } from '../persistenceSubscriber';
+import { createPersistenceSubscriber, PersistenceSubscriberEngine, PersistPayload } from '../persistenceSubscriber';
 import { EngineEvent } from '../../types/engineEvents';
 import * as sessionRecoveryService from '../sessionRecoveryService';
 import { TABATA_WORKOUT } from '../../data/mockWorkouts';
 
 function createFakeEngine() {
   let handler: ((e: EngineEvent) => void) | null = null;
-  let onPersist: ((session: unknown) => void) | null = null;
-  return {
-    engine: {
-      subscribeEvents: (h: (e: EngineEvent) => void) => {
-        handler = h;
-        return () => {
-          handler = null;
-        };
-      },
-      setOnPersist: (cb: (session: unknown) => void) => {
-        onPersist = cb;
-      },
+  let onPersist: ((session: PersistPayload) => void) | null = null;
+  const engine: PersistenceSubscriberEngine = {
+    subscribeEvents: (h: (e: EngineEvent) => void) => {
+      handler = h;
+      return () => {
+        handler = null;
+      };
     },
+    setOnPersist: (cb: (session: PersistPayload) => void) => {
+      onPersist = cb;
+    },
+  };
+  return {
+    engine,
     emit: (e: EngineEvent) => handler?.(e),
-    triggerPersist: (session: unknown) => onPersist?.(session),
+    triggerPersist: (session: PersistPayload) => onPersist?.(session),
   };
 }
 
@@ -41,7 +42,7 @@ describe('persistenceSubscriber (karakterisering, B3 α4)', () => {
 
   it('kobler onPersist til saveInterruptedSession', () => {
     const { engine, triggerPersist } = createFakeEngine();
-    createPersistenceSubscriber(engine as any);
+    createPersistenceSubscriber(engine);
 
     const payload = {
       workout: TABATA_WORKOUT,
@@ -57,7 +58,7 @@ describe('persistenceSubscriber (karakterisering, B3 α4)', () => {
 
   it('workout:completed → clearInterruptedSession', () => {
     const { engine, emit } = createFakeEngine();
-    createPersistenceSubscriber(engine as any);
+    createPersistenceSubscriber(engine);
 
     emit({ type: 'workout:completed', tone: 'rolig' });
 
@@ -66,7 +67,7 @@ describe('persistenceSubscriber (karakterisering, B3 α4)', () => {
 
   it('workout:reset → clearInterruptedSession', () => {
     const { engine, emit } = createFakeEngine();
-    createPersistenceSubscriber(engine as any);
+    createPersistenceSubscriber(engine);
 
     emit({ type: 'workout:reset' });
 
@@ -75,7 +76,7 @@ describe('persistenceSubscriber (karakterisering, B3 α4)', () => {
 
   it('andre hendelser rører ikke lagringen', () => {
     const { engine, emit } = createFakeEngine();
-    createPersistenceSubscriber(engine as any);
+    createPersistenceSubscriber(engine);
 
     emit({ type: 'workout:paused' });
     emit({ type: 'countdown', secondsLeft: 1 });
@@ -86,11 +87,27 @@ describe('persistenceSubscriber (karakterisering, B3 α4)', () => {
 
   it('unsubscribe stopper videre reaksjon', () => {
     const { engine, emit } = createFakeEngine();
-    const unsub = createPersistenceSubscriber(engine as any);
+    const unsub = createPersistenceSubscriber(engine);
     unsub();
 
     emit({ type: 'workout:reset' });
 
     expect(sessionRecoveryService.clearInterruptedSession).not.toHaveBeenCalled();
+  });
+
+  it('dispose kobler også ut onPersist (engine.setOnPersist(no-op)) — ingen lagring etter unsubscribe', () => {
+    const { engine, triggerPersist } = createFakeEngine();
+    const unsub = createPersistenceSubscriber(engine);
+    unsub();
+
+    triggerPersist({
+      workout: TABATA_WORKOUT,
+      phase: 'work',
+      currentRound: 1,
+      currentItemIndex: 0,
+      totalElapsedSeconds: 10,
+    });
+
+    expect(sessionRecoveryService.saveInterruptedSession).not.toHaveBeenCalled();
   });
 });

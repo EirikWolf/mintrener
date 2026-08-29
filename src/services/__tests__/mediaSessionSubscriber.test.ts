@@ -4,7 +4,7 @@
 // workout-navn (TimerState har ingen workout-referanse) — navnet hentes i
 // stedet fra workout:started-hendelsen og caches, jf. rapportert mappinggap.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createMediaSessionSubscriber } from '../mediaSessionSubscriber';
+import { createMediaSessionSubscriber, MediaSessionSubscriberEngine } from '../mediaSessionSubscriber';
 import { EngineEvent } from '../../types/engineEvents';
 import { TimerState } from '../../types/workout';
 import * as mediaSessionService from '../mediaSessionService';
@@ -35,27 +35,36 @@ function createFakeEngine(overrides: Partial<TimerState> = {}) {
     motionReps: 0,
     ...overrides,
   };
-  return {
-    engine: {
-      subscribeEvents: (h: (e: EngineEvent) => void) => {
-        eventHandler = h;
-        return () => {
-          eventHandler = null;
-        };
-      },
-      subscribe: (l: () => void) => {
-        snapshotListener = l;
-        return () => {
-          snapshotListener = null;
-        };
-      },
-      getSnapshot: () => snapshot,
-      pause: vi.fn(),
-      resume: vi.fn(),
-      skipNext: vi.fn(),
-      previous: vi.fn(),
+  const pause = vi.fn();
+  const resume = vi.fn();
+  const skipNext = vi.fn();
+  const previous = vi.fn();
+  const engine: MediaSessionSubscriberEngine = {
+    subscribeEvents: (h: (e: EngineEvent) => void) => {
+      eventHandler = h;
+      return () => {
+        eventHandler = null;
+      };
     },
+    subscribe: (l: () => void) => {
+      snapshotListener = l;
+      return () => {
+        snapshotListener = null;
+      };
+    },
+    getSnapshot: () => snapshot,
+    pause,
+    resume,
+    skipNext,
+    previous,
+  };
+  return {
+    engine,
     snapshot,
+    pause,
+    resume,
+    skipNext,
+    previous,
     emitEvent: (e: EngineEvent) => eventHandler?.(e),
     notify: () => snapshotListener?.(),
   };
@@ -73,7 +82,7 @@ describe('mediaSessionSubscriber (karakterisering, B3 α4)', () => {
 
   it('idle ved oppstart → clearMediaSession, ingen updateMediaSession', () => {
     const { engine } = createFakeEngine({ status: 'idle' });
-    createMediaSessionSubscriber(engine as any);
+    createMediaSessionSubscriber(engine);
 
     expect(mediaSessionService.clearMediaSession).toHaveBeenCalledTimes(1);
     expect(mediaSessionService.updateMediaSession).not.toHaveBeenCalled();
@@ -81,7 +90,7 @@ describe('mediaSessionSubscriber (karakterisering, B3 α4)', () => {
 
   it('running → updateMediaSession med tittel/artist/album fra snapshot + workout:started-navn', () => {
     const { engine, emitEvent, notify, snapshot } = createFakeEngine({ status: 'idle' });
-    createMediaSessionSubscriber(engine as any);
+    createMediaSessionSubscriber(engine);
 
     emitEvent({ type: 'workout:started', workout: TABATA_WORKOUT });
     snapshot.status = 'running';
@@ -103,7 +112,7 @@ describe('mediaSessionSubscriber (karakterisering, B3 α4)', () => {
 
   it('fasenavn: work→Jobb, rest→Pause, alt annet→Klargjøring', () => {
     const { engine, emitEvent, notify, snapshot } = createFakeEngine({ status: 'idle' });
-    createMediaSessionSubscriber(engine as any);
+    createMediaSessionSubscriber(engine);
     emitEvent({ type: 'workout:started', workout: TABATA_WORKOUT });
 
     snapshot.status = 'running';
@@ -122,7 +131,7 @@ describe('mediaSessionSubscriber (karakterisering, B3 α4)', () => {
 
   it('paused → fortsatt updateMediaSession (ikke clear)', () => {
     const { engine, emitEvent, notify, snapshot } = createFakeEngine({ status: 'idle' });
-    createMediaSessionSubscriber(engine as any);
+    createMediaSessionSubscriber(engine);
     emitEvent({ type: 'workout:started', workout: TABATA_WORKOUT });
     snapshot.status = 'paused';
     notify();
@@ -135,8 +144,8 @@ describe('mediaSessionSubscriber (karakterisering, B3 α4)', () => {
     // sideload (ingen workout:started har noensinne blitt emittert i denne
     // abonnentens levetid) skal likevel vise riktig workout-navn.
     const { engine, emitEvent, notify, snapshot } = createFakeEngine({ status: 'idle' });
-    createMediaSessionSubscriber(engine as any);
-    (mediaSessionService.updateMediaSession as any).mockClear();
+    createMediaSessionSubscriber(engine);
+    vi.mocked(mediaSessionService.updateMediaSession).mockClear();
 
     emitEvent({ type: 'workout:restored', workout: TABATA_WORKOUT });
     snapshot.status = 'paused';
@@ -161,8 +170,8 @@ describe('mediaSessionSubscriber (karakterisering, B3 α4)', () => {
 
   it('completed → clearMediaSession', () => {
     const { engine, snapshot, notify } = createFakeEngine({ status: 'running' });
-    createMediaSessionSubscriber(engine as any);
-    (mediaSessionService.clearMediaSession as any).mockClear();
+    createMediaSessionSubscriber(engine);
+    vi.mocked(mediaSessionService.clearMediaSession).mockClear();
 
     snapshot.status = 'completed';
     notify();
@@ -172,7 +181,7 @@ describe('mediaSessionSubscriber (karakterisering, B3 α4)', () => {
 
   it('ingen currentExercise → tittel faller tilbake til workout-navn', () => {
     const { engine, emitEvent, notify, snapshot } = createFakeEngine({ status: 'idle' });
-    createMediaSessionSubscriber(engine as any);
+    createMediaSessionSubscriber(engine);
     emitEvent({ type: 'workout:started', workout: TABATA_WORKOUT });
     snapshot.status = 'running';
     snapshot.currentExercise = null;
@@ -184,28 +193,28 @@ describe('mediaSessionSubscriber (karakterisering, B3 α4)', () => {
   });
 
   it('handlingscallbacks er koblet til engine-metodene', () => {
-    const { engine, emitEvent, notify, snapshot } = createFakeEngine({ status: 'idle' });
-    createMediaSessionSubscriber(engine as any);
+    const { engine, emitEvent, notify, snapshot, pause, resume, skipNext, previous } = createFakeEngine({ status: 'idle' });
+    createMediaSessionSubscriber(engine);
     emitEvent({ type: 'workout:started', workout: TABATA_WORKOUT });
     snapshot.status = 'running';
     notify();
 
-    const call = (mediaSessionService.updateMediaSession as any).mock.calls[0][0];
-    call.onPlay();
-    call.onPause();
-    call.onNext();
-    call.onPrevious();
+    const call = vi.mocked(mediaSessionService.updateMediaSession).mock.calls[0][0];
+    call.onPlay?.();
+    call.onPause?.();
+    call.onNext?.();
+    call.onPrevious?.();
 
-    expect(engine.resume).toHaveBeenCalledTimes(1);
-    expect(engine.pause).toHaveBeenCalledTimes(1);
-    expect(engine.skipNext).toHaveBeenCalledTimes(1);
-    expect(engine.previous).toHaveBeenCalledTimes(1);
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(pause).toHaveBeenCalledTimes(1);
+    expect(skipNext).toHaveBeenCalledTimes(1);
+    expect(previous).toHaveBeenCalledTimes(1);
   });
 
   it('unsubscribe stopper videre reaksjon', () => {
     const { engine, notify } = createFakeEngine({ status: 'idle' });
-    const unsub = createMediaSessionSubscriber(engine as any);
-    (mediaSessionService.clearMediaSession as any).mockClear();
+    const unsub = createMediaSessionSubscriber(engine);
+    vi.mocked(mediaSessionService.clearMediaSession).mockClear();
     unsub();
 
     notify();

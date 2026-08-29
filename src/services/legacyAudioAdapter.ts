@@ -15,7 +15,7 @@ import {
  * Motorflaten adapteren trenger — strukturelt typet (jf. task-oppdraget) slik
  * at testene kan injisere en minimal stubb uten en ekte TimerEngine.
  */
-interface LegacyAudioAdapterEngine {
+export interface LegacyAudioAdapterEngine {
   subscribeEvents(handler: (e: EngineEvent) => void): () => void;
   getSnapshot(): TimerState;
   setMotionReps(v: number): void;
