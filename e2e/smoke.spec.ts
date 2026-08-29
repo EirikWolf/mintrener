@@ -45,6 +45,14 @@ test('start → fullfør → historikk', async ({ page }) => {
         hasCompletedOnboarding: true,
       })
     );
+    // C2-gaten (OnboardingFlow) dekker ellers hele førstesiden (inkl. START)
+    // for ferske brukere — frøet speiler en bruker som alt har fullført flyten
+    // og valgt trenerstemme. Onboarding-flyten har sin egen røyk (onboarding.spec.ts).
+    localStorage.setItem(
+      'mintrener_onboarding_v1',
+      JSON.stringify({ completedAt: '2026-01-01T00:00:00.000Z' })
+    );
+    localStorage.setItem('mintrener_coach_persona', 'standard');
   });
 
   // 1. Åpne appen med røyk-økten valgt via delingslenken. `ref=share` gjør at
