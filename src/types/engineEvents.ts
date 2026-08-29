@@ -12,6 +12,8 @@ export type EngineEvent =
       endsAt: number | null }
   | { type: 'phase:deadlineChanged'; endsAt: number }
   | { type: 'phase:halfway' }
+  | { type: 'phase:endingSoon' }  // én gang per fase ved remaining <= 3.5s i prepare/rest/round_rest
+                                  // (hookens persona-start_321-vindu; adapter filtrerer persona, beta ignorerer — lookahead overtar)
   | { type: 'countdown'; secondsLeft: 1 | 2 | 3 }
   | { type: 'resync'; skippedPhases: number; landingPhase: IntervalPhase;
       exercise: Exercise | null; nextExercise: Exercise | null; tone: VoiceTone }

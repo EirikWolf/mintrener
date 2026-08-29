@@ -387,6 +387,15 @@ export class TimerEngine {
     if (drift > SLEEP_REANCHOR_THRESHOLD_MS) {
       s.phaseStartTime -= drift;
       s.workoutStartTime -= drift;
+      // Planrettelse (α3-review): reankringen flyttet fasegrensen — varsle
+      // planlagt lyd om korrigert frist. KUN når fasen fortsatt lever: er den
+      // alt utløpt, overtar catch-up umiddelbart med phase:started +
+      // deadlineChanged for landingsfasen, og en frist i fortiden ville bare
+      // vært støy for abonnentene.
+      const endsAt = s.phaseStartTime + s.phaseDuration * 1000;
+      if (endsAt > nowPerf) {
+        this.emit({ type: 'phase:deadlineChanged', endsAt });
+      }
     }
     s.lastTickWallMs = wallNow;
     s.lastTickPerfMs = nowPerf;
@@ -401,6 +410,22 @@ export class TimerEngine {
     const wholeSecondsLeft = Math.ceil(remaining);
     const phaseElapsedSec = Math.floor(phaseElapsed);
     const halfwaySec = Math.floor(s.phaseDuration / 2);
+
+    // Bit-identisk port av hookens persona-start_321-vindu (planrettelse fra
+    // α3-review): remaining > 0 (a1dc749-vakten mot spurious cue rett før stille
+    // catch-up) && <= 3.5, kun prepare/rest/round_rest, firedCues-gated én gang
+    // per fase, INGEN varighetsvakt (divergensen fra countdown-pipet: en 3s-fase
+    // får endingSoon, aldri countdown). Persona-/speech-filtreringen eies av
+    // adapteren (α4).
+    if (
+      (s.phase === 'prepare' || s.phase === 'rest' || s.phase === 'round_rest') &&
+      remaining > 0 &&
+      remaining <= 3.5 &&
+      !s.firedCues.has('start_321')
+    ) {
+      s.firedCues.add('start_321');
+      this.emit({ type: 'phase:endingSoon' });
+    }
 
     // Halvveis-cue — samme gating som hooken: firedCues, kun work, kun faser >= 15s.
     if (
@@ -450,6 +475,8 @@ export class TimerEngine {
       // normalt enkelt-avansement med full hendelse ellers.
       this.catchUpExpiredPhases();
     } else if (
+      // Portert ordrett fra hooken; status-sjekken er alltid sann her (tick
+      // returnerer tidlig ellers) — behold for ordrett paritet, ikke fjern.
       s.status === 'running' &&
       wholeSecondsLeft % 2 === 0 &&
       wholeSecondsLeft !== s.lastSessionSaveSecond
@@ -506,6 +533,13 @@ export class TimerEngine {
       // Landet korrekt inni denne fasen: bakdater phaseStartTime slik at gjenværende
       // tid blir riktig fremover (uten dette ville fasen fremstå som nylig startet).
       s.phaseStartTime = this.now() - restOvershoot * 1000;
+      // Planrettelse (α3-review): landingens nettopp-emitterte phase:started.endsAt
+      // er foreldet med restOvershoot (setupPhase satte den fra nå + full varighet)
+      // — deadlineChanged rett etterpå bærer korrekt frist for planlagt lyd.
+      this.emit({
+        type: 'phase:deadlineChanged',
+        endsAt: s.phaseStartTime + s.phaseDuration * 1000,
+      });
       break;
     }
 
@@ -656,10 +690,13 @@ export class TimerEngine {
   }
 
   /**
-   * Prop-sync fra hook-bindingen — kun i idle (plan-låst semantikk, jf. «dagens
-   * prop-sync-semantikk»): hooken nullstilte fasefeltene bare i idle; utenfor
-   * idle beholdes kjørende økt urørt (propWorkout-speilet oppdateres uansett som
-   * setupPhase-fallback).
+   * Prop-sync fra hook-bindingen — kun i idle. BEVISST AVVIK fra hooken (plan-
+   * låst): hooken byttet activeWorkout (React-state) ubetinget også midt i en
+   * kjørende økt, slik at VISNINGSFELTENE (navn/øvelser/totaler) byttet workout
+   * mens fasemaskinen (stateRef.current.workout) beholdt den gamle — en
+   * inkonsistent split-brain-tilstand. Motoren holder alt urørt utenfor idle
+   * (coherent-by-design); propWorkout-speilet oppdateres uansett som
+   * setupPhase-fallback.
    */
   setWorkout(w: WorkoutTemplate): void {
     if (this.propWorkout === w) return;
@@ -700,6 +737,17 @@ export class TimerEngine {
 
   setLocked(v: boolean): void {
     this.state.isLocked = v;
+    this.notifySnapshotIfChanged();
+  }
+
+  /**
+   * Bevegelsesteller fra motionTrackerService — adapteren (α4) eier selve
+   * sporingen og mater verdien inn her (hookens setMotionReps-callback).
+   * motionReps er allerede del av snapshot-nøkkelen, så samme verdi gir
+   * uendret identitet.
+   */
+  setMotionReps(v: number): void {
+    this.state.motionReps = v;
     this.notifySnapshotIfChanged();
   }
 }

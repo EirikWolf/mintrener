@@ -270,6 +270,9 @@ describe('TimerEngine – catch-up ved dvale/lomme (karakterisering)', () => {
       events.filter((e) => e.type === 'phase:started' && e.phase === 'work' && !e.silent)
     ).toHaveLength(1);
     expect(events.filter((e) => e.type === 'resync')).toHaveLength(0);
+    // Normal drift: verken reanker eller landing-bakdatering skjer — ingen
+    // deadlineChanged (planrettelsen fra α3-review gjelder kun de to stedene).
+    expect(events.filter((e) => e.type === 'phase:deadlineChanged')).toHaveLength(0);
   });
 
   // Portert fra «dvale midt i økten: spoler stille gjennom flere faser og lander
@@ -307,9 +310,19 @@ describe('TimerEngine – catch-up ved dvale/lomme (karakterisering)', () => {
     ).toHaveLength(0);
 
     // a1dc749-porten: ved oppvåkning er den utløpte fasen fortsatt aktiv med
-    // remaining=0 idet cue-blokkene evalueres – wholeSecondsLeft >= 1-vakten
-    // (remaining > 0) skal hindre enhver spurious countdown-emisjon.
+    // remaining=0 idet cue-blokkene evalueres – remaining > 0-vaktene skal hindre
+    // enhver spurious countdown- OG endingSoon-emisjon rett før stille catch-up.
     expect(events.filter((e) => e.type === 'countdown')).toHaveLength(0);
+    expect(events.filter((e) => e.type === 'phase:endingSoon')).toHaveLength(0);
+
+    // Planrettelse (α3-review): landingens nettopp-emitterte phase:started.endsAt
+    // er foreldet med restOvershoot – nøyaktig én deadlineChanged ETTER landingen
+    // bærer korrekt frist (t=95s + ~5s igjen = 100_000).
+    const deadlines = events.filter((e) => e.type === 'phase:deadlineChanged');
+    expect(deadlines).toHaveLength(1);
+    expect(deadlines[0]).toMatchObject({ endsAt: 100_000 });
+    const lastStartedIdx = events.map((e) => e.type).lastIndexOf('phase:started');
+    expect(events.indexOf(deadlines[0])).toBeGreaterThan(lastStartedIdx);
 
     // Én tick til uten videre tidshopp: den bakdaterte phaseStartTime skal gi
     // ~5s igjen av 10s-pausen (leses via phaseProgress, som i hook-testen).
@@ -320,6 +333,7 @@ describe('TimerEngine – catch-up ved dvale/lomme (karakterisering)', () => {
     expect(remaining).toBeGreaterThan(4.8);
     expect(remaining).toBeLessThan(5.2);
     expect(events.filter((e) => e.type === 'resync')).toHaveLength(1);
+    expect(events.filter((e) => e.type === 'phase:deadlineChanged')).toHaveLength(1);
   });
 
   // Portert fra «dvale forbi slutten av økten»: «nøyaktig ett playWorkoutComplete»
@@ -345,6 +359,9 @@ describe('TimerEngine – catch-up ved dvale/lomme (karakterisering)', () => {
         (e) => e.type === 'phase:started' && (e.phase === 'work' || e.phase === 'rest') && !e.silent
       )
     ).toHaveLength(0);
+    // Ingen landing-bakdatering skjer når loopen ender i complete – ingen
+    // deadlineChanged (complete har ingen frist).
+    expect(events.filter((e) => e.type === 'phase:deadlineChanged')).toHaveLength(0);
   });
 
   // Portert fra «resync som lander i round_rest»: round_rest-grenen annonserer
@@ -476,6 +493,62 @@ describe('TimerEngine – cue- og persist-gating (karakterisering)', () => {
     expect(persisted.map((p) => p.totalElapsedSeconds)).toEqual([0, 2, 4]);
     expect(persisted.every((p) => p.phase === 'prepare')).toBe(true);
   });
+
+  // Portert bit-identisk fra hookens persona-start_321-blokk (useIntervalTimer.ts
+  // 533-543): remaining > 0 && remaining <= 3.5, kun prepare/rest/round_rest,
+  // firedCues-gated én gang per fase, INGEN varighetsvakt. Persona-/speech-sjekken
+  // flytter til adapteren (α4) som for halfway/countdown.
+  it('phase:endingSoon emitteres én gang i 3,5s-vinduet med firedCues-dedup', () => {
+    const { clock, engine, events } = createRigg();
+    spyWallClockLockstep(clock);
+    engine.start();
+
+    clock.t = 6_400; // remaining 3.6 > 3.5 – utenfor vinduet
+    engine.tick();
+    expect(events.filter((e) => e.type === 'phase:endingSoon')).toHaveLength(0);
+
+    for (const t of [6_600, 6_700, 7_500, 9_000]) {
+      clock.t = t;
+      engine.tick();
+    }
+    expect(events.filter((e) => e.type === 'phase:endingSoon')).toHaveLength(1);
+  });
+
+  // Divergensen reviewen fanget: countdown har phaseDuration >= 4-vakt, hookens
+  // start_321-vindu hadde INGEN varighetsvakt – en 3s-fase skal gi endingSoon
+  // men aldri countdown.
+  it('phase:endingSoon fyres også for faser under 4s der countdown aldri gjør det', () => {
+    const shortPrepWorkout = {
+      ...MULTI_ROUND_WORKOUT,
+      id: 'short-prep-ending-soon',
+      prepareDurationSeconds: 3,
+    };
+    const { clock, engine, events } = createRigg(shortPrepWorkout);
+    spyWallClockLockstep(clock);
+    engine.start();
+
+    clock.t = 1_000; // remaining 2: i vinduet (<= 3.5, > 0)
+    engine.tick();
+    clock.t = 2_000; // remaining 1
+    engine.tick();
+
+    expect(events.filter((e) => e.type === 'phase:endingSoon')).toHaveLength(1);
+    expect(events.filter((e) => e.type === 'countdown')).toHaveLength(0);
+  });
+
+  it('phase:endingSoon emitteres IKKE i work-fasen (kun prepare/rest/round_rest)', () => {
+    const { clock, engine, events } = createRigg();
+    spyWallClockLockstep(clock);
+    engine.start();
+    engine.skipNext(); // -> work (20s)
+
+    clock.t = 17_000; // remaining 3 – i vinduet, men feil fase
+    engine.tick();
+
+    expect(events.filter((e) => e.type === 'phase:endingSoon')).toHaveLength(0);
+    // Standard-pipet lever derimot i alle faser (som i hooken).
+    expect(events.filter((e) => e.type === 'countdown')).toHaveLength(1);
+  });
 });
 
 describe('TimerEngine – snapshot-gating og subscribe (A3-port)', () => {
@@ -553,6 +626,36 @@ describe('TimerEngine – veggklokke-reanker ved dvale (A6-port)', () => {
     expect(events.filter((e) => e.type === 'resync')).toHaveLength(1);
     // Reankringen skal også flytte workoutStartTime: total forløpt tid = 95s.
     expect(s.totalElapsedSeconds).toBe(95);
+    // Nøyaktig ÉN deadlineChanged: reanker-stedet emitter IKKE når fasen alt er
+    // utløpt (fristen ligger i fortiden og catch-up overtar umiddelbart) — kun
+    // landing-bakdateringen varsler, med korrekt frist (5s igjen fra motortid 0).
+    const deadlines = events.filter((e) => e.type === 'phase:deadlineChanged');
+    expect(deadlines).toHaveLength(1);
+    expect(deadlines[0]).toMatchObject({ endsAt: 5_000 });
+  });
+
+  // Planrettelsens sted (b) isolert: drift over terskelen der fasen fortsatt
+  // lever etter reankringen — én deadlineChanged med korrigert frist, ingen resync.
+  it('reanker uten utløpt fase: én deadlineChanged med korrigert frist', () => {
+    const wall = { t: 1_000_000 };
+    const { clock, engine, events } = createRigg();
+    vi.spyOn(Date, 'now').mockImplementation(() => wall.t);
+    engine.start();
+
+    // 1s motortid, 4s veggklokke → 3s drift > 2000ms-terskelen; prepare (10s)
+    // har 6s igjen etter reankringen.
+    clock.t = 1_000;
+    wall.t += 4_000;
+    engine.tick();
+
+    const s = engine.getSnapshot();
+    expect(s.phase).toBe('prepare');
+    expect(s.phaseRemainingSeconds).toBe(6);
+    const deadlines = events.filter((e) => e.type === 'phase:deadlineChanged');
+    expect(deadlines).toHaveLength(1);
+    // phaseStartTime reankret til -3000 → frist = -3000 + 10_000 = 7_000.
+    expect(deadlines[0]).toMatchObject({ endsAt: 7_000 });
+    expect(events.filter((e) => e.type === 'resync')).toHaveLength(0);
   });
 
   // Portert fra «drift under terskelen (500ms) re-ankrer IKKE».
@@ -679,6 +782,20 @@ describe('TimerEngine – toggles og setWorkout', () => {
     expect(s.totalRounds).toBe(2);
     expect(s.totalItems).toBe(1);
     expect(s.currentExercise?.name).toBe('Knebøy');
+  });
+
+  it('setMotionReps muterer og gir ny snapshot-identitet – samme verdi gir samme identitet', () => {
+    const { engine } = createRigg();
+    const before = engine.getSnapshot();
+
+    engine.setMotionReps(5);
+    const after = engine.getSnapshot();
+    expect(Object.is(before, after)).toBe(false);
+    expect(after.motionReps).toBe(5);
+
+    // Samme verdi endrer ingen rendringsverdige felter → identiteten består.
+    engine.setMotionReps(5);
+    expect(Object.is(engine.getSnapshot(), after)).toBe(true);
   });
 
   it('setWorkout utenfor idle rører ikke kjørende økt (plan-låst semantikk)', () => {
