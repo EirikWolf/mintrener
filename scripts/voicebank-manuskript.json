@@ -1,0 +1,109 @@
+{
+  "$comment": "Maskinlesbar batch-input for Chatterbox-lydbanken. Speiler docs/manuskript-persona-lydbank-2026-08-29.md (GODKJENT 2026-08-29). Tekniske id-er (haugesund, romsdal, ...) er stabile noekler; displayName/region er visning. Filer legges under /audio/personas/<persona-id>/<file>. Oevelsestekstene er felles for alle personas: samme ttsText genereres per persona-seed.",
+  "language": "no",
+  "personas": {
+    "haugesund": {
+      "displayName": "Jossa",
+      "region": "Haugalandet",
+      "seedFile": "mintrener-seed-haugesund.wav",
+      "cues": {
+        "intro": { "text": "Velkommen te økta! Eg heite Jossa, og i dag ska me gje gass. Trø te!", "file": "intro.mp3" },
+        "go-1": { "text": "Gje gass!", "file": "go-1.mp3" },
+        "go-2": { "text": "Trø te!", "file": "go-2.mp3" },
+        "go-3": { "text": "Kjør på, då!", "file": "go-3.mp3" },
+        "halfway": { "text": "Halvveis! Dette går som ei kule — hold trøkket!", "file": "halfway.mp3" },
+        "last5": { "text": "Fem sekund igjen — alt du har no!", "file": "last5.mp3" },
+        "rest": { "text": "Pust ut litt no — dette har du fortjent!", "file": "rest.mp3" },
+        "finish": { "text": "Ferdig! Det va rått levert — kjempegodt jobba!", "file": "finish.mp3" },
+        "bro-neste": { "text": "Neste ut:", "file": "bro-neste.mp3" },
+        "bro-naa": { "text": "No kjøre me:", "file": "bro-naa.mp3" },
+        "bro-resync": { "text": "Du e no på:", "file": "bro-resync.mp3" }
+      },
+      "recordedCues": { "start_321": "bruk eksisterende Tre-To-En-innspilling" }
+    },
+    "romsdal": {
+      "displayName": "Ola",
+      "region": "Romsdalen",
+      "seedFile": "mintrener-seed-romsdal.wav",
+      "cues": {
+        "intro": { "text": "No e vi i gang! Ola her — i dag e det bære å gønne på. Dette bli bra!", "file": "intro.mp3" },
+        "go-1": { "text": "Gønne på!", "file": "go-1.mp3" },
+        "go-2": { "text": "No kjøre vi!", "file": "go-2.mp3" },
+        "go-3": { "text": "Stå på, du!", "file": "go-3.mp3" },
+        "halfway": { "text": "Halvvegs no! Du ligg godt an — bære fortsett!", "file": "halfway.mp3" },
+        "last5": { "text": "Fem sekund att — hold ut no!", "file": "last5.mp3" },
+        "rest": { "text": "Fin pause no. Trekk pusten og rist laus.", "file": "rest.mp3" },
+        "finish": { "text": "Der satt den! Heile økta i boks — godt jobba!", "file": "finish.mp3" },
+        "bro-neste": { "text": "Neste øvelse bli:", "file": "bro-neste.mp3" },
+        "bro-naa": { "text": "No ska vi ha:", "file": "bro-naa.mp3" },
+        "bro-resync": { "text": "Du e no på:", "file": "bro-resync.mp3" }
+      },
+      "recordedCues": { "start_321": "bruk eksisterende Tre-To-En-innspilling" }
+    },
+    "hardcore": {
+      "displayName": "Axel",
+      "region": null,
+      "seedFile": "mintrener-seed-hardcore.wav",
+      "cues": {
+        "intro": { "text": "Axel her! Ingen unnskyldninger i dag — vi knuser denne økta sammen. La oss kjøre!", "file": "intro.mp3" },
+        "go-1": { "text": "Kjør! Ingen nåde!", "file": "go-1.mp3" },
+        "go-2": { "text": "Gi alt! Nå!", "file": "go-2.mp3" },
+        "go-3": { "text": "Slipp beistet løs!", "file": "go-3.mp3" },
+        "halfway": { "text": "Halvveis! Smerten er midlertidig — press videre!", "file": "halfway.mp3" },
+        "last5": { "text": "Fem sekunder! Alt du har — nå!", "file": "last5.mp3" },
+        "rest": { "text": "Pause. Pust. Om litt går vi til krig igjen.", "file": "rest.mp3" },
+        "finish": { "text": "Ferdig! Du knuste den! Sånn bygges legender!", "file": "finish.mp3" },
+        "bro-neste": { "text": "Neste offer:", "file": "bro-neste.mp3" },
+        "bro-naa": { "text": "Nå smeller det:", "file": "bro-naa.mp3" },
+        "bro-resync": { "text": "Tilbake i kampen! Du er nå på:", "file": "bro-resync.mp3" }
+      },
+      "recordedCues": { "start_321": "bruk eksisterende Tre-To-En-innspilling" }
+    },
+    "boyband": {
+      "displayName": "Robin",
+      "region": null,
+      "seedFile": "mintrener-seed-boyband.wav",
+      "cues": {
+        "intro": { "text": "Hei, det er Robin. Dette blir vår økt — bare du og jeg. Ooh yeah, nå skinner vi!", "file": "intro.mp3" },
+        "go-1": { "text": "Kjør, baby!", "file": "go-1.mp3" },
+        "go-2": { "text": "Ooh yeah, gi på!", "file": "go-2.mp3" },
+        "go-3": { "text": "Nå glitrer vi!", "file": "go-3.mp3" },
+        "halfway": { "text": "Halvveis, baby! Du er en stjerne — hold rytmen!", "file": "halfway.mp3" },
+        "last5": { "text": "Fem sekunder — helt inn nå, du klarer det!", "file": "last5.mp3" },
+        "rest": { "text": "Pust rolig nå. Du fortjener denne pausen, superstjerne.", "file": "rest.mp3" },
+        "finish": { "text": "Wow, ferdig! Du var helt fantastisk i dag — ooh yeah!", "file": "finish.mp3" },
+        "bro-neste": { "text": "Neste øvelse, baby:", "file": "bro-neste.mp3" },
+        "bro-naa": { "text": "Og nå:", "file": "bro-naa.mp3" },
+        "bro-resync": { "text": "Du er nå på:", "file": "bro-resync.mp3" }
+      },
+      "recordedCues": { "start_321": "bruk eksisterende Tre-To-En-innspilling" }
+    }
+  },
+  "exercises": [
+    { "id": "kneboy", "displayText": "Knebøy", "ttsText": "Knebøy", "file": "exercise-kneboy.mp3" },
+    { "id": "push-ups", "displayText": "Armhevinger", "ttsText": "Armhevinger", "file": "exercise-push-ups.mp3" },
+    { "id": "utfall-forover", "displayText": "Utfall forover", "ttsText": "Utfall forover", "file": "exercise-utfall-forover.mp3" },
+    { "id": "planke", "displayText": "Planke", "ttsText": "Planke", "file": "exercise-planke.mp3" },
+    { "id": "mountain-climbers", "displayText": "Mountain Climbers", "ttsText": "Mauntn klaimers", "file": "exercise-mountain-climbers.mp3" },
+    { "id": "burpees", "displayText": "Burpees", "ttsText": "Børpis", "file": "exercise-burpees.mp3" },
+    { "id": "sideplanke", "displayText": "Sideplanke", "ttsText": "Sideplanke", "file": "exercise-sideplanke.mp3" },
+    { "id": "rygghev-superman", "displayText": "Rygghev", "ttsText": "Rygghev", "file": "exercise-rygghev-superman.mp3" },
+    { "id": "dips-pa-stol", "displayText": "Dips på stol", "ttsText": "Dipps på stol", "file": "exercise-dips-pa-stol.mp3" },
+    { "id": "hulekroppshold", "displayText": "Hulekroppshold", "ttsText": "Hulekroppshold", "file": "exercise-hulekroppshold.mp3" },
+    { "id": "sprellmenn", "displayText": "Sprellmenn", "ttsText": "Sprellmenn", "file": "exercise-sprellmenn.mp3" },
+    { "id": "hoye-kneloft", "displayText": "Høye kneløft", "ttsText": "Høye kneløft", "file": "exercise-hoye-kneloft.mp3" },
+    { "id": "skoytehopp", "displayText": "Skøytehopp", "ttsText": "Skøytehopp", "file": "exercise-skoytehopp.mp3" },
+    { "id": "manualpress-bryst", "displayText": "Brystpress med manualer", "ttsText": "Brystpress med manualer", "file": "exercise-manualpress-bryst.mp3" },
+    { "id": "skulderpress-manualer", "displayText": "Skulderpress med manualer", "ttsText": "Skulderpress med manualer", "file": "exercise-skulderpress-manualer.mp3" },
+    { "id": "rumensk-markloft-manualer", "displayText": "Rumensk markløft med manualer", "ttsText": "Rumensk markløft med manualer", "file": "exercise-rumensk-markloft-manualer.mp3" },
+    { "id": "kettlebell-swing", "displayText": "Kettlebell-swing", "ttsText": "Kettelbell-sving", "file": "exercise-kettlebell-swing.mp3" },
+    { "id": "goblet-squat", "displayText": "Goblet Squat", "ttsText": "Gåblet skvått", "file": "exercise-goblet-squat.mp3" },
+    { "id": "kettlebell-press", "displayText": "Kettlebell skulderpress", "ttsText": "Kettelbell skulderpress", "file": "exercise-kettlebell-press.mp3" },
+    { "id": "kettlebell-halo", "displayText": "Kettlebell Halo", "ttsText": "Kettelbell heilo", "file": "exercise-kettlebell-halo.mp3" },
+    { "id": "kettlebell-row", "displayText": "Ettarms roing med kettlebell", "ttsText": "Ettarms roing med kettelbell", "file": "exercise-kettlebell-row.mp3" },
+    { "id": "katte-ku", "displayText": "Katte-ku", "ttsText": "Katte-ku", "file": "exercise-katte-ku.mp3" },
+    { "id": "verdens-beste-toyeovelse", "displayText": "Verdens beste tøyeøvelse", "ttsText": "Verdens beste tøyeøvelse", "file": "exercise-verdens-beste-toyeovelse.mp3" },
+    { "id": "hofteapner-90-90", "displayText": "Hofteåpner 90/90", "ttsText": "Hofteåpner nitti nitti", "file": "exercise-hofteapner-90-90.mp3" },
+    { "id": "skulder-dislocates", "displayText": "Skulderrotasjon med strikk", "ttsText": "Skulderrotasjon med strikk", "file": "exercise-skulder-dislocates.mp3" }
+  ]
+}
