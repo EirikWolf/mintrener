@@ -2,6 +2,7 @@ import { WorkoutTemplate } from '../types/workout';
 import { ExerciseItem } from '../schemas/exerciseSchema';
 import { EXERCISE_LIBRARY } from '../data/exercises';
 import { WeeklyGoalProgress } from './weeklyGoalService';
+import { getHeartRateZone, getUserMaxHeartRate } from './heartRateZoneService';
 
 export interface CoachMessage {
   id: string;
@@ -16,6 +17,28 @@ export interface CoachContext {
   workoutHistory?: any[];
   currentWorkout?: WorkoutTemplate | null;
   selectedExercise?: ExerciseItem | null;
+}
+
+export type WorkoutRating = 'for_lett' | 'passe' | 'for_tungt';
+
+/**
+ * Kontekst brukt til å generere Astrids personlige tilbakemelding rett
+ * etter en fullført økt (se WorkoutSummary.tsx). Alle felt utover
+ * `workoutName` og `durationSeconds` er valgfrie - jo mer kontekst, jo mer
+ * treffsikker og personlig blir tilbakemeldingen.
+ */
+export interface WorkoutSummaryFeedbackContext {
+  workoutName: string;
+  durationSeconds: number;
+  isNewPr?: boolean;
+  rating?: WorkoutRating | null;
+  weeklyGoal?: WeeklyGoalProgress | null;
+  /** Antall dager på rad brukeren har trent, inkludert denne økten. */
+  streakDays?: number;
+  /** Kun satt når et pulsbelte var tilkoblet under økten. */
+  avgHeartRate?: number | null;
+  /** Kun satt når et pulsbelte var tilkoblet under økten. */
+  maxHeartRate?: number | null;
 }
 
 /**
@@ -117,6 +140,89 @@ class LocalAiCoachService {
     }
 
     return 'Veldig godt spørsmål! Som din personlige trener anbefaler jeg å fokusere på god teknikk, jevnlig trening 2-3 ganger i uken, og å lytte til kroppen. Skal vi sette i gang en god økt sammen?';
+  }
+
+  /**
+   * Genererer Astrids personlige tilbakemelding rett etter en fullført
+   * økt. Ren regelmotor - deterministisk gitt samme kontekst, ingen
+   * nettverk eller window.ai. Prioritert etter hva som er mest relevant
+   * å fremheve akkurat nå (ny PR slår alt, deretter ukesmål, osv.), og
+   * kombinerer maks to aspekter per melding for å holde den kort.
+   */
+  public generateWorkoutSummaryFeedback(context: WorkoutSummaryFeedbackContext): string {
+    const hasStreak = (context.streakDays ?? 0) >= 3;
+    const hasHeartRate = context.avgHeartRate !== undefined && context.avgHeartRate !== null;
+    const streakSuffix = hasStreak ? this.streakClause(context.streakDays as number) : '';
+
+    if (context.isNewPr) {
+      return `Ny personlig rekord i ${context.workoutName}! Dette er resultatet av jevn innsats – nyt følelsen, du har all grunn til å være stolt!${streakSuffix}`;
+    }
+
+    if (context.weeklyGoal?.isGoalMet && context.weeklyGoal.completedThisWeek === context.weeklyGoal.goal) {
+      return `Ukesmålet er i boks! Du har fullført ${context.weeklyGoal.goal} økter denne uken, og denne økten var den som avgjorde det. Godt jobba!${streakSuffix}`;
+    }
+
+    if (context.rating) {
+      return this.buildRatingFeedback(context, hasStreak, hasHeartRate);
+    }
+
+    if (hasStreak) {
+      const hrSuffix = hasHeartRate ? this.heartRateClause(context) : '';
+      return `${context.streakDays} dager på rad – for en fin streak! Kontinuitet er nøkkelen til varige resultater, og du bygger vaner som varer.${hrSuffix}`;
+    }
+
+    if (hasHeartRate) {
+      return this.buildHeartRateFeedback(context);
+    }
+
+    return this.durationFallback(context.durationSeconds);
+  }
+
+  private buildRatingFeedback(
+    context: WorkoutSummaryFeedbackContext,
+    hasStreak: boolean,
+    hasHeartRate: boolean
+  ): string {
+    const base =
+      context.rating === 'for_tungt'
+        ? 'Den kjentes tung ut i dag, og det er helt greit – kroppen forteller deg noe viktig. Prioriter god søvn, rikelig med vann og lett tøying de neste dagene, så du er klar til neste økt.'
+        : context.rating === 'for_lett'
+        ? 'Den føltes lett i dag – bra tegn på at formen er god! Neste gang kan du legge på en ekstra runde eller noen sekunder per intervall for å presse deg litt lenger.'
+        : 'Passe belastning – akkurat sånn du ønsker det! Denne balansen mellom innsats og kontroll er oppskriften på jevn fremgang over tid.';
+
+    if (hasStreak) return base + this.streakClause(context.streakDays as number);
+    if (hasHeartRate) return base + this.heartRateClause(context);
+    return base;
+  }
+
+  private buildHeartRateFeedback(context: WorkoutSummaryFeedbackContext): string {
+    const durationRemark =
+      context.durationSeconds > 600 ? 'Solid utholdenhet i dag!' : 'Kjapt og effektivt gjennomført!';
+    return `Snittpulsen din var ${context.avgHeartRate} slag/min${this.zoneSuffix(context.avgHeartRate as number)}. ${durationRemark}`;
+  }
+
+  private streakClause(streakDays: number): string {
+    return ` Og med ${streakDays} dager på rad er du virkelig i støtet!`;
+  }
+
+  private heartRateClause(context: WorkoutSummaryFeedbackContext): string {
+    const peak = context.maxHeartRate ? ` Makspuls under økten var ${context.maxHeartRate}.` : '';
+    return ` Snittpulsen lå på ${context.avgHeartRate}${this.zoneSuffix(context.avgHeartRate as number)}.${peak}`;
+  }
+
+  private zoneSuffix(avgHeartRate: number): string {
+    const zone = getHeartRateZone(avgHeartRate, getUserMaxHeartRate());
+    return `, i ${zone.label.toLowerCase()} (${zone.name})`;
+  }
+
+  private durationFallback(durationSeconds: number): string {
+    if (durationSeconds <= 180) {
+      return 'Kort og effektiv! Selv en rask økt som dette bygger gode vaner – hver eneste gang teller.';
+    }
+    if (durationSeconds <= 600) {
+      return 'Kjapt, effektivt og godt levert! Kontinuitet er nøkkelen til langsiktig styrke og form.';
+    }
+    return 'Fantastisk innsats og solid utholdenhet! Husk å drikke litt vann og ta 2 minutter med rolig tøying nå.';
   }
 }
 

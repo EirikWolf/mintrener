@@ -1,10 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { WorkoutTemplate } from '../../types/workout';
+import { CompletedWorkoutLog } from '../../types/models';
 import { useAuth } from '../../contexts/AuthContext';
 import { updateWorkoutRating } from '../../services/firestoreService';
 import { savePersonalRecord } from '../../services/personalRecordService';
 import { recordWorkoutTelemetry } from '../../services/telemetryService';
+import { calculateWeeklyProgress, WeeklyGoalProgress } from '../../services/weeklyGoalService';
+import { computeStreakDays } from '../../services/streakService';
+import { localAiCoach } from '../../services/localAiCoachService';
 import { Trophy, RotateCcw, Flame, CheckCircle2, ThumbsUp, Smile, Medal, Sparkles } from 'lucide-react';
+
+const LOCAL_HISTORY_KEY = 'mintrener_local_workout_history';
 
 interface WorkoutSummaryProps {
   workout: WorkoutTemplate;
@@ -22,6 +28,8 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
   const { user } = useAuth();
   const [selectedRating, setSelectedRating] = useState<'for_lett' | 'passe' | 'for_tungt' | null>(null);
   const [prStatus, setPrStatus] = useState<{ isNewPr: boolean; previousBest: number } | null>(null);
+  const [weeklyGoal, setWeeklyGoal] = useState<WeeklyGoalProgress | null>(null);
+  const [streakDays, setStreakDays] = useState(0);
 
   // Send anonym telemetri og sjekk PR ved fullføring
   useEffect(() => {
@@ -36,6 +44,59 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
       });
     }
   }, [workout, totalElapsedSeconds, user]);
+
+  // Hent lokal historikk for å gi Astrid kontekst om ukesmål og streak.
+  // MERK: App.tsx sin egen "lagre fullført økt"-effekt (som skriver denne
+  // økten til lokal historikk) kan kjøre etter denne effekten - React kjører
+  // barn-effekter før foreldre-effekter i samme commit. Vi sjekker derfor om
+  // nyeste oppføring allerede samsvarer med denne økten, og teller den med
+  // manuelt hvis ikke, slik at "nådd ukesmål"/streak blir riktig med en gang.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LOCAL_HISTORY_KEY);
+      const history: CompletedWorkoutLog[] = raw ? JSON.parse(raw) : [];
+
+      const mostRecent = history[0];
+      const alreadyIncluded =
+        !!mostRecent &&
+        mostRecent.workoutName === workout.name &&
+        mostRecent.durationSeconds === totalElapsedSeconds &&
+        Date.now() - new Date(mostRecent.completedAt).getTime() < 15000;
+
+      const progress = calculateWeeklyProgress(history);
+      const completedThisWeek = progress.completedThisWeek + (alreadyIncluded ? 0 : 1);
+      setWeeklyGoal({
+        goal: progress.goal,
+        completedThisWeek,
+        percentage: Math.min(100, Math.round((completedThisWeek / progress.goal) * 100)),
+        isGoalMet: completedThisWeek >= progress.goal,
+      });
+
+      const dates = history.map((log) => new Date(log.completedAt).toISOString().split('T')[0]);
+      if (!alreadyIncluded) dates.unshift(new Date().toISOString().split('T')[0]);
+      setStreakDays(computeStreakDays(dates));
+    } catch {
+      // Lokal historikk utilgjengelig - Astrid faller tilbake på generisk feedback
+    }
+  }, [workout, totalElapsedSeconds]);
+
+  // Astrids tilbakemelding - regenereres reaktivt når PR-status eller
+  // brukerens vurdering av økten endrer seg. Puls er ikke koblet til her:
+  // det finnes i dag ingen enkel kilde til gjennomsnitt/maks-puls for HELE
+  // økten (kun sanntidsdata fra pulsbeltet via bluetoothHeartRateService),
+  // og å bygge det er utenfor rammen av denne oppgaven.
+  const astridFeedback = useMemo(
+    () =>
+      localAiCoach.generateWorkoutSummaryFeedback({
+        workoutName: workout.name,
+        durationSeconds: totalElapsedSeconds,
+        isNewPr: prStatus?.isNewPr ?? false,
+        rating: selectedRating,
+        weeklyGoal,
+        streakDays,
+      }),
+    [workout.name, totalElapsedSeconds, prStatus, selectedRating, weeklyGoal, streakDays]
+  );
 
   const handleRate = async (rating: 'for_lett' | 'passe' | 'for_tungt') => {
     setSelectedRating(rating);
@@ -174,11 +235,7 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
             <span className="text-xs font-bold text-emerald-400">Astrid • AI-Trener</span>
             <span className="text-[10px] px-1 bg-emerald-500/20 text-emerald-300 rounded font-semibold">Smart Coach</span>
           </div>
-          <p className="text-xs text-zinc-300 leading-snug">
-            {totalElapsedSeconds > 600
-              ? 'Fantastisk innsats og solid utholdenhet! Husk å drikke litt vann og ta 2 minutter med rolig tøying nå.'
-              : 'Kjapt, effektivt og godt levert! Kontinuitet er nøkkelen til langsiktig styrke og form.'}
-          </p>
+          <p className="text-xs text-zinc-300 leading-snug">{astridFeedback}</p>
         </div>
       </div>
 
