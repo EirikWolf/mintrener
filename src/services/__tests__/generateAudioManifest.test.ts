@@ -160,7 +160,9 @@ describe('generate-audio-manifest – extractExerciseIds (forventet-listen fra d
 });
 
 describe('generate-audio-manifest – REQUIRED_CUES', () => {
-  it('dekker de 11 manuskript-cuene + start_321 + start_321_short (fasit: scripts/voicebank-manuskript.json)', () => {
+  // Cue-id-settet er uendret av Oppgave B (start_321_short flyttet bare kilde:
+  // fra hale-trim av innspillingen til egen TTS-cue i manuskriptet).
+  it('dekker de 12 manuskript-cuene (inkl. start_321_short) + innspilt start_321 (fasit: scripts/voicebank-manuskript.json)', () => {
     expect([...REQUIRED_CUES].sort()).toEqual(
       [
         'intro',

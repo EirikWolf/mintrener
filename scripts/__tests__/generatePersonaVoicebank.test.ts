@@ -11,8 +11,6 @@ import {
   buildClonePayload,
   buildTtsFfmpegArgs,
   buildRecordedFfmpegArgs,
-  buildRecordedShortFfmpegArgs,
-  START321_SHORT_TAIL_S,
   cacheIsFresh,
   decideTtsAction,
   persistRawCache,
@@ -36,14 +34,19 @@ const manifest = parseManifest(JSON.parse(fs.readFileSync(manifestPath, 'utf-8')
 const PERSONA_IDS = ['haugesund', 'romsdal', 'hardcore', 'boyband'];
 
 describe('buildTaskList', () => {
-  it('bygger full liste: 144 TTS-oppgaver + 8 innspilte (full + short per persona) = 152', () => {
+  // Oppgave B (felttest-oppfølging): start_321_short er nå en egen TTS-cue i
+  // cues-mappen (kort «Klar? Tre, to, ein, kjør!»-tekst per persona), ikke
+  // lenger en hale-trim av den innspilte peptalken — halen («ikkje no knussel
+  // på slutten») var meningsløs isolert ved øktstart. Totalen er fortsatt 152:
+  // short flytter bare kategori (recorded → tts).
+  it('bygger full liste: 148 TTS-oppgaver + 4 innspilte (start_321 per persona) = 152', () => {
     const tasks = buildTaskList(manifest, {});
     expect(tasks).toHaveLength(152);
-    expect(tasks.filter((t) => t.kind === 'tts')).toHaveLength(144);
-    expect(tasks.filter((t) => t.kind === 'recorded')).toHaveLength(8);
+    expect(tasks.filter((t) => t.kind === 'tts')).toHaveLength(148);
+    expect(tasks.filter((t) => t.kind === 'recorded')).toHaveLength(4);
   });
 
-  it('gir 38 oppgaver per persona (11 cues + 25 øvelser + 2 innspilte)', () => {
+  it('gir 38 oppgaver per persona (12 cues + 25 øvelser + 1 innspilt)', () => {
     for (const id of PERSONA_IDS) {
       const forPersona = buildTaskList(manifest, {}).filter((t) => t.personaId === id);
       expect(forPersona).toHaveLength(38);
@@ -105,7 +108,7 @@ describe('buildTaskList', () => {
     expect(exerciseIds[exerciseIds.length - 1]).toBe('skulder-dislocates');
   });
 
-  it('--persona filtrerer til én persona (36 TTS + 2 innspilte)', () => {
+  it('--persona filtrerer til én persona (37 TTS + 1 innspilt)', () => {
     const tasks = buildTaskList(manifest, { persona: 'haugesund' });
     expect(tasks).toHaveLength(38);
     expect(tasks.every((t) => t.personaId === 'haugesund')).toBe(true);
@@ -125,27 +128,34 @@ describe('buildTaskList', () => {
     ).toBe(true);
   });
 
-  it('--only start_321 gir kun de fire innspilte (aldri short-variantene)', () => {
+  it('--only start_321 gir kun de fire innspilte (short er TTS og matcher ikke)', () => {
     const tasks = buildTaskList(manifest, { only: 'start_321' });
     expect(tasks).toHaveLength(4);
     expect(tasks.every((t) => t.kind === 'recorded')).toBe(true);
     expect(tasks.every((t) => t.outputRelPath.endsWith('/start_321.mp3'))).toBe(true);
   });
 
-  it('--only start_321_short gir kun de fire trimmede variantene, fra samme kilde', () => {
+  it('--only start_321_short gir 4 TTS-oppgaver med personaens korte 3-2-1-tekst', () => {
+    // Oppgave B: short produseres i samme TTS-prosesseringskjede (v2) som de
+    // andre cuene — ikke lenger klippet fra den innspilte kilden.
     const tasks = buildTaskList(manifest, { only: 'start_321_short' });
     expect(tasks).toHaveLength(4);
-    expect(tasks.every((t) => t.kind === 'recorded')).toBe(true);
+    expect(tasks.every((t) => t.kind === 'tts')).toBe(true);
     expect(tasks.every((t) => t.outputRelPath.endsWith('/start_321_short.mp3'))).toBe(true);
-    const romsdal = tasks.find((t) => t.personaId === 'romsdal');
-    expect(romsdal && romsdal.kind === 'recorded' ? romsdal.sourceRelPath : null).toBe(
-      'audio/Tre-To-En- Romsdalen (Lead Vocal).mp3',
+    const textByPersona = Object.fromEntries(
+      tasks.map((t) => [t.personaId, t.kind === 'tts' ? t.text : null]),
     );
+    expect(textByPersona).toEqual({
+      haugesund: 'Gjer deg klar! Tre, to, ein, kjør!',
+      romsdal: 'Klar? Tre, to, ein, kjør!',
+      hardcore: 'Klar til kamp! Tre! To! En! KJØR!',
+      boyband: 'Er du klar? Tre, to, en, kjør baby!',
+    });
   });
 
-  it('--skip-recorded utelater innspilte spor (144 igjen)', () => {
+  it('--skip-recorded utelater innspilte spor (148 igjen)', () => {
     const tasks = buildTaskList(manifest, { skipRecorded: true });
-    expect(tasks).toHaveLength(144);
+    expect(tasks).toHaveLength(148);
     expect(tasks.every((t) => t.kind === 'tts')).toBe(true);
   });
 
@@ -210,7 +220,7 @@ describe('språkoverstyring (ttsLang)', () => {
     const others = buildTaskList(manifest, {}).filter(
       (t): t is TtsTask => t.kind === 'tts' && t.id !== 'mountain-climbers',
     );
-    expect(others).toHaveLength(140);
+    expect(others).toHaveLength(144);
     expect(others.every((t) => t.lang === 'no')).toBe(true);
   });
 });
@@ -294,46 +304,6 @@ describe('buildRecordedFfmpegArgs (skånsom kjede for innspilte spor)', () => {
     expect(filter).not.toContain('treble');
     expect(filter).not.toContain('bass');
     expect(filter).not.toContain('highpass');
-  });
-});
-
-describe('buildRecordedShortFfmpegArgs (trimmet start_321-variant for korte faser)', () => {
-  const args = buildRecordedShortFfmpegArgs('in.mp3', 'out.mp3');
-  const filter = args[args.indexOf('-af') + 1] ?? '';
-
-  it('kalibrerings-konstanten er 8,5 s (én-linjes justerbar for lytterunde)', () => {
-    expect(START321_SHORT_TAIL_S).toBe(8.5);
-  });
-
-  it('beholder de SISTE 8,5 sekundene av INNHOLDET: haletrim (areverse) FØR atrim-utsnittet', () => {
-    // Kildene har 0-5 s halestillhet — et rått tail-kutt ville gitt 3-8 s
-    // faktisk innhold avhengig av persona. Derfor: reverser, trim (gamle)
-    // halestillheten, kutt utsnittet, reverser tilbake.
-    const atrimIdx = filter.indexOf(`atrim=end=${START321_SHORT_TAIL_S}`);
-    expect(atrimIdx).toBeGreaterThanOrEqual(0);
-    expect(filter.startsWith('areverse,silenceremove=')).toBe(true);
-    expect(filter.indexOf('silenceremove=')).toBeLessThan(atrimIdx);
-  });
-
-  it('fader inn 0,4 s i starten av utsnittet, FØR den skånsomme kjeden', () => {
-    expect(filter).toContain('areverse,afade=t=in:st=0:d=0.4,');
-  });
-
-  it('gjenbruker den skånsomme recorded-kjeden (trim + fade + loudnorm, ingen denoise/EQ)', () => {
-    const recordedFilter = buildRecordedFfmpegArgs('in.mp3', 'out.mp3');
-    const chain = recordedFilter[recordedFilter.indexOf('-af') + 1];
-    expect(filter).toBe(
-      'areverse,silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,' +
-        `atrim=end=${START321_SHORT_TAIL_S},areverse,afade=t=in:st=0:d=0.4,${chain}`
-    );
-    expect(filter).not.toContain('afftdn');
-    expect(filter).not.toContain('deesser');
-  });
-
-  it('overskriver uten prompt og leser aldri stdin', () => {
-    expect(args).toContain('-y');
-    expect(args).toContain('-nostdin');
-    expect(args[args.length - 1]).toBe('out.mp3');
   });
 });
 
