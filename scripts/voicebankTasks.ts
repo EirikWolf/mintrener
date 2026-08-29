@@ -79,13 +79,74 @@ export function parseManifest(raw: unknown): VoicebankManifest {
     throw new Error('Manuskriptet er ikke et JSON-objekt');
   }
   const obj = raw as Record<string, unknown>;
-  if (typeof obj.personas !== 'object' || obj.personas === null) {
-    throw new Error('Manuskriptet mangler "personas"');
+  if (
+    typeof obj.personas !== 'object' ||
+    obj.personas === null ||
+    Array.isArray(obj.personas)
+  ) {
+    throw new Error('Manuskriptet mangler "personas" (må være et objekt)');
   }
   if (!Array.isArray(obj.exercises)) {
-    throw new Error('Manuskriptet mangler "exercises"');
+    throw new Error('Manuskriptet mangler "exercises" (må være en liste)');
   }
   return raw as VoicebankManifest;
+}
+
+export interface CliOptions extends TaskFilters {
+  readonly dryRun: boolean;
+  readonly force: boolean;
+}
+
+/**
+ * Parser kommandolinjeflagg. Verdi-flaggene (--persona/--only) valideres slik
+ * at en glemt verdi ikke stille sluker neste flagg som filterverdi.
+ */
+export function parseCliArgs(argv: readonly string[]): CliOptions {
+  const valueOf = (flag: string): string | undefined => {
+    const idx = argv.indexOf(flag);
+    if (idx < 0) return undefined;
+    const value = argv[idx + 1];
+    if (value === undefined || value.startsWith('--')) {
+      throw new Error(`Flagget ${flag} krever en verdi (f.eks. "${flag} haugesund")`);
+    }
+    return value;
+  };
+  return {
+    dryRun: argv.includes('--dry-run'),
+    force: argv.includes('--force'),
+    skipRecorded: argv.includes('--skip-recorded'),
+    persona: valueOf('--persona'),
+    only: valueOf('--only'),
+  };
+}
+
+/**
+ * Retry lønner seg bare når neste forsøk kan gå bedre: 5xx (serverkrasj/
+ * kaldstart) og 429 (rate limit). Øvrige 4xx (401/400/422 ...) er
+ * deterministiske klientfeil — de blir aldri bedre av å vente 3 sekunder.
+ */
+export function isRetryableHttpStatus(status: number): boolean {
+  return status >= 500 || status === 429;
+}
+
+/** Feil som aldri skal retries (deterministisk 4xx fra serveren). */
+export class NonRetryableError extends Error {
+  readonly retryable = false as const;
+}
+
+export type TaskOutcome = 'generated' | 'skipped' | 'failed';
+
+/** Abort-terskel: så mange PÅFØLGENDE feil tyder på global årsak (token/nede). */
+export const MAX_CONSECUTIVE_FAILURES = 3;
+
+/**
+ * Teller påfølgende feil: suksess nullstiller, skip er nøytral (ingen ny
+ * informasjon om serveren), feil øker.
+ */
+export function updateConsecutiveFailures(count: number, outcome: TaskOutcome): number {
+  if (outcome === 'generated') return 0;
+  if (outcome === 'failed') return count + 1;
+  return count;
 }
 
 function outputPath(personaId: string, file: string): string {

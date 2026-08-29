@@ -16,16 +16,22 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { getKitorToken } from './kitorEnv';
 import {
+  MAX_CONSECUTIVE_FAILURES,
+  NonRetryableError,
   buildClonePayload,
   buildFfmpegArgs,
   buildTaskList,
+  isRetryableHttpStatus,
+  parseCliArgs,
   parseManifest,
+  updateConsecutiveFailures,
+  type CliOptions,
   type RecordedTask,
-  type TaskFilters,
+  type TaskOutcome,
   type TtsTask,
   type VoicebankTask,
 } from './voicebankTasks';
@@ -39,25 +45,6 @@ const TTS_TIMEOUT_MS = 240_000;
 const TTS_RETRIES = 2; // i tillegg til første forsøk
 const RETRY_PAUSE_MS = 3_000;
 const SUSPICIOUS_BYTES = 1024; // < 1 KB er sannsynligvis en feilside, ikke lyd
-
-interface CliOptions extends TaskFilters {
-  readonly dryRun: boolean;
-  readonly force: boolean;
-}
-
-function parseCliArgs(argv: readonly string[]): CliOptions {
-  const valueOf = (flag: string): string | undefined => {
-    const idx = argv.indexOf(flag);
-    return idx >= 0 ? argv[idx + 1] : undefined;
-  };
-  return {
-    dryRun: argv.includes('--dry-run'),
-    force: argv.includes('--force'),
-    skipRecorded: argv.includes('--skip-recorded'),
-    persona: valueOf('--persona'),
-    only: valueOf('--only'),
-  };
-}
 
 function toAbsolute(relPath: string): string {
   return path.join(ROOT_DIR, ...relPath.split('/'));
@@ -84,9 +71,23 @@ function postProcess(inputPath: string, outputPath: string): void {
   });
   if (res.status !== 0) {
     fs.rmSync(tmpPath, { force: true });
-    throw new Error(`ffmpeg feilet (exit ${res.status ?? '?'}): ${res.stderr?.trim()}`);
+    const detail = res.error ? res.error.message : res.stderr?.trim();
+    throw new Error(`ffmpeg feilet (exit ${res.status ?? '?'}): ${detail}`);
   }
   fs.renameSync(tmpPath, outputPath);
+}
+
+/** Rydder etterlatte tempfiler fra en tidligere hardt drept kjøring. */
+function cleanupStaleTempFiles(): void {
+  const base = path.join(ROOT_DIR, 'public', 'audio', 'personas');
+  if (!fs.existsSync(base)) return;
+  const stale = fs
+    .readdirSync(base, { recursive: true, encoding: 'utf-8' })
+    .filter((rel) => rel.endsWith('.raw.mp3') || rel.endsWith('.tmp.mp3'));
+  for (const rel of stale) {
+    fs.rmSync(path.join(base, rel), { force: true });
+    console.log(`🧹 Ryddet etterlatt tempfil: ${rel}`);
+  }
 }
 
 async function fetchTtsOnce(task: TtsTask, token: string): Promise<Buffer> {
@@ -101,35 +102,47 @@ async function fetchTtsOnce(task: TtsTask, token: string): Promise<Buffer> {
   });
   if (!res.ok) {
     const errText = (await res.text()).slice(0, 300);
-    throw new Error(`HTTP ${res.status} fra Kitor: ${errText}`);
+    const message = `HTTP ${res.status} fra Kitor: ${errText}`;
+    // Deterministiske klientfeil (401/400/422 ...) blir aldri bedre av retry.
+    if (!isRetryableHttpStatus(res.status)) {
+      throw new NonRetryableError(message);
+    }
+    throw new Error(message);
   }
   const buffer = Buffer.from(await res.arrayBuffer());
   if (buffer.length < SUSPICIOUS_BYTES) {
-    // Mistenkelig liten respons — sannsynligvis en feilside; behandles som feil
-    // slik at retrien får en ny sjanse i stedet for å lagre søppel.
+    // Mistenkelig liten respons — sannsynligvis en feilside; behandles som
+    // retryable feil slik at neste forsøk får en sjanse i stedet for å lagre søppel.
     throw new Error(`mistenkelig liten respons (${buffer.length} bytes < 1 KB)`);
   }
   return buffer;
 }
 
-async function fetchTtsWithRetries(task: TtsTask, token: string): Promise<Buffer> {
+/**
+ * Opptil 2 retries, men KUN for feil der neste forsøk kan gå bedre
+ * (nettverk/timeout/5xx/429/for liten respons). Eksportert for test.
+ */
+export async function fetchTtsWithRetries(
+  task: TtsTask,
+  token: string,
+  pauseMs: number = RETRY_PAUSE_MS,
+): Promise<Buffer> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= TTS_RETRIES; attempt++) {
     if (attempt > 0) {
-      console.warn(`   ↻ Forsøk ${attempt + 1}/${TTS_RETRIES + 1} om ${RETRY_PAUSE_MS / 1000} s...`);
-      await sleep(RETRY_PAUSE_MS);
+      console.warn(`   ↻ Forsøk ${attempt + 1}/${TTS_RETRIES + 1} om ${pauseMs / 1000} s...`);
+      await sleep(pauseMs);
     }
     try {
       return await fetchTtsOnce(task, token);
     } catch (err) {
-      lastError = err;
       console.warn(`   ⚠️ ${err instanceof Error ? err.message : String(err)}`);
+      if (err instanceof NonRetryableError) throw err;
+      lastError = err;
     }
   }
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
-
-type TaskOutcome = 'generated' | 'skipped' | 'failed';
 
 async function runTtsTask(task: TtsTask, token: string, force: boolean): Promise<TaskOutcome> {
   const outputPath = toAbsolute(task.outputRelPath);
@@ -206,7 +219,11 @@ async function runAll(tasks: readonly VoicebankTask[], opts: CliOptions): Promis
     process.exit(1);
   }
 
+  cleanupStaleTempFiles();
+
   const counts: Record<TaskOutcome, number> = { generated: 0, skipped: 0, failed: 0 };
+  const failedIds: string[] = [];
+  let consecutiveFailures = 0;
   // Sekvensielt med vilje — én GPU på Kitor.
   for (const task of tasks) {
     const outcome =
@@ -214,11 +231,24 @@ async function runAll(tasks: readonly VoicebankTask[], opts: CliOptions): Promis
         ? await runTtsTask(task, token, opts.force)
         : runRecordedTask(task, opts.force);
     counts[outcome]++;
+    if (outcome === 'failed') failedIds.push(`${task.personaId}/${task.id}`);
+    consecutiveFailures = updateConsecutiveFailures(consecutiveFailures, outcome);
+    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+      console.error(
+        `\n❌ ${consecutiveFailures} påfølgende oppgaver feilet — avbryter kjøringen.`,
+      );
+      console.error('   Dette tyder på en global årsak (ugyldig token, Kitor nede?).');
+      break;
+    }
   }
 
   console.log('\n🏁 Sluttrapport:');
   console.log(`   Generert: ${counts.generated}, hoppet over: ${counts.skipped}, feilet: ${counts.failed}`);
-  if (counts.failed > 0) {
+  if (failedIds.length > 0) {
+    console.log('   Feilede oppgaver (kjør på nytt med --persona/--only):');
+    for (const id of failedIds) {
+      console.log(`     ${id}`);
+    }
     process.exitCode = 1;
   }
 }
@@ -246,7 +276,15 @@ async function main(): Promise<void> {
   await runAll(tasks, opts);
 }
 
-main().catch((err) => {
-  console.error('❌ Uventet feil:', err);
-  process.exit(1);
-});
+// Kjør kun når fila startes direkte (npx tsx scripts/generatePersonaVoicebank.ts),
+// ikke når testene importerer fetchTtsWithRetries.
+const isDirectRun =
+  typeof process.argv[1] === 'string' &&
+  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+
+if (isDirectRun) {
+  main().catch((err: unknown) => {
+    console.error('❌', err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}
