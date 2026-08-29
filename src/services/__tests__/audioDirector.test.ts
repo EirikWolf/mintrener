@@ -8,7 +8,12 @@
 // mockes helt — lookahead-matematikken (anker-verdiene) asserteres på kall-nivå;
 // selve skeduleringen er testet i audioBufferEngine-suiten (β1).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createAudioDirector, resolveAnnouncementPlan, AudioDirectorEngine } from '../audioDirector';
+import {
+  createAudioDirector,
+  resolveAnnouncementPlan,
+  ANNOUNCE_HEADROOM_S,
+  AudioDirectorEngine,
+} from '../audioDirector';
 import { EngineEvent } from '../../types/engineEvents';
 import { TimerState } from '../../types/workout';
 import { audioService } from '../audioService';
@@ -131,6 +136,10 @@ describe('audioDirector (B3 β2)', () => {
     // og sjekker cache-status via has() — default: ingenting cachet.
     vi.spyOn(audioBufferEngine, 'playSequence').mockResolvedValue(true);
     vi.spyOn(audioBufferEngine, 'has').mockReturnValue(false);
+    // Annonseringsprioritet (felttest-funn): default UKJENT varighet (null) —
+    // stigen skal da beholde dagens kaldstart-adferd (forsøk full → short →
+    // flagg). Testene som trenger hodroms-kortslutningen mocker varigheter selv.
+    vi.spyOn(audioBufferEngine, 'getDuration').mockReturnValue(null);
     vi.spyOn(audioBufferEngine, 'stop').mockImplementation(() => {});
     // Planrettelse 2 (flerkjedemodell): deadlineChanged/skip kansellerer nå kun
     // det SKEDULERTE via cancelScheduled(), ikke full stop() – se testene under.
@@ -494,6 +503,110 @@ describe('audioDirector (B3 β2)', () => {
       await flush();
 
       expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith([SHORT], { endAt: 10_000 });
+    });
+  });
+
+  describe('annonseringsprioritet — ANNOUNCE_HEADROOM_S (felttest: Tabata med 10 s grensefaser)', () => {
+    // Felttest-funn (Android, Klassisk Tabata): short (8,5 s hale av peptalken)
+    // ble endAt-forankret i 10 s-faser og STARTET ~1,5 s inn i fasen — den
+    // skedulerte kjeden preemptet (fade) den reaktive annonseringskjeden
+    // (rest-cue → bro-neste → øvelsesnavn), så øvelsesnavnet ble ALDRI lest opp.
+    // Med KJENT varighet skal en endAt-kandidat kun skeduleres når kjedestarten
+    // gir annonseringen minst ANNOUNCE_HEADROOM_S rom fra «nå» (motorklokken).
+    const FULL = `${HC}/start_321.mp3`;
+    const SHORT = `${HC}/start_321_short.mp3`;
+
+    function mockDurations(map: Record<string, number>): void {
+      vi.mocked(audioBufferEngine.getDuration).mockImplementation((k: string) => map[k] ?? null);
+    }
+
+    it('hodromskonstanten er 6 s (rest-cue + bro + øvelsesnavn får plass)', () => {
+      expect(ANNOUNCE_HEADROOM_S).toBe(6);
+    });
+
+    it('10 s fase, full (20 s) og short (8,5 s) cachet: INGEN endAt-kjede, go består, ingen pip-flagging', async () => {
+      usePersona();
+      mockDurations({ [FULL]: 20, [SHORT]: 8.5 });
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', itemIndex: 0, endsAt: 10_000 }));
+      await flush();
+
+      // short ville startet 1,5 s inn i fasen (10 − 8,5 < 6) — bevisst
+      // prioritering av annonseringen, IKKE degradering: ingen endAt-kjede,
+      // go-tilropet på grensen består, og countdown forblir stum (ingen pip).
+      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith([FULL], expect.anything());
+      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith([SHORT], expect.anything());
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith(
+        [`${HC}/go-1.mp3`],
+        { startAt: 10_000 }
+      );
+      emit({ type: 'countdown', secondsLeft: 3 });
+      expect(audioService.playCountdownBeep).not.toHaveBeenCalled();
+    });
+
+    it('10 s fase med short på 3,5 s: short skeduleres (starter 6,5 s inn ≥ 6 s hodrom)', async () => {
+      usePersona();
+      mockDurations({ [FULL]: 20, [SHORT]: 3.5 });
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', itemIndex: 0, endsAt: 10_000 }));
+      await flush();
+
+      // full (kjent 20 s) passer aldri — forsøkes ikke engang; short direkte.
+      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith([FULL], expect.anything());
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 10_000 });
+      emit({ type: 'countdown', secondsLeft: 3 });
+      expect(audioService.playCountdownBeep).not.toHaveBeenCalled();
+    });
+
+    it('lang fase (30 s) med full på 20 s: full skeduleres som før (kjedestart 10 s ≥ 6 s)', async () => {
+      usePersona();
+      mockDurations({ [FULL]: 20, [SHORT]: 8.5 });
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', itemIndex: 0, endsAt: 30_000 }));
+      await flush();
+
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([FULL], { endAt: 30_000 });
+      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith([SHORT], expect.anything());
+    });
+
+    it('hodrommet måles mot motorklokken (engine.getNow) ved utstedelse, ikke mot 0', async () => {
+      usePersona();
+      mockDurations({ [FULL]: 20, [SHORT]: 8.5 });
+      const { engine, emit, setNow } = createFakeEngine();
+      createAudioDirector(engine);
+
+      // Fase starter ved t=4000 med frist 19 000: short-kjedestart 10 500 ≥
+      // 4000 + 6000 → passer. (Mot 0 hadde også full på 20 s «passert» feil.)
+      setNow(4_000);
+      emit(phaseStarted({ phase: 'rest', itemIndex: 0, endsAt: 19_000 }));
+      await flush();
+
+      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith([FULL], expect.anything());
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 19_000 });
+    });
+
+    it('ukjent varighet (kaldstart, ucachet): dagens stige uendret — full → false → short → pip-flagg', async () => {
+      usePersona();
+      // getDuration → null (default fra beforeEach): hodrommet kan ikke avgjøres
+      // uten gjetning — degraderingsflagget + replanCurrentPhase re-evaluerer
+      // med kjente varigheter når preload er ferdig.
+      vi.mocked(audioBufferEngine.scheduleSequence).mockResolvedValue(false);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', itemIndex: 0, endsAt: 10_000 }));
+      await flush();
+
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([FULL], { endAt: 10_000 });
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 10_000 });
+      emit({ type: 'countdown', secondsLeft: 3 });
+      expect(audioService.playCountdownBeep).toHaveBeenCalledWith(true);
     });
   });
 
