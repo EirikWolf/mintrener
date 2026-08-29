@@ -241,9 +241,9 @@ describe('AudioBufferEngine.preload', () => {
 
 describe('AudioBufferEngine.getDuration (annonseringsprioritet, felttest-funn)', () => {
   // Directoren trenger fasit-varighet for å avgjøre om en endAt-forankret
-  // grensekjede lar annonseringen få hodrom (ANNOUNCE_HEADROOM_S) — aldri
-  // gjetning: ucachet nøkkel svarer null, og Directoren beholder da dagens
-  // kaldstart-stige.
+  // grensekjede lar annonseringen få hodrom — hodrommet er summen av de
+  // faktiske klippene i kjeden, aldri en gjetning: ucachet nøkkel svarer null,
+  // og Directoren beholder da dagens kaldstart-stige.
   let engine: AudioBufferEngine;
 
   beforeEach(() => {

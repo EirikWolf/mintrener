@@ -913,6 +913,32 @@ describe('audioDirector (B3 β2)', () => {
       expect(audioService.playCountdownBeep).not.toHaveBeenCalled();
     });
 
+    it('NOTAT: studioklipp UTEN rest-cue kjedes, og er dermed beskyttet av hodrommet', async () => {
+      usePersona();
+      // Kun studioklippet (ingen persona-variant dekodet) og nedtellings-
+      // klippene: før returnerte utledningen tom kjede her, og da var
+      // studio-annonseringen usynlig for hodroms-utregningen.
+      cacheClips({ 'exercise-utfall-forover': 6.0, [FULL]: 27.815, [SHORT]: 4.44 });
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_B, endsAt: 10_000 }));
+      await flush();
+
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith(['exercise-utfall-forover']);
+      expect(audioClipService.playClipOrFallback).not.toHaveBeenCalled();
+      // 6 s annonsering i en 10 s fase: short ville startet 5,56 s inn, altså
+      // midt i navnet → gates bort, som for persona-klippene.
+      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith(
+        [SHORT],
+        expect.anything()
+      );
+      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith(
+        [FULL],
+        expect.anything()
+      );
+    });
+
     it('BØR-3: resync-annonseringen får SAMME hodromsbeskyttelse som fasestartens kjede', async () => {
       usePersona();
       cacheClips({ ...HC_REAL, [`${HC}/bro-resync.mp3`]: 2.5 });

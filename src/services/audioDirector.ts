@@ -205,9 +205,12 @@ function deriveRestChain(event: PhaseStartedEvent): AnnounceChain {
   if (plan === 'persona' && personaKey) {
     return { cue, bridge: cachedPersonaKey('bro-neste'), name: personaKey };
   }
-  // Studioklippet kjedes kun når rest-cuen ligger foran; uten cue er dagens
-  // sti playClipOrFallback (utenfor Directorens bufferkjede).
-  if (plan === 'studio' && cue !== null) {
+  // NOTAT (andre review): studioklippet kjedes nå også UTEN rest-cue foran.
+  // Før returnerte den grenen tom kjede, og da var studio-annonseringen usynlig
+  // for hodroms-utregningen — altså ubeskyttet mot preemsjon fra nedtellingen.
+  // 'studio'-planen krever at klippet ER dekodet, så playSequence([studioKey])
+  // gjør nøyaktig det playClipOrFallback ville gjort i sin første gren.
+  if (plan === 'studio') {
     return { cue, bridge: null, name: studioKey };
   }
   if (plan === 'bridge-tts') {
