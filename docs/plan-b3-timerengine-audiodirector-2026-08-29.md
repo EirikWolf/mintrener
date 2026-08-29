@@ -60,6 +60,8 @@ export type EngineEvent =
       endsAt: number | null }
   | { type: 'phase:deadlineChanged'; endsAt: number }
   | { type: 'phase:halfway' }
+  | { type: 'phase:endingSoon' }  // én gang per fase ved remaining <= 3.5s i prepare/rest/round_rest
+                                  // (hookens persona-start_321-vindu; adapter filtrerer persona, beta ignorerer — lookahead overtar)
   | { type: 'countdown'; secondsLeft: 1 | 2 | 3 }
   | { type: 'resync'; skippedPhases: number; landingPhase: IntervalPhase;
       exercise: Exercise | null; nextExercise: Exercise | null; tone: VoiceTone }
@@ -140,6 +142,7 @@ describe('TimerEngine – init (karakterisering)', () => {
 |:--|:--|
 | Hele lyd/tale-blokken i `setupPhase` per fase | `phase:started` med alle felter (tone = `w.voiceTone \|\| 'rolig'`, `endsAt = now() + duration*1000`, `nextExercise` = dagens `items[idx+1]`-oppslag) |
 | `playPersonaCue('halfway')`-blokken i tick | `phase:halfway` (gated på `firedCues` som i dag) |
+| `playPersonaCue('start_321')`-blokken i tick (remaining <= 3.5 og > 0, prepare/rest/round_rest, firedCues-gated, INGEN varighetsvakt) | `phase:endingSoon` med eksakt samme gating (persona-sjekken flytter til adapter) |
 | 3-2-1-pip-blokken i tick | `countdown` per helsekund 3/2/1 (samme gating som i dag: `lastCountdownBeep`, `phaseDuration >= 4`) |
 | `playResyncCue()` | `resync` med landing-feltene |
 | `saveInterruptedSession(...)` i tick + pause | `persistenceSubscriber` håndterer — motor emitter INGEN egen hendelse; subscriber leser snapshot ved `workout:paused` og på egen 2s-gating fra tick-hendelse… **Nei — enklest og bit-identisk:** behold gating-logikken i motoren, men kall en injisert `onPersist(sessionData)`-callback (default no-op) som persistenceSubscriber kobler. |
@@ -227,6 +230,8 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
 
 - [ ] **Step 1 (rød):** Tester: (a) `setTimeBridge(engineNowMs)` måler offset slik at `toAudioTime(engineMs) = engineMs/1000 + (ctx.currentTime − engineNowMs/1000)`; (b) `scheduleSequence(['a'], { endAt: T })` → source.start kalles med `toAudioTime(T) − buffer.duration`; (c) `{ startAt: T }` → start på `toAudioTime(T)`; (d) anker i fortiden/for trangt vindu (`toAudioTime(endAt) − duration < ctx.currentTime + SCHEDULE_LEAD_S`) → resolver `false` uten å spille; (e) `stop()`/ny sekvens kansellerer planlagt (epoch — gjenbruk eksisterende mekanisme, ny test for skedulert-men-ikke-startet kilde).
 - [ ] **Step 2:** Implementer: `scheduleSequence(keys: string[], anchor: { endAt?: number; startAt?: number }, opts?): Promise<boolean>` — gjenbruker `computeSequenceSchedule` med `startAt`-parameteren den allerede har; `endAt` regnes om til startAt via sum av varigheter minus crossfader. Samme kontrakt som `playSequence` ellers (false ved ucachet nøkkel, aldri reject, ducking ved faktisk avspillingsstart — bruk en skedulert gain-rampe eller `setTimeout` til duck-start ved `startAt`; velg det som er testbart og kommenter). → PASS. **Commit** `feat(audio): scheduleSequence med absolutt anker og tidsbro`
+
+**Planrettelse (fra alpha3-review):** Motoren emitter `phase:deadlineChanged` fra og med alpha3-fiksen på to steder: (a) etter catch-up-bakdateringen av landingsfasen (den emitterte `phase:started.endsAt` er da foreldet med restOvershoot — deadlineChanged rett etterpaa baerer korrekt frist), og (b) etter drift-reanker i tick. beta2 konsumerer; ingen beta-task skal legge til emisjonen selv.
 
 ### Task β2: AudioDirector-kjernen
 
