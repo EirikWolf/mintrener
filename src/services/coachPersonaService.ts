@@ -126,6 +126,10 @@ export function getPersonaCueUrl(cue: PersonaCueName, personaId?: CoachPersonaId
  * genererte personaAudioManifest.json uten at kallerne (AudioDirector) endres —
  * kallere skal aldri bygge persona-stier selv. Null for personaer uten
  * cuesPath (standard = ren talesyntese).
+ *
+ * NB til β5: sømmen er hele MODULEN, ikke bare denne funksjonen —
+ * getPersonaCueUrl, playPersonaCue og preloadPersonaAudio bygger også
+ * cuesPath-URLer internt og må bytte til manifestoppslaget samtidig.
  */
 export function getPersonaClipKey(
   cueOrExerciseId: string,

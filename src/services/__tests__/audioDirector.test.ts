@@ -885,6 +885,95 @@ describe('audioDirector (B3 β2)', () => {
     });
   });
 
+  describe('fix-løkke — phaseEpoch-guard for TTS-etter-kjede (skip-lekkasje)', () => {
+    // Funn fra spec-review: playSequence løser true BÅDE ved naturlig
+    // kjedeslutt og ved bevisst stopp (fadeStopChain → finishChain(chain, true)).
+    // Et skip stopper bro-kjeden via stopAudiblePersonaAudio i den nye fasens
+    // reaktive sti, promiset løses true, og uten epoch-guard ville .then lese
+    // det GAMLE navnet over den nye fasens kjede (status er fortsatt 'running',
+    // og ved prepare→prepare-skip hjelper heller ikke fase-gaten).
+    const CUSTOM_EX = { id: 'custom-42', name: 'Kjeglehopp' };
+
+    it('skip midt i bro-kjeden (rest): TTS-navnet leses IKKE etter at ny fase har startet', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/bro-neste.mp3`);
+      let resolveChain!: (v: boolean) => void;
+      vi.mocked(audioBufferEngine.playSequence).mockImplementationOnce(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveChain = resolve;
+          })
+      );
+      const { engine, emit, setNow } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', nextExercise: CUSTOM_EX, endsAt: 10_000 }));
+      // Brukeren skipper FØR fristen → ny prepare-fase starter
+      setNow(4_000);
+      emit(phaseStarted({ phase: 'prepare', itemIndex: 1, endsAt: 14_000 }));
+      // Skipets audible-stopp løser bro-kjedens promise med true (bevisst stopp)
+      resolveChain(true);
+      await flush();
+
+      expect(speechService.speak).not.toHaveBeenCalled();
+    });
+
+    it('prepare→prepare-skip: fase-gaten alene hjelper ikke — epoch-guarden stopper TTS', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.has).mockImplementation(
+        (k: string) => k === `${HC}/intro.mp3` || k === `${HC}/bro-naa.mp3`
+      );
+      let resolveChain!: (v: boolean) => void;
+      vi.mocked(audioBufferEngine.playSequence).mockImplementationOnce(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveChain = resolve;
+          })
+      );
+      const { engine, emit, setNow } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', exercise: CUSTOM_EX, durationS: 10, endsAt: 10_000 }));
+      // Skip til NY prepare (annen øvelse, ikke egendefinert) — snapshotets
+      // fase er fortsatt 'prepare' og status 'running', så kun epoken skiller
+      setNow(4_000);
+      emit(phaseStarted({ phase: 'prepare', exercise: EX_A, itemIndex: 1, durationS: 10, endsAt: 14_000 }));
+      resolveChain(true);
+      await flush();
+
+      expect(speechService.speak).not.toHaveBeenCalled();
+    });
+
+    it('resync-TTS-grenen avbrutt av fasebytte: ingen speak', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/bro-resync.mp3`);
+      let resolveChain!: (v: boolean) => void;
+      vi.mocked(audioBufferEngine.playSequence).mockImplementationOnce(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveChain = resolve;
+          })
+      );
+      const { engine, emit, setNow } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit({
+        type: 'resync',
+        skippedPhases: 2,
+        landingPhase: 'work',
+        exercise: EX_A,
+        nextExercise: EX_B,
+        tone: 'rolig',
+      });
+      setNow(4_000);
+      emit(phaseStarted({ phase: 'rest', itemIndex: 0, endsAt: 14_000 }));
+      resolveChain(true);
+      await flush();
+
+      expect(speechService.speak).not.toHaveBeenCalled();
+    });
+  });
+
   describe('unsubscribe', () => {
     it('returnert opprydningsfunksjon stopper videre reaksjon på hendelser', () => {
       const { engine, emit } = createFakeEngine();

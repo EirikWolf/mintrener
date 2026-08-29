@@ -26,6 +26,21 @@ export interface AudioDirectorEngine {
   getNow(): number;
 }
 
+/**
+ * Kontekst delt fra createAudioDirector-lukningen til speil-/annonserings-
+ * funksjonene: motorflaten + leser for gjeldende phaseEpoch. TTS-etter-kjede-
+ * veiene fanger epoken ved oppsett og sammenligner ved promise-oppløsning
+ * (samme mønster som issuePending/flagIfTooTight) — playSequence løser nemlig
+ * true BÅDE ved naturlig kjedeslutt og ved bevisst stopp, så et skip som
+ * fade-stopper bro-kjeden ville ellers latt TTS lese GAMMELT øvelsesnavn over
+ * den nye fasens lyd (status-gaten hjelper ikke: skip endrer ikke status, og
+ * ved prepare→prepare-skip hjelper heller ikke fase-gaten).
+ */
+interface DirectorCtx {
+  engine: AudioDirectorEngine;
+  getPhaseEpoch(): number;
+}
+
 export type AnnouncementPlan = 'persona' | 'studio' | 'bridge-tts' | 'tts' | 'beep-only';
 
 /**
@@ -85,7 +100,7 @@ function isCustomExercise(ex: Exercise): boolean {
  * fallback (dagens playClipOrFallback-kjede, som selv ender i TTS).
  */
 function playBridgeThenTts(
-  engine: AudioDirectorEngine,
+  ctx: DirectorCtx,
   bridgeCue: 'bro-neste' | 'bro-naa' | 'bro-resync',
   name: string,
   fallback: () => void
@@ -95,9 +110,13 @@ function playBridgeThenTts(
     fallback();
     return;
   }
+  // Epoch-guard (fix-løkke etter spec-review): fanges FØR kjeden startes —
+  // et skip/fasebytte bumper phaseEpoch, og da skal navnet aldri leses selv
+  // om promiset løses true (bevisst-stopp-kontrakten). Se DirectorCtx-doc.
+  const epoch = ctx.getPhaseEpoch();
   void audioBufferEngine.playSequence([key]).then(() => {
     // Pause/reset i mellomtiden: ikke les navnet oppå en stoppet økt
-    if (engine.getSnapshot().status === 'running') {
+    if (epoch === ctx.getPhaseEpoch() && ctx.engine.getSnapshot().status === 'running') {
       speechService.speak(name);
     }
   });
@@ -128,6 +147,10 @@ export function createAudioDirector(engine: AudioDirectorEngine): () => void {
   let currentDeadline: number | null = null;
   let beepFallback = false;
   let phaseEpoch = 0;
+
+  // Delt med speil-funksjonene: gir TTS-etter-kjede-veiene tilgang til
+  // fase-epoken (guard mot skip-lekkasje — se DirectorCtx).
+  const ctx: DirectorCtx = { engine, getPhaseEpoch: () => phaseEpoch };
 
   function issuePending(endsAt: number): void {
     if (!pending) return;
@@ -195,7 +218,7 @@ export function createAudioDirector(engine: AudioDirectorEngine): () => void {
     beepFallback = false;
     currentDeadline = e.endsAt;
 
-    mirrorLegacyPhaseStarted(engine, e);
+    mirrorLegacyPhaseStarted(ctx, e);
     planLookahead(e);
   }
 
@@ -247,7 +270,7 @@ export function createAudioDirector(engine: AudioDirectorEngine): () => void {
         handleDeadlineChanged(event.endsAt);
         break;
       case 'phase:halfway':
-        mirrorLegacyHalfway(engine);
+        mirrorLegacyHalfway(ctx);
         break;
       case 'phase:endingSoon':
         // Bevisst ignorert i β: det reaktive start_321-vinduet er erstattet av
@@ -257,7 +280,7 @@ export function createAudioDirector(engine: AudioDirectorEngine): () => void {
         handleCountdown();
         break;
       case 'resync':
-        mirrorLegacyResync(engine, event);
+        mirrorLegacyResync(ctx, event);
         break;
       case 'workout:paused':
         // Fade-kanseller alt (stopCurrentPersonaAudio → audioBufferEngine.stop),
@@ -287,21 +310,21 @@ export function createAudioDirector(engine: AudioDirectorEngine): () => void {
 // betingelser, kall og rekkefølge er uendret fra adapteren.
 // ---------------------------------------------------------------------------
 
-function mirrorLegacyPhaseStarted(engine: AudioDirectorEngine, event: PhaseStartedEvent): void {
+function mirrorLegacyPhaseStarted(ctx: DirectorCtx, event: PhaseStartedEvent): void {
   const { phase } = event;
   if (phase === 'prepare') {
-    mirrorPrepare(engine, event);
+    mirrorPrepare(ctx, event);
   } else if (phase === 'work') {
-    mirrorWork(engine, event);
+    mirrorWork(ctx, event);
   } else if (phase === 'rest' || phase === 'round_rest') {
-    mirrorRest(engine, event);
+    mirrorRest(ctx, event);
   } else if (phase === 'complete') {
-    mirrorComplete(engine, event);
+    mirrorComplete(ctx, event);
   }
 }
 
-function mirrorPrepare(engine: AudioDirectorEngine, event: PhaseStartedEvent): void {
-  const snap = engine.getSnapshot();
+function mirrorPrepare(ctx: DirectorCtx, event: PhaseStartedEvent): void {
+  const snap = ctx.engine.getSnapshot();
   const { exercise, durationS, tone, silent } = event;
   if (silent || !snap.speechEnabled) return;
 
@@ -312,9 +335,9 @@ function mirrorPrepare(engine: AudioDirectorEngine, event: PhaseStartedEvent): v
         // Bro + TTS (valg B): egendefinerte øvelser har verken studio- eller
         // persona-klipp, så intro-kjeden kan aldri lykkes — gå rett på
         // [intro, bro-naa]-kjeden («Nå: …») + TTS-navnet etter kjedeslutt.
-        announceCustomPrepare(engine, firstEx.name);
+        announceCustomPrepare(ctx, firstEx.name);
       } else {
-        playPrepareIntroChain(engine, firstEx);
+        playPrepareIntroChain(ctx, firstEx);
       }
     } else {
       playPersonaCue('intro');
@@ -337,7 +360,7 @@ function mirrorPrepare(engine: AudioDirectorEngine, event: PhaseStartedEvent): v
  * (Planrettelse 3, stopAudiblePersonaAudio) som aldri rører skedulerte kjeder —
  * men rekkefølgen skal ikke «ryddes» uten denne historikken.
  */
-function playPrepareIntroChain(engine: AudioDirectorEngine, firstEx: Exercise): void {
+function playPrepareIntroChain(ctx: DirectorCtx, firstEx: Exercise): void {
   void playIntroThenExercise(firstEx.id).then((played) => {
     if (played) return;
     // Degradert sti: bufferne er ikke dekodet ennå — spill intro via
@@ -345,7 +368,7 @@ function playPrepareIntroChain(engine: AudioDirectorEngine, firstEx: Exercise): 
     // før AudioBuffer-migreringen.
     playPersonaCue('intro');
     setTimeout(() => {
-      const s = engine.getSnapshot();
+      const s = ctx.engine.getSnapshot();
       if (s.phase === 'prepare' && s.status === 'running') {
         audioClipService.playClipOrFallback('exercise-' + firstEx.id, firstEx.name);
       }
@@ -359,13 +382,17 @@ function playPrepareIntroChain(engine: AudioDirectorEngine, firstEx: Exercise): 
  * overlapp. Uten cachede klipp: samme degraderte intro-sti som ellers
  * (HTMLAudio-intro + varighetsgjetting), med rent TTS-navn til slutt.
  */
-function announceCustomPrepare(engine: AudioDirectorEngine, name: string): void {
+function announceCustomPrepare(ctx: DirectorCtx, name: string): void {
   const keys = ['intro', 'bro-naa']
     .map((cue) => getPersonaClipKey(cue))
     .filter((k): k is string => k !== null && audioBufferEngine.has(k));
+  // Epoch-guard i TILLEGG til fase-/status-gaten: ved prepare→prepare-skip er
+  // den nye fasen også 'prepare', så bare epoken avslører at kjeden ble
+  // stoppet av et fasebytte (se DirectorCtx-doc). Gjelder begge stiene under.
+  const epoch = ctx.getPhaseEpoch();
   const speakIfStillPreparing = (): void => {
-    const s = engine.getSnapshot();
-    if (s.phase === 'prepare' && s.status === 'running') {
+    const s = ctx.engine.getSnapshot();
+    if (epoch === ctx.getPhaseEpoch() && s.phase === 'prepare' && s.status === 'running') {
       speechService.speak(name);
     }
   };
@@ -377,8 +404,8 @@ function announceCustomPrepare(engine: AudioDirectorEngine, name: string): void 
   void audioBufferEngine.playSequence(keys).then(speakIfStillPreparing);
 }
 
-function mirrorWork(engine: AudioDirectorEngine, event: PhaseStartedEvent): void {
-  const snap = engine.getSnapshot();
+function mirrorWork(ctx: DirectorCtx, event: PhaseStartedEvent): void {
+  const snap = ctx.engine.getSnapshot();
   const { exercise, tone, silent } = event;
   if (!silent) {
     if (getActiveCoachPersona() === 'standard') {
@@ -391,12 +418,12 @@ function mirrorWork(engine: AudioDirectorEngine, event: PhaseStartedEvent): void
   // Bevegelsessporing er persona-uavhengig og portert utenfor if(!silent) —
   // se identisk plassering i legacyAudioAdapter/useIntervalTimer sin work-gren.
   motionTrackerService.start((m: MotionMetrics) => {
-    engine.setMotionReps(m.count);
+    ctx.engine.setMotionReps(m.count);
   }, 'hopp');
 }
 
-function mirrorRest(engine: AudioDirectorEngine, event: PhaseStartedEvent): void {
-  const snap = engine.getSnapshot();
+function mirrorRest(ctx: DirectorCtx, event: PhaseStartedEvent): void {
+  const snap = ctx.engine.getSnapshot();
   const { nextExercise, tone, silent } = event;
   if (!silent) {
     audioService.playRestStart(snap.soundEnabled);
@@ -404,7 +431,7 @@ function mirrorRest(engine: AudioDirectorEngine, event: PhaseStartedEvent): void
       if (getActiveCoachPersona() === 'standard') {
         speechService.announceRest(nextExercise?.name, tone);
       } else if (nextExercise) {
-        announceNextExercise(engine, nextExercise);
+        announceNextExercise(ctx, nextExercise);
       }
     }
   }
@@ -420,7 +447,7 @@ function mirrorRest(engine: AudioDirectorEngine, event: PhaseStartedEvent): void
  *  - bridge-tts: egendefinert → bro-neste-kjede + TTS-navn (aldri overlapp)
  *  - studio/tts: dagens playClipOrFallback-kjede uendret (buffer → HTMLAudio → TTS)
  */
-function announceNextExercise(engine: AudioDirectorEngine, next: Exercise): void {
+function announceNextExercise(ctx: DirectorCtx, next: Exercise): void {
   const personaKey = getPersonaClipKey('exercise-' + next.id);
   const fallback = (): void => {
     audioClipService.playClipOrFallback('exercise-' + next.id, 'Neste: ' + next.name);
@@ -437,14 +464,14 @@ function announceNextExercise(engine: AudioDirectorEngine, next: Exercise): void
     const keys = broKey && audioBufferEngine.has(broKey) ? [broKey, personaKey] : [personaKey];
     void audioBufferEngine.playSequence(keys).catch(() => {});
   } else if (plan === 'bridge-tts') {
-    playBridgeThenTts(engine, 'bro-neste', next.name, fallback);
+    playBridgeThenTts(ctx, 'bro-neste', next.name, fallback);
   } else {
     fallback();
   }
 }
 
-function mirrorComplete(engine: AudioDirectorEngine, event: PhaseStartedEvent): void {
-  const snap = engine.getSnapshot();
+function mirrorComplete(ctx: DirectorCtx, event: PhaseStartedEvent): void {
+  const snap = ctx.engine.getSnapshot();
   const { tone, silent } = event;
   if (!silent) {
     if (getActiveCoachPersona() !== 'standard') {
@@ -459,15 +486,15 @@ function mirrorComplete(engine: AudioDirectorEngine, event: PhaseStartedEvent): 
   motionTrackerService.stop();
 }
 
-function mirrorLegacyHalfway(engine: AudioDirectorEngine): void {
-  const snap = engine.getSnapshot();
+function mirrorLegacyHalfway(ctx: DirectorCtx): void {
+  const snap = ctx.engine.getSnapshot();
   if (getActiveCoachPersona() !== 'standard' && snap.speechEnabled) {
     playPersonaCue('halfway');
   }
 }
 
-function mirrorLegacyResync(engine: AudioDirectorEngine, event: ResyncEvent): void {
-  const snap = engine.getSnapshot();
+function mirrorLegacyResync(ctx: DirectorCtx, event: ResyncEvent): void {
+  const snap = ctx.engine.getSnapshot();
   const { landingPhase, exercise, nextExercise, tone } = event;
 
   if (getActiveCoachPersona() !== 'standard') {
@@ -479,7 +506,7 @@ function mirrorLegacyResync(engine: AudioDirectorEngine, event: ResyncEvent): vo
     if (!target) return;
     // Fallback-tekstene speiler dagens reaktive sti (navn / «Neste: navn»)
     const fallbackText = landingPhase === 'work' ? target.name : 'Neste: ' + target.name;
-    announcePersonaResync(engine, target, fallbackText);
+    announcePersonaResync(ctx, target, fallbackText);
     return;
   }
 
@@ -506,7 +533,7 @@ function mirrorLegacyResync(engine: AudioDirectorEngine, event: ResyncEvent): vo
  * playClipOrFallback-sti uendret (fallbackText bærer «Neste:»-konteksten).
  */
 function announcePersonaResync(
-  engine: AudioDirectorEngine,
+  ctx: DirectorCtx,
   target: Exercise,
   fallbackText: string
 ): void {
@@ -529,9 +556,13 @@ function announcePersonaResync(
   } else if (plan === 'studio') {
     void audioBufferEngine.playSequence([broKey, studioKey]).catch(() => {});
   } else {
-    // bridge-tts/tts: broen spiller, TTS leser kun navnet etterpå (valg B)
+    // bridge-tts/tts: broen spiller, TTS leser kun navnet etterpå (valg B).
+    // Epoch-guard: resync emitteres ETTER landingsfasens phase:started (jf.
+    // catchUpExpiredPhases), så epoken fanget her er landingens — et senere
+    // fasebytte/skip bumper den og undertrykker det gamle navnet (se DirectorCtx).
+    const epoch = ctx.getPhaseEpoch();
     void audioBufferEngine.playSequence([broKey]).then(() => {
-      if (engine.getSnapshot().status === 'running') {
+      if (epoch === ctx.getPhaseEpoch() && ctx.engine.getSnapshot().status === 'running') {
         speechService.speak(target.name);
       }
     });
