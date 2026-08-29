@@ -1,4 +1,4 @@
-import { TimerState, IntervalPhase } from '../types/workout';
+import { TimerState, IntervalPhase, Exercise } from '../types/workout';
 import { EngineEvent } from '../types/engineEvents';
 import { audioService } from './audioService';
 import { speechService } from './speechService';
@@ -6,8 +6,8 @@ import { audioClipService } from './audioClipService';
 import { audioBufferEngine } from './audioBufferEngine';
 import { motionTrackerService, MotionMetrics } from './motionTrackerService';
 import {
-  COACH_PERSONAS,
   getActiveCoachPersona,
+  getPersonaClipKey,
   playPersonaCue,
   playIntroThenExercise,
   stopCurrentPersonaAudio,
@@ -69,15 +69,38 @@ type PendingLookahead =
   | { kind: 'last5'; key: string };
 
 /**
- * Nøkkel for en persona-cue etter dagens cuesPath-konvensjon. '/'-prefiksede
- * nøkler behandles som direkte URL-er av audioBufferEngine (se preloadOne) —
- * samme oppslag som getPersonaCueUrl, men uten PersonaCueName-begrensningen
- * (go-1/2/3 er nye i β). β3 innfører getPersonaClipKey (manifest-basert) som
- * erstatter denne hjelperen.
+ * Egendefinert øvelse: 'custom-'-prefiks fra byggeren, eller isCustom-flagget
+ * fra biblioteket (CustomExerciseItem — Exercise-typen bærer ikke flagget,
+ * derfor strukturell lesing).
  */
-function personaCueKey(cue: string): string | null {
-  const persona = COACH_PERSONAS.find((p) => p.id === getActiveCoachPersona());
-  return persona?.cuesPath ? `${persona.cuesPath}/${cue}.mp3` : null;
+function isCustomExercise(ex: Exercise): boolean {
+  return ex.id.startsWith('custom-') || (ex as Exercise & { isCustom?: boolean }).isCustom === true;
+}
+
+/**
+ * Bro + TTS (spec § 4, prioritet 3 — kun egendefinerte øvelser): personaens
+ * bro-frase spilles som bufferkjede, og TTS leser KUN navnet ETTER at kjeden
+ * har spilt ferdig (playSequence-promiset løses ved kjedeslutt) — de to
+ * stemmene overlapper aldri (produkteiers valg B). Uten cachet bro: kallerens
+ * fallback (dagens playClipOrFallback-kjede, som selv ender i TTS).
+ */
+function playBridgeThenTts(
+  engine: AudioDirectorEngine,
+  bridgeCue: 'bro-neste' | 'bro-naa' | 'bro-resync',
+  name: string,
+  fallback: () => void
+): void {
+  const key = getPersonaClipKey(bridgeCue);
+  if (!key || !audioBufferEngine.has(key)) {
+    fallback();
+    return;
+  }
+  void audioBufferEngine.playSequence([key]).then(() => {
+    // Pause/reset i mellomtiden: ikke les navnet oppå en stoppet økt
+    if (engine.getSnapshot().status === 'running') {
+      speechService.speak(name);
+    }
+  });
 }
 
 /**
@@ -133,16 +156,16 @@ export function createAudioDirector(engine: AudioDirectorEngine): () => void {
     if (getActiveCoachPersona() === 'standard') return;
 
     if (BOUNDARY_PHASES.includes(e.phase)) {
-      const start321Key = personaCueKey('start_321');
+      const start321Key = getPersonaClipKey('start_321');
       // go-rotasjon: deterministisk på itemIndex % 3 — samme item gir samme
       // tilrop (reproduserbart i test/felt), variasjon på tvers av items uten
       // tilstand som kan drifte mellom økter.
-      const goKey = personaCueKey(`go-${(e.itemIndex % 3) + 1}`);
+      const goKey = getPersonaClipKey(`go-${(e.itemIndex % 3) + 1}`);
       if (!start321Key || !goKey) return;
       pending = { kind: 'boundary', start321Key, goKey };
       issuePending(e.endsAt);
     } else if (e.phase === 'work' && e.durationS >= LAST5_MIN_WORK_S) {
-      const key = personaCueKey('last5');
+      const key = getPersonaClipKey('last5');
       if (!key) return;
       pending = { kind: 'last5', key };
       issuePending(e.endsAt);
@@ -150,6 +173,13 @@ export function createAudioDirector(engine: AudioDirectorEngine): () => void {
   }
 
   function handlePhaseStarted(e: PhaseStartedEvent): void {
+    // Planrettelse 4 (fix 1): re-mål tidsbroen per fase. ctx.currentTime kan
+    // fryse ved mid-økt-suspensjon mens motorklokken løper videre — motorens
+    // drift-reanker fanger IKKE det (begge DENS klokker løper), og en engangs-
+    // bro ville gjort alle senere ankre permanent like sene som suspensjonen
+    // varte. Re-måling her er gratis i forgrunn og alltid fersk når ankrene
+    // under regnes ut.
+    audioBufferEngine.setTimeBridge(engine.getNow());
     // Skip/previous: ny fase FØR forrige frist → lyd SKEDULERT for den gamle
     // grensen (start_321/go/last5, ikke startet ennå) skal aldri høres —
     // kanseller den stille (Planrettelse 2: cancelScheduled(), IKKE full
@@ -170,8 +200,15 @@ export function createAudioDirector(engine: AudioDirectorEngine): () => void {
   }
 
   function handleDeadlineChanged(endsAt: number): void {
+    // Planrettelse 4 (fix 1): re-mål broen også her — særlig viktig via
+    // workout:resumed, der ctx typisk var suspendert gjennom hele pausen.
+    audioBufferEngine.setTimeBridge(engine.getNow());
     currentDeadline = endsAt;
     if (!pending) return;
+    // Planrettelse 4 (fix 2): en tidligere mislykket skedulering skal ikke la
+    // pip-fallbacken leve videre oppå en VELLYKKET reskedulering — nullstill
+    // FØR issuePending; et nytt false-svar setter flagget igjen om vinduet ryker.
+    beepFallback = false;
     // Kanseller planlagte (ikke-hørbare) kjeder og reskeduler mot ny frist.
     // Planrettelse 2: cancelScheduled(), IKKE full stop() — en pause/dvale-
     // reanker skjer mens f.eks. rest-annonseringen fortsatt kan spille hørbart,
@@ -198,8 +235,9 @@ export function createAudioDirector(engine: AudioDirectorEngine): () => void {
   return engine.subscribeEvents((event) => {
     switch (event.type) {
       case 'workout:started':
-        // Tidsbroen måles én gang per økt — motorklokke ↔ AudioContext-klokke
-        // har samme rate, kun forskjellig epoke (audioBufferEngine.setTimeBridge).
+        // Første bro-måling — motorklokke ↔ AudioContext-klokke har samme rate,
+        // kun forskjellig epoke (audioBufferEngine.setTimeBridge). Re-måles
+        // deretter per fase/fristflytt (Planrettelse 4 fix 1, se handlePhaseStarted).
         audioBufferEngine.setTimeBridge(engine.getNow());
         break;
       case 'phase:started':
@@ -270,27 +308,73 @@ function mirrorPrepare(engine: AudioDirectorEngine, event: PhaseStartedEvent): v
   if (getActiveCoachPersona() !== 'standard') {
     const firstEx = exercise;
     if (durationS >= 6 && firstEx) {
-      // Intro + øvelsesnavn som ÉN sample-nøyaktig bufferkjede — introens
-      // faktiske varighet styrer skjøten, ingen gjetting.
-      void playIntroThenExercise(firstEx.id).then((played) => {
-        if (played) return;
-        // Degradert sti: bufferne er ikke dekodet ennå — spill intro via
-        // Audio-element og gjett introens varighet med setTimeout, som
-        // før AudioBuffer-migreringen.
-        playPersonaCue('intro');
-        setTimeout(() => {
-          const s = engine.getSnapshot();
-          if (s.phase === 'prepare' && s.status === 'running') {
-            audioClipService.playClipOrFallback('exercise-' + firstEx.id, firstEx.name);
-          }
-        }, 2300);
-      });
+      if (isCustomExercise(firstEx)) {
+        // Bro + TTS (valg B): egendefinerte øvelser har verken studio- eller
+        // persona-klipp, så intro-kjeden kan aldri lykkes — gå rett på
+        // [intro, bro-naa]-kjeden («Nå: …») + TTS-navnet etter kjedeslutt.
+        announceCustomPrepare(engine, firstEx.name);
+      } else {
+        playPrepareIntroChain(engine, firstEx);
+      }
     } else {
       playPersonaCue('intro');
     }
   } else {
     speechService.announcePrepare(exercise?.name, tone);
   }
+}
+
+/**
+ * Intro + øvelsesnavn som ÉN sample-nøyaktig bufferkjede — introens faktiske
+ * varighet styrer skjøten, ingen gjetting.
+ *
+ * Rekkefølge-notat (Planrettelse 4-tillegget): mirror* kjøres FØR planLookahead
+ * i handlePhaseStarted, så suksess-stien her stoppet historisk tale FØR
+ * prepare-ankrene (start_321/go) fantes — den overlevde altså kun i kraft av
+ * den rekkefølgen. Den degraderte .then-grenen kjører derimot ETTER at
+ * planLookahead har skedulert ankrene. Begge stiene er nå ufarlige fordi
+ * playIntroThenExercise/playPersonaCue bruker audible-only-stopp
+ * (Planrettelse 3, stopAudiblePersonaAudio) som aldri rører skedulerte kjeder —
+ * men rekkefølgen skal ikke «ryddes» uten denne historikken.
+ */
+function playPrepareIntroChain(engine: AudioDirectorEngine, firstEx: Exercise): void {
+  void playIntroThenExercise(firstEx.id).then((played) => {
+    if (played) return;
+    // Degradert sti: bufferne er ikke dekodet ennå — spill intro via
+    // Audio-element og gjett introens varighet med setTimeout, som
+    // før AudioBuffer-migreringen.
+    playPersonaCue('intro');
+    setTimeout(() => {
+      const s = engine.getSnapshot();
+      if (s.phase === 'prepare' && s.status === 'running') {
+        audioClipService.playClipOrFallback('exercise-' + firstEx.id, firstEx.name);
+      }
+    }, 2300);
+  });
+}
+
+/**
+ * Prepare for egendefinert øvelse (bro + TTS): intro og bro-naa som ÉN
+ * bufferkjede når cachet; TTS leser KUN navnet etter kjedeslutt — aldri
+ * overlapp. Uten cachede klipp: samme degraderte intro-sti som ellers
+ * (HTMLAudio-intro + varighetsgjetting), med rent TTS-navn til slutt.
+ */
+function announceCustomPrepare(engine: AudioDirectorEngine, name: string): void {
+  const keys = ['intro', 'bro-naa']
+    .map((cue) => getPersonaClipKey(cue))
+    .filter((k): k is string => k !== null && audioBufferEngine.has(k));
+  const speakIfStillPreparing = (): void => {
+    const s = engine.getSnapshot();
+    if (s.phase === 'prepare' && s.status === 'running') {
+      speechService.speak(name);
+    }
+  };
+  if (keys.length === 0) {
+    playPersonaCue('intro');
+    setTimeout(speakIfStillPreparing, 2300);
+    return;
+  }
+  void audioBufferEngine.playSequence(keys).then(speakIfStillPreparing);
 }
 
 function mirrorWork(engine: AudioDirectorEngine, event: PhaseStartedEvent): void {
@@ -320,11 +404,43 @@ function mirrorRest(engine: AudioDirectorEngine, event: PhaseStartedEvent): void
       if (getActiveCoachPersona() === 'standard') {
         speechService.announceRest(nextExercise?.name, tone);
       } else if (nextExercise) {
-        audioClipService.playClipOrFallback('exercise-' + nextExercise.id, 'Neste: ' + nextExercise.name);
+        announceNextExercise(engine, nextExercise);
       }
     }
   }
   motionTrackerService.stop();
+}
+
+/**
+ * Persona-stiens annonsering av NESTE øvelse (rest/round_rest) — rutet gjennom
+ * resolveAnnouncementPlan (spec § 4-kjeden håndheves ETT sted, β3-minor som
+ * lukker den aspirasjonelle docstringen):
+ *  - persona: personaens eget øvelsesklipp, kjedet etter bro-neste når broen er
+ *    cachet (β5 leverer klippene — sømmen er klar i dag, stien er sovende)
+ *  - bridge-tts: egendefinert → bro-neste-kjede + TTS-navn (aldri overlapp)
+ *  - studio/tts: dagens playClipOrFallback-kjede uendret (buffer → HTMLAudio → TTS)
+ */
+function announceNextExercise(engine: AudioDirectorEngine, next: Exercise): void {
+  const personaKey = getPersonaClipKey('exercise-' + next.id);
+  const fallback = (): void => {
+    audioClipService.playClipOrFallback('exercise-' + next.id, 'Neste: ' + next.name);
+  };
+  const plan = resolveAnnouncementPlan({
+    personaActive: true, // kalleren står i persona-grenen
+    personaClipCached: personaKey !== null && audioBufferEngine.has(personaKey),
+    studioClipCached: audioBufferEngine.has('exercise-' + next.id),
+    isCustomExercise: isCustomExercise(next),
+    speechEnabled: true, // speech-gaten ligger hos kalleren (mirrorRest)
+  });
+  if (plan === 'persona' && personaKey) {
+    const broKey = getPersonaClipKey('bro-neste');
+    const keys = broKey && audioBufferEngine.has(broKey) ? [broKey, personaKey] : [personaKey];
+    void audioBufferEngine.playSequence(keys).catch(() => {});
+  } else if (plan === 'bridge-tts') {
+    playBridgeThenTts(engine, 'bro-neste', next.name, fallback);
+  } else {
+    fallback();
+  }
 }
 
 function mirrorComplete(engine: AudioDirectorEngine, event: PhaseStartedEvent): void {
@@ -356,18 +472,14 @@ function mirrorLegacyResync(engine: AudioDirectorEngine, event: ResyncEvent): vo
 
   if (getActiveCoachPersona() !== 'standard') {
     // playPersonaResyncCue-semantikken fra adapteren: BEVISST uten playRestStart/
-    // playWorkStart-tone (avvik fra setupPhase, arvet fra hooken). β3 gjør denne
-    // grenen bro-bevisst ([bro-resync, exercise-<id>]).
-    if (landingPhase === 'work') {
-      if (snap.speechEnabled && exercise) {
-        audioClipService.playClipOrFallback('exercise-' + exercise.id, exercise.name);
-      }
-    } else {
-      // rest eller round_rest
-      if (snap.speechEnabled && nextExercise) {
-        audioClipService.playClipOrFallback('exercise-' + nextExercise.id, 'Neste: ' + nextExercise.name);
-      }
-    }
+    // playWorkStart-tone (avvik fra setupPhase, arvet fra hooken). β3: bro-
+    // bevisst — bro-resync («Du er nå på:») + øvelsesnavn (spec § 4).
+    if (!snap.speechEnabled) return;
+    const target = landingPhase === 'work' ? exercise : nextExercise;
+    if (!target) return;
+    // Fallback-tekstene speiler dagens reaktive sti (navn / «Neste: navn»)
+    const fallbackText = landingPhase === 'work' ? target.name : 'Neste: ' + target.name;
+    announcePersonaResync(engine, target, fallbackText);
     return;
   }
 
@@ -383,5 +495,45 @@ function mirrorLegacyResync(engine: AudioDirectorEngine, event: ResyncEvent): vo
     if (snap.speechEnabled) {
       speechService.announceRest(nextExercise?.name, tone);
     }
+  }
+}
+
+/**
+ * Persona-resync (β3, spec § 4): bro-resync («Du er nå på:») + øvelsesnavn.
+ * Navndelen rutes gjennom resolveAnnouncementPlan: persona-/studioklipp kjedes
+ * sample-nøyaktig ETTER broen; ellers (egendefinert eller ucachet) leser TTS
+ * navnet etter kjedeslutt — aldri overlapp. Uten cachet bro: dagens reaktive
+ * playClipOrFallback-sti uendret (fallbackText bærer «Neste:»-konteksten).
+ */
+function announcePersonaResync(
+  engine: AudioDirectorEngine,
+  target: Exercise,
+  fallbackText: string
+): void {
+  const broKey = getPersonaClipKey('bro-resync');
+  const studioKey = 'exercise-' + target.id;
+  if (!broKey || !audioBufferEngine.has(broKey)) {
+    audioClipService.playClipOrFallback(studioKey, fallbackText);
+    return;
+  }
+  const personaKey = getPersonaClipKey(studioKey); // exercise-<id> under personaens sti
+  const plan = resolveAnnouncementPlan({
+    personaActive: true,
+    personaClipCached: personaKey !== null && audioBufferEngine.has(personaKey),
+    studioClipCached: audioBufferEngine.has(studioKey),
+    isCustomExercise: isCustomExercise(target),
+    speechEnabled: true, // gatet av kalleren (mirrorLegacyResync)
+  });
+  if (plan === 'persona' && personaKey) {
+    void audioBufferEngine.playSequence([broKey, personaKey]).catch(() => {});
+  } else if (plan === 'studio') {
+    void audioBufferEngine.playSequence([broKey, studioKey]).catch(() => {});
+  } else {
+    // bridge-tts/tts: broen spiller, TTS leser kun navnet etterpå (valg B)
+    void audioBufferEngine.playSequence([broKey]).then(() => {
+      if (engine.getSnapshot().status === 'running') {
+        speechService.speak(target.name);
+      }
+    });
   }
 }

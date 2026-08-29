@@ -110,6 +110,7 @@ describe('audioDirector (B3 β2)', () => {
     vi.spyOn(audioService, 'playRestStart').mockImplementation(() => {});
     vi.spyOn(audioService, 'playWorkoutComplete').mockImplementation(() => {});
     vi.spyOn(audioService, 'playCountdownBeep').mockImplementation(() => {});
+    vi.spyOn(speechService, 'speak').mockImplementation(() => {});
     vi.spyOn(speechService, 'announceWork').mockImplementation(() => {});
     vi.spyOn(speechService, 'announceRest').mockImplementation(() => {});
     vi.spyOn(speechService, 'announcePrepare').mockImplementation(() => {});
@@ -122,6 +123,10 @@ describe('audioDirector (B3 β2)', () => {
     vi.spyOn(motionTrackerService, 'stop').mockImplementation(() => {});
     vi.spyOn(audioBufferEngine, 'setTimeBridge').mockImplementation(() => {});
     vi.spyOn(audioBufferEngine, 'scheduleSequence').mockResolvedValue(true);
+    // β3 (bro + TTS): Directoren spiller bro-kjeder reaktivt via playSequence
+    // og sjekker cache-status via has() — default: ingenting cachet.
+    vi.spyOn(audioBufferEngine, 'playSequence').mockResolvedValue(true);
+    vi.spyOn(audioBufferEngine, 'has').mockReturnValue(false);
     vi.spyOn(audioBufferEngine, 'stop').mockImplementation(() => {});
     // Planrettelse 2 (flerkjedemodell): deadlineChanged/skip kansellerer nå kun
     // det SKEDULERTE via cancelScheduled(), ikke full stop() – se testene under.
@@ -130,10 +135,15 @@ describe('audioDirector (B3 β2)', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    localStorage.clear();
   });
 
   function usePersona(): void {
+    // Spy for Directorens egne persona-sjekker (kryssmodul-bindingen) …
     vi.spyOn(coachPersonaService, 'getActiveCoachPersona').mockReturnValue('hardcore');
+    // … og lagret persona for getPersonaClipKey, som kaller modul-INTERN
+    // getActiveCoachPersona (spies ikke via namespace-bindingen).
+    coachPersonaService.setActiveCoachPersona('hardcore');
   }
 
   describe('workout:started — tidsbro', () => {
@@ -564,6 +574,314 @@ describe('audioDirector (B3 β2)', () => {
       emit({ type: 'phase:endingSoon' });
 
       expect(coachPersonaService.playPersonaCue).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Planrettelse 4 (fix 1) — tidsbroen re-måles per fase', () => {
+    it('phase:started re-måler broen med engine.getNow() (fanger frossen ctx-klokke)', () => {
+      const { engine, emit, setNow } = createFakeEngine();
+      createAudioDirector(engine);
+      setNow(4_000);
+
+      emit(phaseStarted({ phase: 'prepare', endsAt: 14_000 }));
+
+      expect(audioBufferEngine.setTimeBridge).toHaveBeenCalledWith(4_000);
+    });
+
+    it('phase:deadlineChanged re-måler broen FØR reskeduleringen', () => {
+      usePersona();
+      const { engine, emit, setNow } = createFakeEngine();
+      createAudioDirector(engine);
+      emit(phaseStarted({ phase: 'prepare', itemIndex: 0, endsAt: 10_000 }));
+      setNow(6_000);
+      vi.mocked(audioBufferEngine.setTimeBridge).mockClear();
+
+      emit({ type: 'phase:deadlineChanged', endsAt: 12_000 });
+
+      expect(audioBufferEngine.setTimeBridge).toHaveBeenCalledWith(6_000);
+      // Broen skal være fersk når ankrene regnes ut: bro-kallet FØR reskeduleringen
+      const bridgeOrder = vi.mocked(audioBufferEngine.setTimeBridge).mock.invocationCallOrder[0];
+      const lastScheduleOrder = vi
+        .mocked(audioBufferEngine.scheduleSequence)
+        .mock.invocationCallOrder.slice(-1)[0];
+      expect(bridgeOrder).toBeLessThan(lastScheduleOrder);
+    });
+
+    it('workout:resumed re-måler broen (ctx var typisk suspendert gjennom pausen)', () => {
+      usePersona();
+      const { engine, emit, setNow } = createFakeEngine();
+      createAudioDirector(engine);
+      emit(phaseStarted({ phase: 'prepare', itemIndex: 0, endsAt: 10_000 }));
+      emit({ type: 'workout:paused' });
+      setNow(8_000);
+      vi.mocked(audioBufferEngine.setTimeBridge).mockClear();
+
+      emit({ type: 'workout:resumed', endsAt: 15_000 });
+
+      expect(audioBufferEngine.setTimeBridge).toHaveBeenCalledWith(8_000);
+    });
+  });
+
+  describe('Planrettelse 4 (fix 2) — beepFallback nullstilles ved vellykket reskedulering', () => {
+    it('mislykket skedulering + vellykket reskedulering: ingen pip oppå den skedulerte stemmen', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.scheduleSequence)
+        .mockResolvedValueOnce(false) // start_321, første forsøk (for trangt vindu)
+        .mockResolvedValueOnce(false) // go, første forsøk
+        .mockResolvedValue(true); // reskeduleringen mot ny frist lykkes
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', itemIndex: 0, endsAt: 10_000 }));
+      await flush();
+      // Sanity: fallbacken er aktiv etter den mislykkede skeduleringen
+      emit({ type: 'countdown', secondsLeft: 3 });
+      expect(audioService.playCountdownBeep).toHaveBeenCalledTimes(1);
+
+      emit({ type: 'phase:deadlineChanged', endsAt: 12_000 });
+      await flush();
+
+      emit({ type: 'countdown', secondsLeft: 2 });
+      // Uten fiksen ville flagget levd videre → pip oppå korrekt skedulert tale
+      expect(audioService.playCountdownBeep).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('phaseEpoch-vakten i issuePending (Planrettelse 4, minor)', () => {
+    it('sent false-svar fra forrige fases skedulering setter ikke fallback for ny fase', async () => {
+      usePersona();
+      let resolveLate!: (v: boolean) => void;
+      vi.mocked(audioBufferEngine.scheduleSequence)
+        .mockImplementationOnce(
+          () =>
+            new Promise<boolean>((resolve) => {
+              resolveLate = resolve;
+            })
+        )
+        .mockResolvedValue(true);
+      const { engine, emit, setNow } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', itemIndex: 0, endsAt: 10_000 }));
+      setNow(10_000);
+      emit(phaseStarted({ phase: 'work', durationS: 20, endsAt: 30_000 }));
+      await flush();
+
+      resolveLate(false); // forrige fases svar ankommer ETTER faseskiftet
+      await flush();
+
+      emit({ type: 'countdown', secondsLeft: 3 });
+      expect(audioService.playCountdownBeep).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('β3 — bro + TTS for egendefinerte øvelser (spec § 4, valg B)', () => {
+    const CUSTOM_EX = { id: 'custom-42', name: 'Kjeglehopp' };
+    // isCustom-flagget uten custom-prefiks (biblioteksøvelser); struktur-cast
+    // fordi Exercise-typen ikke bærer flagget (CustomExerciseItem gjør det).
+    const FLAGGED_EX = { id: 'egen-sving', name: 'Egen sving', isCustom: true } as typeof EX_A;
+
+    it('rest med egendefinert neste: playSequence([bro-neste]) og DERETTER (await kjedeslutt) speak(navn)', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/bro-neste.mp3`);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', nextExercise: CUSTOM_EX, endsAt: 10_000 }));
+
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([`${HC}/bro-neste.mp3`]);
+      // Aldri overlapp: TTS-navnet leses først når bro-kjeden har spilt ferdig
+      expect(speechService.speak).not.toHaveBeenCalled();
+      await flush();
+      expect(speechService.speak).toHaveBeenCalledWith('Kjeglehopp');
+      expect(audioClipService.playClipOrFallback).not.toHaveBeenCalled();
+    });
+
+    it('isCustom-flagget (uten custom-prefiks) behandles likt', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/bro-neste.mp3`);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', nextExercise: FLAGGED_EX, endsAt: 10_000 }));
+      await flush();
+
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([`${HC}/bro-neste.mp3`]);
+      expect(speechService.speak).toHaveBeenCalledWith('Egen sving');
+    });
+
+    it('bro-klippet ucachet: dagens playClipOrFallback-sti uendret (TTS «Neste: navn»)', () => {
+      usePersona();
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', nextExercise: CUSTOM_EX, endsAt: 10_000 }));
+
+      expect(audioClipService.playClipOrFallback).toHaveBeenCalledWith(
+        'exercise-custom-42',
+        'Neste: Kjeglehopp'
+      );
+      expect(audioBufferEngine.playSequence).not.toHaveBeenCalled();
+    });
+
+    it('TTS-navnet leses IKKE hvis økten ikke lenger kjører når kjeden slutter (pause under broen)', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/bro-neste.mp3`);
+      const { engine, emit, snapshot } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', nextExercise: CUSTOM_EX, endsAt: 10_000 }));
+      snapshot.status = 'paused';
+      await flush();
+
+      expect(speechService.speak).not.toHaveBeenCalled();
+    });
+
+    it('persona-øvelsesklipp cachet (β5-sømmen): [bro-neste, persona-klipp] som ÉN kjede, ingen TTS', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.has).mockImplementation(
+        (k: string) => k === `${HC}/bro-neste.mp3` || k === `${HC}/exercise-lunge.mp3`
+      );
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', nextExercise: EX_B, endsAt: 10_000 }));
+      await flush();
+
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([
+        `${HC}/bro-neste.mp3`,
+        `${HC}/exercise-lunge.mp3`,
+      ]);
+      expect(speechService.speak).not.toHaveBeenCalled();
+      expect(audioClipService.playClipOrFallback).not.toHaveBeenCalled();
+    });
+
+    it('prepare med egendefinert øvelse: [intro, bro-naa]-kjede og DERETTER speak(navn)', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.has).mockImplementation(
+        (k: string) => k === `${HC}/intro.mp3` || k === `${HC}/bro-naa.mp3`
+      );
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', exercise: CUSTOM_EX, durationS: 10, endsAt: 10_000 }));
+
+      expect(coachPersonaService.playIntroThenExercise).not.toHaveBeenCalled();
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([
+        `${HC}/intro.mp3`,
+        `${HC}/bro-naa.mp3`,
+      ]);
+      expect(speechService.speak).not.toHaveBeenCalled();
+      await flush();
+      expect(speechService.speak).toHaveBeenCalledWith('Kjeglehopp');
+    });
+
+    it('prepare egendefinert uten cachede klipp: degradert intro-sti (playPersonaCue), aldri intro-kjeden', () => {
+      usePersona();
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', exercise: CUSTOM_EX, durationS: 10, endsAt: 10_000 }));
+
+      expect(coachPersonaService.playIntroThenExercise).not.toHaveBeenCalled();
+      expect(coachPersonaService.playPersonaCue).toHaveBeenCalledWith('intro');
+      expect(audioBufferEngine.playSequence).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('β3 — persona-bevisst resync (bro-resync)', () => {
+    function resyncEvent(landingPhase: 'work' | 'rest' | 'round_rest'): EngineEvent {
+      return {
+        type: 'resync',
+        skippedPhases: 2,
+        landingPhase,
+        exercise: EX_A,
+        nextExercise: EX_B,
+        tone: 'rolig',
+      };
+    }
+
+    it('landing work med bro + studioklipp cachet: ÉN kjede [bro-resync, exercise-<id>]', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.has).mockImplementation(
+        (k: string) => k === `${HC}/bro-resync.mp3` || k === 'exercise-squat'
+      );
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(resyncEvent('work'));
+      await flush();
+
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([
+        `${HC}/bro-resync.mp3`,
+        'exercise-squat',
+      ]);
+      expect(speechService.speak).not.toHaveBeenCalled();
+      expect(audioClipService.playClipOrFallback).not.toHaveBeenCalled();
+    });
+
+    it('landing work med kun bro cachet: bro-kjede og DERETTER speak(navn)', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/bro-resync.mp3`);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(resyncEvent('work'));
+
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([`${HC}/bro-resync.mp3`]);
+      expect(speechService.speak).not.toHaveBeenCalled();
+      await flush();
+      expect(speechService.speak).toHaveBeenCalledWith('Knebøy');
+    });
+
+    it('landing rest: navnedelen er NESTE øvelse', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/bro-resync.mp3`);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(resyncEvent('rest'));
+      await flush();
+
+      expect(speechService.speak).toHaveBeenCalledWith('Utfall');
+    });
+
+    it('persona-øvelsesklipp cachet (β5-sømmen): kjeden bruker personaens klipp', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.has).mockImplementation(
+        (k: string) => k === `${HC}/bro-resync.mp3` || k === `${HC}/exercise-squat.mp3`
+      );
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(resyncEvent('work'));
+      await flush();
+
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([
+        `${HC}/bro-resync.mp3`,
+        `${HC}/exercise-squat.mp3`,
+      ]);
+    });
+
+    it('bro ucachet: dagens reaktive persona-resync uendret (playClipOrFallback)', () => {
+      usePersona();
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(resyncEvent('work'));
+
+      expect(audioClipService.playClipOrFallback).toHaveBeenCalledWith('exercise-squat', 'Knebøy');
+      expect(audioBufferEngine.playSequence).not.toHaveBeenCalled();
+    });
+
+    it('bro ucachet, landing rest: playClipOrFallback med «Neste:»-tekst som i dag', () => {
+      usePersona();
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(resyncEvent('round_rest'));
+
+      expect(audioClipService.playClipOrFallback).toHaveBeenCalledWith('exercise-lunge', 'Neste: Utfall');
     });
   });
 
