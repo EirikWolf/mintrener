@@ -121,12 +121,13 @@ export class TimerEngine {
 
     this.state.firedCues = new Set<string>();
 
+    const phaseStart = this.now();
     this.state.phase = newPhase;
     this.state.currentRound = round;
     this.state.currentItemIndex = itemIdx;
     this.state.phaseDuration = duration;
     this.state.phaseRemaining = duration;
-    this.state.phaseStartTime = this.now();
+    this.state.phaseStartTime = phaseStart;
     this.state.lastCountdownBeep = -1;
     this.state.lastSessionSaveSecond = -1;
 
@@ -145,11 +146,15 @@ export class TimerEngine {
       round,
       itemIndex: itemIdx,
       exercise: items[itemIdx]?.exercise ?? null,
-      nextExercise: items[itemIdx + 1]?.exercise ?? null,
+      // round_rest starter neste runde forfra: hookens round_rest-gren annonserte
+      // items[0]?.exercise som «neste», ikke items[idx+1] (useIntervalTimer.ts,
+      // round_rest-blokken). rest wrapper IKKE — siste-item-rest annonserte
+      // undefined i hooken, så null her er bit-identisk.
+      nextExercise: (newPhase === 'round_rest' ? items[0]?.exercise : items[itemIdx + 1]?.exercise) ?? null,
       durationS: duration,
       tone,
       silent,
-      endsAt: newPhase === 'complete' ? null : this.now() + duration * 1000,
+      endsAt: newPhase === 'complete' ? null : phaseStart + duration * 1000,
     });
     if (newPhase === 'complete') {
       this.emit({ type: 'workout:completed', tone });
@@ -234,7 +239,12 @@ export class TimerEngine {
     return sum;
   }
 
-  /** Immutabelt; ny identitet KUN ved rendringsverdig endring (materialiseres her). */
+  /**
+   * Immutabelt snapshot, materialisert per kall. NB: identitets-cachen (ny
+   * identitet KUN ved rendringsverdig endring) kommer først i α3 — ikke koble
+   * useSyncExternalStore mot denne før da (hvert kall gir nå nytt objekt, som
+   * ville gitt evig re-render).
+   */
   getSnapshot(): TimerState {
     const s = this.state;
     const workoutItems = s.activeWorkout?.items || [];

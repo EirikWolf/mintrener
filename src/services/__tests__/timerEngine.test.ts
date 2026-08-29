@@ -29,6 +29,7 @@ describe('TimerEngine – init (karakterisering)', () => {
     expect(s.phase).toBe('prepare');
     expect(s.phaseRemainingSeconds).toBe(10);
     expect(s.totalRemainingSeconds).toBe(240);
+    expect(s.totalRounds).toBe(1);
     expect(s.totalItems).toBe(8);
   });
 });
@@ -156,6 +157,36 @@ describe('TimerEngine – kontroll og faser (karakterisering)', () => {
     // «announcePrepare ikke kalt» → ingen ikke-stille fasestart (kun silent prepare)
     expect(events.filter((e) => e.type === 'phase:started' && !e.silent)).toHaveLength(0);
     expect(events.filter((e) => e.type === 'workout:reset')).toHaveLength(1);
+  });
+
+  // Hookens round_rest-gren annonserte items[0]?.exercise («neste runde starter
+  // forfra»), ikke items[idx+1] — hendelsen må bære samme øvelse. NB: samme
+  // wrap-regel gjelder for α3s resync-payload (landing i round_rest).
+  it('phase:started(round_rest) bærer første øvelse som nextExercise (neste runde starter forfra)', () => {
+    const multiRoundWorkout = {
+      id: 'multi-test',
+      name: 'Flerrunde-test',
+      description: 'To runder med runde-pause',
+      type: 'custom' as const,
+      prepareDurationSeconds: 10,
+      rounds: 2,
+      roundRestDurationSeconds: 30,
+      voiceTone: 'rolig' as const,
+      items: [
+        { id: 'mr1', exercise: { id: 'kneboy', name: 'Knebøy' }, workDurationSeconds: 20, restDurationSeconds: 10 },
+      ],
+    };
+
+    const { engine, events } = createRigg(multiRoundWorkout);
+    engine.start();
+    engine.skipNext(); // prepare -> work (runde 1)
+    engine.skipNext(); // work -> rest
+    engine.skipNext(); // rest -> round_rest (siste item, flere runder igjen)
+
+    expect(engine.getSnapshot().phase).toBe('round_rest');
+    const roundRest = events.find((e) => e.type === 'phase:started' && e.phase === 'round_rest');
+    expect(roundRest).toBeDefined();
+    expect(roundRest?.type === 'phase:started' ? roundRest.nextExercise?.name : null).toBe('Knebøy');
   });
 
   it('starter direkte med ny økt og annonserer riktig første øvelse og tone', () => {
