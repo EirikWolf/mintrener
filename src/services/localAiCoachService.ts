@@ -150,9 +150,10 @@ class LocalAiCoachService {
    * kombinerer maks to aspekter per melding for å holde den kort.
    */
   public generateWorkoutSummaryFeedback(context: WorkoutSummaryFeedbackContext): string {
-    const hasStreak = (context.streakDays ?? 0) >= 3;
+    const streakDays = context.streakDays ?? 0;
+    const hasStreak = streakDays >= 3;
     const hasHeartRate = context.avgHeartRate !== undefined && context.avgHeartRate !== null;
-    const streakSuffix = hasStreak ? this.streakClause(context.streakDays as number) : '';
+    const streakSuffix = hasStreak ? this.streakClause(streakDays) : '';
 
     if (context.isNewPr) {
       return `Ny personlig rekord i ${context.workoutName}! Dette er resultatet av jevn innsats – nyt følelsen, du har all grunn til å være stolt!${streakSuffix}`;
@@ -190,15 +191,16 @@ class LocalAiCoachService {
         ? 'Den føltes lett i dag – bra tegn på at formen er god! Neste gang kan du legge på en ekstra runde eller noen sekunder per intervall for å presse deg litt lenger.'
         : 'Passe belastning – akkurat sånn du ønsker det! Denne balansen mellom innsats og kontroll er oppskriften på jevn fremgang over tid.';
 
-    if (hasStreak) return base + this.streakClause(context.streakDays as number);
+    if (hasStreak) return base + this.streakClause(context.streakDays ?? 0);
     if (hasHeartRate) return base + this.heartRateClause(context);
     return base;
   }
 
   private buildHeartRateFeedback(context: WorkoutSummaryFeedbackContext): string {
+    const avgHeartRate = context.avgHeartRate ?? 0;
     const durationRemark =
       context.durationSeconds > 600 ? 'Solid utholdenhet i dag!' : 'Kjapt og effektivt gjennomført!';
-    return `Snittpulsen din var ${context.avgHeartRate} slag/min${this.zoneSuffix(context.avgHeartRate as number)}. ${durationRemark}`;
+    return `Snittpulsen din var ${avgHeartRate} slag/min${this.zoneSuffix(avgHeartRate)}. ${durationRemark}`;
   }
 
   private streakClause(streakDays: number): string {
@@ -206,8 +208,9 @@ class LocalAiCoachService {
   }
 
   private heartRateClause(context: WorkoutSummaryFeedbackContext): string {
+    const avgHeartRate = context.avgHeartRate ?? 0;
     const peak = context.maxHeartRate ? ` Makspuls under økten var ${context.maxHeartRate}.` : '';
-    return ` Snittpulsen lå på ${context.avgHeartRate}${this.zoneSuffix(context.avgHeartRate as number)}.${peak}`;
+    return ` Snittpulsen lå på ${avgHeartRate}${this.zoneSuffix(avgHeartRate)}.${peak}`;
   }
 
   private zoneSuffix(avgHeartRate: number): string {

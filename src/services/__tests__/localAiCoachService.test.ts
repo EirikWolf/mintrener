@@ -39,7 +39,13 @@ describe('LocalAiCoachService.generateWorkoutSummaryFeedback', () => {
       rating: 'for_tungt',
     });
     expect(msg.toLowerCase()).toContain('personlig rekord');
-    expect(msg.toLowerCase()).not.toContain('restitusjon');
+    // Sjekker at "for tungt"-teksten (som nevner "søvn" og "tung/tungt") IKKE
+    // slipper gjennom - en tidligere versjon av denne testen sjekket
+    // `not.toContain('restitusjon')`, men det ordet forekommer aldri i
+    // for_tungt-teksten uansett («... søvn ... tøying»), så assertionen
+    // kunne aldri feile og fanget derfor ikke opp en prioriteringsfeil.
+    expect(msg.toLowerCase()).not.toContain('søvn');
+    expect(msg.toLowerCase()).not.toMatch(/tung/);
   });
 
   it('prioriterer nådd ukesmål over rating', () => {
