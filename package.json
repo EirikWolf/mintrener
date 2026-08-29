@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-mintrener \"vitest run --config vitest.rules.config.ts\""
+    "test:rules": "firebase emulators:exec --only firestore --project demo-mintrener \"vitest run --config vitest.rules.config.ts\"",
+    "build:e2e": "node scripts/generate-audio-manifest.mjs && tsc -b && vite build --mode e2e",
+    "test:e2e": "npm run build:e2e && firebase emulators:exec --only firestore --project demo-mintrener \"npx playwright test\""
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -23,6 +25,7 @@
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "^4.0.9",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
