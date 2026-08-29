@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useSyncExternalStore } from 'react';
 import { WorkoutTemplate } from '../types/workout';
 import { TimerEngine } from '../services/timerEngine';
-import { createLegacyAudioAdapter } from '../services/legacyAudioAdapter';
+import { createAudioDirector } from '../services/audioDirector';
 import { createVibrationSubscriber } from '../services/vibrationSubscriber';
 import { createPersistenceSubscriber } from '../services/persistenceSubscriber';
 import { createMediaSessionSubscriber } from '../services/mediaSessionSubscriber';
@@ -68,7 +68,10 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
   // ville mistet det.
   useEffect(() => {
     const subs = [
-      createLegacyAudioAdapter(engine),
+      // β4: AudioDirector er ENESTE lydabonnent (spec § 4) — erstatter
+      // LegacyAudioAdapter fra α4. Kobles som resten FØR noe start()-kall kan
+      // skje, så workout:started (tidsbro-målingen) aldri går tapt.
+      createAudioDirector(engine),
       createVibrationSubscriber(engine),
       createPersistenceSubscriber(engine),
       createMediaSessionSubscriber(engine, {

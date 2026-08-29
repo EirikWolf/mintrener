@@ -132,8 +132,8 @@ function playBridgeThenTts(
  * tidsbro). phase:endingSoon ignoreres bevisst — lookahead overtar det reaktive
  * start_321-vinduet (jf. kommentaren i engineEvents.ts).
  *
- * motionTracker-ansvaret følger med fra adapteren (β4 sletter den wholesale);
- * Directoren er i β2 IKKE koblet inn i hooken ennå.
+ * motionTracker-ansvaret fulgte med fra adapteren (slettet i β4); Directoren
+ * kobles av hook-bindingen i useIntervalTimer (β4) og er eneste lydabonnent.
  */
 export function createAudioDirector(engine: AudioDirectorEngine): () => void {
   // Per-fase-tilstand i lukning:
