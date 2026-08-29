@@ -234,7 +234,10 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
       setWeeklyProgress(null);
       setWeekStreak(null);
     }
-  }, [workout, state.status]);
+    // showStreakSheet er bevisst med i deps (B4): arket kan endre ukesmålet,
+    // og lukkingen må re-beregne pillens fremdrift/streak — ellers viser den
+    // stale mål til neste status-skifte.
+  }, [workout, state.status, showStreakSheet]);
 
   // Håndfri Stemmestyring Listener (Steg 1)
   React.useEffect(() => {
@@ -545,7 +548,6 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowStreakSheet(true)}
-                  aria-label="Streak og ukesmål — åpne detaljer"
                   className="w-full flex items-center justify-between px-3 py-1.5 bg-zinc-900/70 border border-zinc-800/80 hover:border-zinc-700 rounded-2xl text-xs shadow-sm transition-all active:scale-[0.99] text-left"
                 >
                   <div className="flex items-center gap-2">
@@ -555,12 +557,13 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                     {weekStreak && weekStreak.currentWeeks >= 1 && (
                       <>
                         <span
+                          role="img"
                           aria-label={`${weekStreak.currentWeeks} ${weekStreak.currentWeeks === 1 ? 'ukes' : 'ukers'} streak`}
                           className="text-[11px] text-amber-400 font-semibold"
                         >
                           🔥 {weekStreak.currentWeeks} {weekStreak.currentWeeks === 1 ? 'uke' : 'uker'}
                         </span>
-                        <span className="text-zinc-600">·</span>
+                        <span aria-hidden="true" className="text-zinc-600">·</span>
                       </>
                     )}
                     <span className="text-[11px] font-bold text-zinc-300">
@@ -580,6 +583,10 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                       {weeklyProgress.percentage}%
                     </span>
                   </div>
+                  {/* UU (B5a): åpne-hintet som skjult suffiks — knappens
+                      tilgjengelige navn er dermed innholdet (streak + fremdrift)
+                      pluss hintet, aldri en aria-label som skjuler tallene */}
+                  <span className="sr-only">— åpne detaljer</span>
                 </button>
               )}
 

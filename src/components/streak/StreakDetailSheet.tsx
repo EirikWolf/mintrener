@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { X, Flame, Trophy, Shield, Target, Milestone } from 'lucide-react';
 import { WEEK_STREAK_MILESTONES, WeekStreakResult } from '../../services/streakService';
 import { getWeeklyGoal, setWeeklyGoal } from '../../services/weeklyGoalService';
@@ -25,6 +25,16 @@ function formatWeeks(n: number): string {
 export const StreakDetailSheet: React.FC<StreakDetailSheetProps> = ({ streak, onClose }) => {
   const [weeklyGoal, setWeeklyGoalState] = useState<number>(() => getWeeklyGoal());
   const [goalChanged, setGoalChanged] = useState(false);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  // WCAG (B5b): flytt fokus inn i dialogen ved åpning og tilbake til
+  // utløseren (pillen) ved lukking — skjermleser/tastatur mister ellers plassen.
+  React.useEffect(() => {
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeButtonRef.current?.focus();
+    return () => previouslyFocused?.focus();
+  }, []);
 
   // WCAG: Lukk ved trykk på Escape-tast (samme mønster som ProfileOnboardingModal)
   React.useEffect(() => {
@@ -62,6 +72,7 @@ export const StreakDetailSheet: React.FC<StreakDetailSheetProps> = ({ streak, on
             <h2 className="text-base font-black text-white">Din streak</h2>
           </div>
           <button
+            ref={closeButtonRef}
             onClick={onClose}
             aria-label="Lukk"
             className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
@@ -131,7 +142,9 @@ export const StreakDetailSheet: React.FC<StreakDetailSheetProps> = ({ streak, on
             >
               -
             </button>
-            <span className="text-xs font-black text-white w-8 text-center">{weeklyGoal} økt</span>
+            <span className="text-xs font-black text-white w-8 text-center">
+              {weeklyGoal} {weeklyGoal === 1 ? 'økt' : 'økter'}
+            </span>
             <button
               onClick={() => handleUpdateWeeklyGoal(weeklyGoal + 1)}
               aria-label="Øk ukesmål"

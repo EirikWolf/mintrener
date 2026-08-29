@@ -1,9 +1,22 @@
 import { STARTER_CHALLENGES } from '../data/challenges';
 import { getChallengeProgress } from './challengeService';
-import { computeWeekStreak } from './streakService';
-import { getGoalForWeek } from './weeklyGoalService';
+import { computeWeekStreak, WeekStreakResult } from './streakService';
+import { makeGoalForWeek } from './weeklyGoalService';
 import { CompletedWorkoutLog } from '../types/models';
 import { WORKOUT_HISTORY_KEY } from './workoutHistoryStorage';
+
+/**
+ * Lat, delt uke-streakberegning for ÉN badge-runde (B3): de seks
+ * uke-milepælcheckene trenger samme WeekStreakResult, og hver beregning
+ * leser mållogg/ukesmål fra localStorage. Provideren beregner først når
+ * (og hvis) et check spør, og gjenbruker svaret for resten av runden.
+ */
+type WeekStreakProvider = () => WeekStreakResult;
+
+function makeWeekStreakProvider(history: CompletedWorkoutLog[]): WeekStreakProvider {
+  let cached: WeekStreakResult | null = null;
+  return () => (cached ??= computeWeekStreak(history, makeGoalForWeek()));
+}
 
 export type BadgeCategory = 'challenge' | 'streak' | 'milestone' | 'special';
 
@@ -39,7 +52,10 @@ const WEEK_STREAK_BADGE_DATA: ReadonlyArray<{ weeks: number; title: string; desc
 
 export const MILESTONE_BADGE_DEFINITIONS: Array<Omit<BadgeItem, 'isUnlocked' | 'progress' | 'maxProgress' | 'unlockedAt'> & {
   maxProgress: number;
-  check: (history: CompletedWorkoutLog[]) => { isUnlocked: boolean; progress: number; unlockedAt?: string };
+  check: (
+    history: CompletedWorkoutLog[],
+    weekStreak?: WeekStreakProvider
+  ) => { isUnlocked: boolean; progress: number; unlockedAt?: string };
 }> = [
   {
     id: 'badge-first-workout',
@@ -130,8 +146,9 @@ export const MILESTONE_BADGE_DEFINITIONS: Array<Omit<BadgeItem, 'isUnlocked' | '
     icon,
     category: 'streak' as const,
     maxProgress: weeks,
-    check: (history: CompletedWorkoutLog[]) => {
-      const r = computeWeekStreak(history, getGoalForWeek);
+    check: (history: CompletedWorkoutLog[], weekStreak?: WeekStreakProvider) => {
+      // Delt provider fra getAllUserBadges; fallback for direkte check-kall
+      const r = (weekStreak ?? makeWeekStreakProvider(history))();
       return {
         // bestWeeks-låsing: et merke som er opptjent forblir opplåst etter brudd
         isUnlocked: r.currentWeeks >= weeks || r.bestWeeks >= weeks,
@@ -263,9 +280,10 @@ export function getAllUserBadges(history?: CompletedWorkoutLog[]): BadgeItem[] {
     });
   }
 
-  // 2. Milepæl- og prestasjonsmerker
+  // 2. Milepæl- og prestasjonsmerker — én delt streakberegning per runde (B3)
+  const weekStreak = makeWeekStreakProvider(workoutHistory);
   for (const def of MILESTONE_BADGE_DEFINITIONS) {
-    const res = def.check(workoutHistory);
+    const res = def.check(workoutHistory, weekStreak);
     badges.push({
       id: def.id,
       title: def.title,

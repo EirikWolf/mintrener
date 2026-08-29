@@ -346,7 +346,7 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
               >
                 -
               </button>
-              <span className="text-xs font-black text-white w-8 text-center">{weeklyGoal} økt</span>
+              <span className="text-xs font-black text-white w-8 text-center">{weeklyGoal} {weeklyGoal === 1 ? 'økt' : 'økter'}</span>
               <button
                 onClick={() => handleUpdateWeeklyGoal(weeklyGoal + 1)}
                 className="w-6 h-6 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm flex items-center justify-center transition-all active:scale-95"

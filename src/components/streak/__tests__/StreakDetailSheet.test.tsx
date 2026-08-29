@@ -85,18 +85,39 @@ describe('StreakDetailSheet', () => {
 
   it('ukesmål-stepper endrer målet via setWeeklyGoal og viser «Gjelder fra neste uke»', () => {
     renderSheet();
-    // Standardmål 3 vises; ingen endringsmelding før brukeren justerer
-    expect(screen.getByText('3 økt')).toBeInTheDocument();
+    // Standardmål 3 vises (pluralisert); ingen endringsmelding før brukeren justerer
+    expect(screen.getByText('3 økter')).toBeInTheDocument();
     expect(screen.queryByText('Gjelder fra neste uke')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Øk ukesmål' }));
-    expect(screen.getByText('4 økt')).toBeInTheDocument();
+    expect(screen.getByText('4 økter')).toBeInTheDocument();
     expect(getWeeklyGoal()).toBe(4); // persistert via setWeeklyGoal
     expect(screen.getByText('Gjelder fra neste uke')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Reduser ukesmål' }));
-    expect(screen.getByText('3 økt')).toBeInTheDocument();
+    expect(screen.getByText('3 økter')).toBeInTheDocument();
     expect(getWeeklyGoal()).toBe(3);
+  });
+
+  it('stepperen bruker entall ved 1 økt', () => {
+    localStorage.setItem('mintrener_weekly_goal', '2');
+    renderSheet();
+    fireEvent.click(screen.getByRole('button', { name: 'Reduser ukesmål' }));
+    expect(screen.getByText('1 økt')).toBeInTheDocument();
+  });
+
+  it('fokuserer lukkeknappen ved mount og returnerer fokus ved unmount (B5b)', () => {
+    const outside = document.createElement('button');
+    outside.textContent = 'utenfor';
+    document.body.appendChild(outside);
+    outside.focus();
+
+    const { unmount } = renderSheet();
+    expect(screen.getByRole('button', { name: 'Lukk' })).toHaveFocus();
+
+    unmount();
+    expect(outside).toHaveFocus();
+    outside.remove();
   });
 
   it('X-knappen kaller onClose', () => {

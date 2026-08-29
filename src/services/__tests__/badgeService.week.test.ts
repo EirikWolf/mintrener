@@ -129,6 +129,15 @@ describe('uke-streak-milepælbadges (badgeService)', () => {
     expect(w8.progress).toBe(5); // ikke 6 — den forsikrede uka gir ingen +1
   });
 
+  it('deler ÉN streakberegning mellom de seks badge-checkene (B3): målloggen leses maks én gang', () => {
+    const h = completedWeeksEndingLastWeek(4);
+    const spy = vi.spyOn(Storage.prototype, 'getItem');
+    getAllUserBadges(h);
+    const goalLogReads = spy.mock.calls.filter(([k]) => k === 'mintrener_weekly_goal_log_v1').length;
+    expect(goalLogReads).toBeLessThanOrEqual(1);
+    spy.mockRestore();
+  });
+
   it('rører ikke de eksisterende dag-streak-badgene', () => {
     const badges = getAllUserBadges([]);
     expect(badges.find((b) => b.id === 'badge-streak-7')?.maxProgress).toBe(7);

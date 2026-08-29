@@ -146,8 +146,18 @@ describe('TimerDisplay – streak i ukesmål-pillen (idle-gren)', () => {
     seedHistoryWithCompletedWeeks(2);
     renderDisplay();
     expect(screen.getByText(/2 uker/)).toBeInTheDocument();
-    // UU: flammen har tekstalternativ — farge/emoji bærer aldri info alene
-    expect(screen.getByLabelText('2 ukers streak')).toBeInTheDocument();
+    // UU (B5c): flammen har tekstalternativ som bilde-rolle — farge/emoji
+    // bærer aldri info alene
+    expect(screen.getByRole('img', { name: '2 ukers streak' })).toBeInTheDocument();
+  });
+
+  it('pill-knappens tilgjengelige navn bygges av innholdet, ikke en skjulende aria-label (B5a)', () => {
+    seedHistoryWithCompletedWeeks(2);
+    renderDisplay();
+    // Navnet skal inneholde BÅDE streak, fremdrift og åpne-hintet
+    const pill = screen.getByRole('button', { name: /åpne detaljer/i });
+    expect(pill).toHaveAccessibleName(/2 ukers streak/);
+    expect(pill).toHaveAccessibleName(/Ukesmål: 0 av 3 økter/);
   });
 
   it('viser INGEN flamme ved 0 streak (ingen «0 uker»-skam)', () => {
@@ -160,14 +170,26 @@ describe('TimerDisplay – streak i ukesmål-pillen (idle-gren)', () => {
   it('trykk på pillen åpner streak-detaljarket', () => {
     seedHistoryWithCompletedWeeks(2);
     renderDisplay();
-    fireEvent.click(screen.getByRole('button', { name: /streak og ukesmål/i }));
+    fireEvent.click(screen.getByRole('button', { name: /åpne detaljer/i }));
     expect(screen.getByRole('dialog', { name: /din streak/i })).toBeInTheDocument();
   });
 
   it('detaljarket kan lukkes igjen med lukkeknappen', () => {
     renderDisplay();
-    fireEvent.click(screen.getByRole('button', { name: /streak og ukesmål/i }));
+    fireEvent.click(screen.getByRole('button', { name: /åpne detaljer/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Lukk' }));
     expect(screen.queryByRole('dialog', { name: /din streak/i })).not.toBeInTheDocument();
+  });
+
+  it('pillen viser NYTT ukesmål etter endring i arket (B4 — ikke stale)', () => {
+    seedHistoryWithCompletedWeeks(2);
+    renderDisplay();
+    fireEvent.click(screen.getByRole('button', { name: /åpne detaljer/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Øk ukesmål' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Lukk' }));
+    // Effekten skal re-beregne ved lukking: 0 av 4 (nytt mål), ikke 0 av 3
+    expect(screen.getByRole('button', { name: /åpne detaljer/i })).toHaveAccessibleName(
+      /Ukesmål: 0 av 4 økter/
+    );
   });
 });
