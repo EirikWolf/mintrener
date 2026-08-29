@@ -4,6 +4,7 @@ import {
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
+  connectFirestoreEmulator,
 } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -29,3 +30,13 @@ export const db = initializeFirestore(app, {
     tabManager: persistentMultipleTabManager(),
   }),
 });
+
+// B4 (revisjon § 5.3): Playwright-røykflyten bygges med `--mode e2e` (.env.e2e),
+// som setter VITE_FIREBASE_EMULATOR_HOST slik at appen snakker med Firestore-
+// EMULATOREN i stedet for produksjon. Variabelen finnes ikke i vanlige bygg —
+// da er grenen død kode og hele blokken tree-shakes bort av Vite.
+const emulatorHost = import.meta.env.VITE_FIREBASE_EMULATOR_HOST;
+if (emulatorHost) {
+  // Port 8080 = firestore-emulatorporten i firebase.json
+  connectFirestoreEmulator(db, emulatorHost, 8080);
+}

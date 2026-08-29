@@ -39,3 +39,7 @@ firebase-debug.log
 temp_*.json
 *.tsbuildinfo
 audition/
+
+# Playwright
+test-results/
+playwright-report/

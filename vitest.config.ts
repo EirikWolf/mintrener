@@ -7,7 +7,8 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
-    // Regeltestene krever Firestore-emulator og kjøres separat via `npm run test:rules`
-    exclude: [...configDefaults.exclude, 'tests/rules/**'],
+    // Regeltestene krever Firestore-emulator og kjøres separat via `npm run test:rules`;
+    // Playwright-røyken (e2e/) kjøres av Playwright via `npm run test:e2e`, ikke Vitest.
+    exclude: [...configDefaults.exclude, 'tests/rules/**', 'e2e/**'],
   },
 })

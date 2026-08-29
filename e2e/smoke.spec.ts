@@ -1,0 +1,78 @@
+import { test, expect } from '@playwright/test';
+import type { WorkoutTemplate } from '../src/types/workout';
+
+/**
+ * B4-røykflyten (revisjon § 5.3): start en økt → fullfør den → verifiser at
+ * den dukker opp i historikken. Kjøres mot vite preview av et emulator-rettet
+ * bygg (se playwright.config.ts og `npm run test:e2e`).
+ *
+ * Økten smugles inn via delingslenke-kanalen (`?w=<base64>`) med sekundkorte
+ * faser, slik at hele flyten fullfører på ~5 sekunder ekte klokketid uten å
+ * manipulere timeren selv — røyken tester nøyaktig samme kode som en delt økt.
+ */
+
+const SMOKE_WORKOUT: WorkoutTemplate = {
+  id: 'e2e-smoke-workout',
+  name: 'B4 Røyktest',
+  description: 'Playwright-røykflyt',
+  type: 'custom',
+  prepareDurationSeconds: 2,
+  rounds: 1,
+  roundRestDurationSeconds: 0,
+  items: [
+    {
+      id: 'e2e-i1',
+      exercise: { id: 'e2e-e1', name: 'Røyk-knebøy' },
+      workDurationSeconds: 3,
+      restDurationSeconds: 1, // droppes for siste øvelse → totalt ~5 s
+    },
+  ],
+};
+
+// Samme koding som shareWorkoutService.getSharedWorkoutFromUrl dekoder:
+// base64 av UTF-8-bytene til JSON-en.
+const encodedWorkout = Buffer.from(JSON.stringify(SMOKE_WORKOUT), 'utf8').toString('base64');
+
+test('start → fullfør → historikk', async ({ page }) => {
+  // Hopp over 1-spørsmåls-onboardingen — den er ikke det denne røyken vokter,
+  // og localStorage-frøet speiler en bruker som allerede har svart.
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'mintrener_user_profiles_v1',
+      JSON.stringify({
+        profiles: ['kontor'],
+        primaryProfile: 'kontor',
+        hasCompletedOnboarding: true,
+      })
+    );
+  });
+
+  // 1. Åpne appen med røyk-økten valgt via delingslenken
+  await page.goto(`/?w=${encodeURIComponent(encodedWorkout)}`);
+  await expect(page.getByRole('button', { name: 'START' })).toBeVisible();
+  await expect(page.getByText('B4 Røyktest').first()).toBeVisible();
+
+  // 2. Start økten: klargjøring → arbeid
+  await page.getByRole('button', { name: 'START' }).click();
+  await expect(page.getByText('Klargjøring')).toBeVisible();
+  await expect(page.getByText('Arbeid')).toBeVisible({ timeout: 10_000 });
+  // Fokusmodus-stripen erstatter toppkrommen under økten
+  await expect(page.getByTestId('focus-quick-controls')).toBeVisible();
+
+  // 3. Fullfør: oppsummeringen dukker opp når siste arbeidsfase løper ut
+  await expect(page.getByRole('heading', { name: 'Bravo! Økt fullført!' })).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(page.getByText('B4 Røyktest')).toBeVisible();
+
+  // 4. Tilbake til forsiden og inn i historikken
+  await page.getByRole('button', { name: 'Ferdig / Ny økt' }).click();
+  await expect(page.getByRole('button', { name: 'START' })).toBeVisible();
+  await page.getByRole('button', { name: 'Historikk' }).click();
+
+  // 5. Økten er logget i historikken
+  await expect(page.getByRole('heading', { name: 'Treningshistorikk' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'B4 Røyktest' })).toBeVisible();
+  // Én fullført økt i statistikk-kortet og «1 runde» på loggraden
+  await expect(page.getByText('1 runde', { exact: true })).toBeVisible();
+});
