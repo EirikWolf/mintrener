@@ -10,6 +10,7 @@ import {
   getPersonaClipKey,
   playPersonaCue,
   playIntroThenExercise,
+  stopAudiblePersonaAudio,
   stopCurrentPersonaAudio,
 } from './coachPersonaService';
 
@@ -73,17 +74,10 @@ const LAST5_LEAD_MS = 5000;
 const LAST5_MIN_WORK_S = 15;
 
 /**
- * Annonserings-hodrom for endAt-forankrede grensekjeder (felttest-funn, Android/
- * Klassisk Tabata der ALLE grensefaser er 10 s): short-varianten (8,5 s) ble
- * endAt-forankret og STARTET ~1,5 s inn i fasen — den skedulerte kjeden
- * preempter da (becomeAudibleWithPreemption, fade) den reaktive annonserings-
- * kjeden som startet ved fasestart (rest-cue → bro-neste → øvelsesnavn, eller
- * intro → førsteøvelse i prepare), og øvelsesnavnet ble ALDRI lest opp i hele
- * økta. En kandidat med KJENT varighet skeduleres derfor kun når kjedestarten
- * (endsAt − varighet) ligger minst så mange sekunder etter «nå» (motorklokken):
- * 6 s gir rom til rest-cue + bro + øvelsesnavn før nedtellingen tar over.
+ * Prepare-faser kortere enn dette får kun intro-cuen (HTMLAudio) — ingen
+ * bufferkjede med øvelsesnavn. Arvet fra LegacyAudioAdapter.
  */
-export const ANNOUNCE_HEADROOM_S = 6;
+const PREPARE_MIN_CHAIN_S = 6;
 
 // Grensefaser der nedtellingen kulminerer i en fasegrense med arbeids-tilrop.
 const BOUNDARY_PHASES: ReadonlyArray<IntervalPhase> = ['prepare', 'rest', 'round_rest'];
@@ -103,6 +97,147 @@ type PendingLookahead =
  */
 function isCustomExercise(ex: Exercise): boolean {
   return ex.id.startsWith('custom-') || (ex as Exercise & { isCustom?: boolean }).isCustom === true;
+}
+
+/**
+ * Den reaktive annonseringens BUFFER-kjede for én fase, delt i de tre leddene
+ * degraderingen kan skrelle av (spec Ø4):
+ *  - cue:    rest-cuen (rest/round_rest) eller introen (prepare)
+ *  - bridge: bro-neste / bro-naa
+ *  - name:   øvelsesklippet (personaens eget, ellers studioklippet)
+ * ttsName markerer at navnet leses av TTS ETTER kjeden (egendefinerte øvelser
+ * og ucachede navn) — TTS ligger utenfor buffermotoren og kan derfor verken
+ * preemptes eller måles, så slike kjeder degraderes aldri.
+ *
+ * Dette er ÉN utledning med TO kallsteder — avspillingen (mirrorPersonaRest/
+ * announceNextExercise/playPrepareIntroChain/announceCustomPrepare) og
+ * hodroms-utregningen i handlePhaseStarted. Bytter vi kjeden senere, følger
+ * hodrommet automatisk med; de kan ikke drifte fra hverandre.
+ */
+export interface AnnounceChain {
+  readonly cue: string | null;
+  readonly bridge: string | null;
+  readonly name: string | null;
+  readonly ttsName: boolean;
+}
+
+const EMPTY_ANNOUNCE_CHAIN: AnnounceChain = {
+  cue: null,
+  bridge: null,
+  name: null,
+  ttsName: false,
+};
+
+/** Nøklene i spillerekkefølge — tom liste når fasen ikke har noen bufferkjede. */
+export function announceChainKeys(chain: AnnounceChain): string[] {
+  return [chain.cue, chain.bridge, chain.name].filter((k): k is string => k !== null);
+}
+
+/** Persona-klippnøkkel som faktisk ER dekodet — ellers null. */
+function cachedPersonaKey(cue: string): string | null {
+  const key = getPersonaClipKey(cue);
+  return key !== null && audioBufferEngine.has(key) ? key : null;
+}
+
+/**
+ * Utleder kjeden for en fasestart. Kun persona-stien har bufferkjeder;
+ * standard-stien (TTS) er uendret og gir tom kjede.
+ */
+export function deriveAnnounceChain(event: PhaseStartedEvent, snap: TimerState): AnnounceChain {
+  if (event.silent || !snap.speechEnabled) return EMPTY_ANNOUNCE_CHAIN;
+  if (getActiveCoachPersona() === 'standard') return EMPTY_ANNOUNCE_CHAIN;
+  if (event.phase === 'prepare') return derivePrepareChain(event);
+  if (event.phase === 'rest' || event.phase === 'round_rest') return deriveRestChain(event);
+  return EMPTY_ANNOUNCE_CHAIN;
+}
+
+/** prepare: [intro, øvelsesnavn] — eller [intro, bro-naa] + TTS for egendefinerte. */
+function derivePrepareChain(event: PhaseStartedEvent): AnnounceChain {
+  const first = event.exercise;
+  // Kort prepare: kun playPersonaCue('intro') via HTMLAudio — ingen bufferkjede.
+  if (!first || event.durationS < PREPARE_MIN_CHAIN_S) return EMPTY_ANNOUNCE_CHAIN;
+  const cue = cachedPersonaKey('intro');
+  if (isCustomExercise(first)) {
+    return { cue, bridge: cachedPersonaKey('bro-naa'), name: null, ttsName: true };
+  }
+  // Speiler playIntroThenExercise: personaens eget klipp foran studioklippet,
+  // og kjeden krever at BEGGE ledd er dekodet (ellers degradert HTMLAudio-sti).
+  const personaEx = getPersonaClipKey('exercise-' + first.id);
+  const nameKey =
+    personaEx !== null && audioBufferEngine.has(personaEx) ? personaEx : 'exercise-' + first.id;
+  if (cue === null || !audioBufferEngine.has(nameKey)) return EMPTY_ANNOUNCE_CHAIN;
+  return { cue, bridge: null, name: nameKey, ttsName: false };
+}
+
+/** rest/round_rest: [rest-cue, bro-neste, øvelsesnavn] etter spec § 4-prioriteten. */
+function deriveRestChain(event: PhaseStartedEvent): AnnounceChain {
+  const cue = cachedPersonaKey('rest');
+  const next = event.nextExercise;
+  if (!next) return { ...EMPTY_ANNOUNCE_CHAIN, cue };
+  const personaKey = getPersonaClipKey('exercise-' + next.id);
+  const studioKey = 'exercise-' + next.id;
+  const plan = resolveAnnouncementPlan({
+    personaActive: true, // utledningen står i persona-grenen
+    personaClipCached: personaKey !== null && audioBufferEngine.has(personaKey),
+    studioClipCached: audioBufferEngine.has(studioKey),
+    isCustomExercise: isCustomExercise(next),
+    speechEnabled: true, // speech-gaten ligger hos deriveAnnounceChain
+  });
+  if (plan === 'persona' && personaKey) {
+    return { cue, bridge: cachedPersonaKey('bro-neste'), name: personaKey, ttsName: false };
+  }
+  // Studioklippet kjedes kun når rest-cuen ligger foran; uten cue er dagens
+  // sti playClipOrFallback (utenfor Directorens bufferkjede).
+  if (plan === 'studio' && cue !== null) {
+    return { cue, bridge: null, name: studioKey, ttsName: false };
+  }
+  if (plan === 'bridge-tts') {
+    return { cue, bridge: cachedPersonaKey('bro-neste'), name: null, ttsName: true };
+  }
+  return { ...EMPTY_ANNOUNCE_CHAIN, cue, ttsName: true };
+}
+
+/** Kjedens samlede varighet i ms — null når et ledd mangler kjent varighet. */
+function announceChainMs(chain: AnnounceChain): number | null {
+  let total = 0;
+  for (const key of announceChainKeys(chain)) {
+    const durationS = audioBufferEngine.getDuration(key);
+    // Uoppnåelig i praksis (has() og getDuration leser samme buffers-Map), men
+    // kontrakten er eksplisitt: uten fasit gjetter vi aldri.
+    if (durationS === null) return null;
+    total += durationS * 1000;
+  }
+  return total;
+}
+
+/** Kjeden som faktisk skal spilles, pluss hodrommet den krever (ms). */
+export interface FittedAnnounceChain {
+  readonly chain: AnnounceChain;
+  /** null = ukjent varighet → ingen hodromsgate (dagens stige uendret). */
+  readonly headroomMs: number | null;
+}
+
+/**
+ * Degraderingsrekkefølgen (Ø4, produkteier-godkjent): produkteiers klage er at
+ * ØVELSESNAVNET mangler, så når hele kjeden ikke rekker fram til fasegrensen
+ * skrelles broen av først, deretter cuen — navnet aldri. Får ikke engang navnet
+ * alene plass, beholdes dagens fulle kjede: bedre å bli preemptet enn å tie.
+ * Kjeder uten målbart navneledd (TTS-navn) degraderes ikke; der er det ingen
+ * bufferlyd å prioritere mellom.
+ */
+export function fitAnnounceChain(chain: AnnounceChain, timeLeftMs: number): FittedAnnounceChain {
+  const fullMs = announceChainMs(chain);
+  if (fullMs === null) return { chain, headroomMs: null };
+  if (chain.name === null || fullMs <= timeLeftMs) return { chain, headroomMs: fullMs };
+  const degradations: AnnounceChain[] = [
+    { ...chain, bridge: null },
+    { ...chain, bridge: null, cue: null },
+  ];
+  for (const candidate of degradations) {
+    const ms = announceChainMs(candidate);
+    if (ms !== null && ms <= timeLeftMs) return { chain: candidate, headroomMs: ms };
+  }
+  return { chain, headroomMs: fullMs };
 }
 
 /**
@@ -129,29 +264,18 @@ function playChainThen(ctx: DirectorCtx, keys: string[], followUp: () => void): 
   });
 }
 
-/**
- * prefixKeys (BØR-1, sluttreview): cachede klipp (persona-rest-cuen) som skal
- * spilles FORAN broen i samme sample-nøyaktige kjede — aldri overlappende tale.
- */
 function playBridgeThenTts(
   ctx: DirectorCtx,
   bridgeCue: 'bro-neste' | 'bro-naa' | 'bro-resync',
   name: string,
-  fallback: () => void,
-  prefixKeys: string[] = []
+  fallback: () => void
 ): void {
   const key = getPersonaClipKey(bridgeCue);
   if (!key || !audioBufferEngine.has(key)) {
-    // Uten cachet bro skal et evt. prefiks (rest-cuen) fortsatt spilles først,
-    // med fallback-annonseringen etter kjedeslutt.
-    if (prefixKeys.length > 0) {
-      playChainThen(ctx, prefixKeys, fallback);
-    } else {
-      fallback();
-    }
+    fallback();
     return;
   }
-  playChainThen(ctx, [...prefixKeys, key], () => speechService.speak(name));
+  playChainThen(ctx, [key], () => speechService.speak(name));
 }
 
 /** Offentlig flate mot hook-bindingen (β4 + Oppgave B): frakobling + kaldstart-replan. */
@@ -215,7 +339,77 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
   // fase-epoken (guard mot skip-lekkasje — se DirectorCtx).
   const ctx: DirectorCtx = { engine, getPhaseEpoch: () => phaseEpoch };
 
-  function issuePending(endsAt: number): void {
+  /**
+   * start_321-stigen (live timing-funn A): fullvarianten (19,8–27,8 s avhengig
+   * av persona) får aldri plass i Tabatas 10 s-grensefaser — prøv den kortere
+   * start_321_short-varianten før pip-fallbacken. Trygt mot dobbel avspilling:
+   * false fra scheduleSequence er kontraktsfestet uten sideeffekter (ucachet
+   * nøkkel/manglende bro/for trangt vindu — ingenting ble skedulert), og et
+   * stopp/kansellering i resume-await-vinduet svarer true, aldri false. Stale-
+   * vakten (epoch + frist) hindrer at et SENT false-svar (resume-await)
+   * skedulerer short mot en forlatt fase eller flyttet frist —
+   * handleDeadlineChanged har da alt kansellert og reskedulert selv.
+   *
+   * Annonseringsprioritet (B1, felttest-funn): headroomMs er varigheten av den
+   * reaktive annonseringskjeden som faktisk spilles i denne fasen (målt, ikke
+   * antatt). En kandidat med KJENT varighet skeduleres kun når kjedestarten
+   * (endsAt − varighet) ligger etter «nå» + hodrommet (motorklokken, samme
+   * tidsbase som endsAt). fitsHeadroom = null betyr «kan ikke avgjøres»: enten
+   * er hodrommet ukjent (resume/replan — ingen annonsering i spill), eller
+   * kandidatens buffer er udekodet (kaldstart). Da kjører dagens stige uendret;
+   * degraderingsflagget + replanCurrentPhase re-evaluerer med fasit.
+   */
+  function issueBoundaryLadder(
+    p: Extract<PendingLookahead, { kind: 'boundary' }>,
+    endsAt: number,
+    headroomMs: number | null,
+    epoch: number,
+    gen: number,
+    flagIfTooTight: (ok: boolean) => void
+  ): void {
+    const shortKey = p.start321ShortKey;
+    const nowMs = engine.getNow();
+    const fitsHeadroom = (key: string): boolean | null => {
+      if (headroomMs === null) return null;
+      const durationS = audioBufferEngine.getDuration(key);
+      if (durationS === null) return null;
+      return endsAt - durationS * 1000 >= nowMs + headroomMs;
+    };
+    if (fitsHeadroom(p.start321Key) === false) {
+      // Full er cachet men ville preemptet annonseringen — forsøk aldri full;
+      // vurder short direkte mot samme hodrom.
+      if (shortKey && fitsHeadroom(shortKey) !== false) {
+        void audioBufferEngine.scheduleSequence([shortKey], { endAt: endsAt }).then(flagIfTooTight);
+      }
+      // Ellers (short passer heller ikke, eller mangler): INGEN endAt-kjede
+      // og INGEN pip-/degraderingsflagg — dette er en bevisst prioritering av
+      // annonseringen, ikke en degradering. Go-tilropet på grensen skeduleres
+      // uansett (av kalleren) og markerer fasebyttet.
+      return;
+    }
+    void audioBufferEngine.scheduleSequence([p.start321Key], { endAt: endsAt }).then((ok) => {
+      if (ok) return;
+      if (epoch !== phaseEpoch || endsAt !== currentDeadline || gen !== issueGen) return;
+      // NB (Ø2): shortKey === null er eneste vei til «ingen kjede uten flagg»
+      // her. Finnes nøkkelen, men er bufferen udekodet, kalles scheduleSequence,
+      // svarer false synkront, og BÅDE beepFallback og lookaheadDegraded settes
+      // — riktig kaldstart-adferd (pip nå, replan når preloaden lander).
+      if (shortKey) {
+        void audioBufferEngine.scheduleSequence([shortKey], { endAt: endsAt }).then(flagIfTooTight);
+      } else {
+        flagIfTooTight(false);
+      }
+    });
+  }
+
+  /**
+   * headroomMs: hvor mye reaktiv annonsering som er i spill i denne fasen.
+   * null = ingen (resume/dvale-reanker/replan re-utsteder KUN lookaheaden og
+   * spiller aldri annonseringen på nytt) → ingen hodromsgate, ellers ville
+   * gaten gitt total stillhet inn mot grensen: verken 3-2-1 eller pip, siden
+   * gate-grenen bevisst ikke setter beepFallback/lookaheadDegraded (B2).
+   */
+  function issuePending(endsAt: number, headroomMs: number | null): void {
     if (!pending) return;
     const epoch = phaseEpoch;
     const gen = issueGen;
@@ -233,50 +427,7 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
       }
     };
     if (pending.kind === 'boundary') {
-      // start_321-stigen (live timing-funn A): fullvarianten (~20 s) får aldri
-      // plass i Tabatas 10 s-grensefaser — prøv den kortere short-varianten
-      // før pip-fallbacken. Trygt mot dobbel avspilling: false fra
-      // scheduleSequence er kontraktsfestet uten sideeffekter (ucachet nøkkel/
-      // manglende bro/for trangt vindu — ingenting ble skedulert), og et stopp/
-      // kansellering i resume-await-vinduet svarer true, aldri false. Stale-
-      // vakten (epoch + frist) hindrer at et SENT false-svar (resume-await)
-      // skedulerer short mot en forlatt fase eller flyttet frist —
-      // handleDeadlineChanged har da alt kansellert og reskedulert selv.
-      //
-      // Annonseringsprioritet (ANNOUNCE_HEADROOM_S, felttest-funn): en kandidat
-      // med KJENT varighet skeduleres kun når kjedestarten (endsAt − varighet)
-      // gir annonseringskjeden minst hodrommet fra «nå» (motorklokken, samme
-      // tidsbase som endsAt). fitsHeadroom: null = ukjent varighet (ucachet,
-      // kaldstart) → dagens stige uendret; degraderingsflagget + replan-
-      // CurrentPhase re-evaluerer med fasit når preload er ferdig.
-      const shortKey = pending.start321ShortKey;
-      const nowMs = engine.getNow();
-      const fitsHeadroom = (key: string): boolean | null => {
-        const durationS = audioBufferEngine.getDuration(key);
-        if (durationS === null) return null;
-        return endsAt - durationS * 1000 >= nowMs + ANNOUNCE_HEADROOM_S * 1000;
-      };
-      if (fitsHeadroom(pending.start321Key) === false) {
-        // Full er cachet men ville preemptet annonseringen — forsøk aldri full;
-        // vurder short direkte mot samme hodrom.
-        if (shortKey && fitsHeadroom(shortKey) !== false) {
-          void audioBufferEngine.scheduleSequence([shortKey], { endAt: endsAt }).then(flagIfTooTight);
-        }
-        // Ellers (short passer heller ikke, eller mangler): INGEN endAt-kjede
-        // og INGEN pip-/degraderingsflagg — dette er en bevisst prioritering av
-        // annonseringen, ikke en degradering. Go-tilropet på grensen skeduleres
-        // uansett (under) og markerer fasebyttet.
-      } else {
-        void audioBufferEngine.scheduleSequence([pending.start321Key], { endAt: endsAt }).then((ok) => {
-          if (ok) return;
-          if (epoch !== phaseEpoch || endsAt !== currentDeadline || gen !== issueGen) return;
-          if (shortKey) {
-            void audioBufferEngine.scheduleSequence([shortKey], { endAt: endsAt }).then(flagIfTooTight);
-          } else {
-            flagIfTooTight(false);
-          }
-        });
-      }
+      issueBoundaryLadder(pending, endsAt, headroomMs, epoch, gen, flagIfTooTight);
       void audioBufferEngine.scheduleSequence([pending.goKey], { startAt: endsAt }).then(flagIfTooTight);
     } else {
       // last5-svikt gir INGEN pip-fallback: cuen er motivasjon midt i fasen,
@@ -289,8 +440,11 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
     }
   }
 
-  /** Fristankret lookahead — KUN persona-stien (spec § 4); standard forblir reaktiv. */
-  function planLookahead(e: PhaseStartedEvent): void {
+  /**
+   * Fristankret lookahead — KUN persona-stien (spec § 4); standard forblir
+   * reaktiv. headroomMs videreføres til issuePending (se der).
+   */
+  function planLookahead(e: PhaseStartedEvent, headroomMs: number | null): void {
     const snap = engine.getSnapshot();
     if (e.silent || e.endsAt === null || !snap.speechEnabled) return;
     if (getActiveCoachPersona() === 'standard') return;
@@ -310,12 +464,12 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
         start321ShortKey: getPersonaClipKey('start_321_short'),
         goKey,
       };
-      issuePending(e.endsAt);
+      issuePending(e.endsAt, headroomMs);
     } else if (e.phase === 'work' && e.durationS >= LAST5_MIN_WORK_S) {
       const key = getPersonaClipKey('last5');
       if (!key) return;
       pending = { kind: 'last5', key };
-      issuePending(e.endsAt);
+      issuePending(e.endsAt, headroomMs);
     }
   }
 
@@ -345,8 +499,19 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
     currentDeadline = e.endsAt;
     currentPhaseEvent = e;
 
-    mirrorLegacyPhaseStarted(ctx, e);
-    planLookahead(e);
+    // B1: kjeden utledes ÉN gang og brukes både til avspilling (mirror*) og som
+    // hodrom for lookaheaden — de kan derfor ikke drifte fra hverandre. Ø4:
+    // fitAnnounceChain degraderer kjeden når den ikke rekker fram til grensen.
+    const fitted =
+      e.endsAt === null
+        ? { chain: deriveAnnounceChain(e, engine.getSnapshot()), headroomMs: null }
+        : fitAnnounceChain(
+            deriveAnnounceChain(e, engine.getSnapshot()),
+            e.endsAt - engine.getNow()
+          );
+
+    mirrorLegacyPhaseStarted(ctx, e, fitted.chain);
+    planLookahead(e, fitted.headroomMs);
   }
 
   /**
@@ -383,7 +548,9 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
     lookaheadDegraded = false;
     pending = null;
     audioBufferEngine.cancelScheduled();
-    planLookahead({ ...currentPhaseEvent, endsAt: currentDeadline });
+    // Hodrom null (B2): replan spiller ALDRI annonseringen på nytt, så det er
+    // ingenting å beskytte — gaten ville bare gitt stillhet inn mot grensen.
+    planLookahead({ ...currentPhaseEvent, endsAt: currentDeadline }, null);
   }
 
   function handleDeadlineChanged(endsAt: number): void {
@@ -407,7 +574,10 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
     // sin landing overtar), så ankeret er alltid gyldig; holder vinduet likevel
     // ikke, svarer scheduleSequence false → pip-fallback, aldri avkuttet tale.
     audioBufferEngine.cancelScheduled();
-    issuePending(endsAt);
+    // Hodrom null (B2): pause→resume, dvale-reanker og catch-up re-utsteder KUN
+    // lookaheaden — den reaktive annonseringen spilles aldri på nytt her, så
+    // gaten skal ikke gjelde. Dagens stige (full → short → pip) er uendret.
+    issuePending(endsAt, null);
   }
 
   function handleCountdown(): void {
@@ -481,34 +651,38 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
 // betingelser, kall og rekkefølge er uendret fra adapteren.
 // ---------------------------------------------------------------------------
 
-function mirrorLegacyPhaseStarted(ctx: DirectorCtx, event: PhaseStartedEvent): void {
+function mirrorLegacyPhaseStarted(
+  ctx: DirectorCtx,
+  event: PhaseStartedEvent,
+  chain: AnnounceChain
+): void {
   const { phase } = event;
   if (phase === 'prepare') {
-    mirrorPrepare(ctx, event);
+    mirrorPrepare(ctx, event, chain);
   } else if (phase === 'work') {
     mirrorWork(ctx, event);
   } else if (phase === 'rest' || phase === 'round_rest') {
-    mirrorRest(ctx, event);
+    mirrorRest(ctx, event, chain);
   } else if (phase === 'complete') {
     mirrorComplete(ctx, event);
   }
 }
 
-function mirrorPrepare(ctx: DirectorCtx, event: PhaseStartedEvent): void {
+function mirrorPrepare(ctx: DirectorCtx, event: PhaseStartedEvent, chain: AnnounceChain): void {
   const snap = ctx.engine.getSnapshot();
   const { exercise, durationS, tone, silent } = event;
   if (silent || !snap.speechEnabled) return;
 
   if (getActiveCoachPersona() !== 'standard') {
     const firstEx = exercise;
-    if (durationS >= 6 && firstEx) {
+    if (durationS >= PREPARE_MIN_CHAIN_S && firstEx) {
       if (isCustomExercise(firstEx)) {
         // Bro + TTS (valg B): egendefinerte øvelser har verken studio- eller
         // persona-klipp, så intro-kjeden kan aldri lykkes — gå rett på
         // [intro, bro-naa]-kjeden («Nå: …») + TTS-navnet etter kjedeslutt.
-        announceCustomPrepare(ctx, firstEx.name);
+        announceCustomPrepare(ctx, firstEx.name, chain);
       } else {
-        playPrepareIntroChain(ctx, firstEx);
+        playPrepareIntroChain(ctx, firstEx, chain);
       }
     } else {
       playPersonaCue('intro');
@@ -531,7 +705,16 @@ function mirrorPrepare(ctx: DirectorCtx, event: PhaseStartedEvent): void {
  * (Planrettelse 3, stopAudiblePersonaAudio) som aldri rører skedulerte kjeder —
  * men rekkefølgen skal ikke «ryddes» uten denne historikken.
  */
-function playPrepareIntroChain(ctx: DirectorCtx, firstEx: Exercise): void {
+function playPrepareIntroChain(ctx: DirectorCtx, firstEx: Exercise, chain: AnnounceChain): void {
+  // Ø4-degradering: introen ble skrelt av fordi [intro, navn] ikke rakk fram
+  // til fasegrensen. playIntroThenExercise spiller ALLTID begge leddene og kan
+  // derfor ikke brukes her — vi spiller navnet direkte, med samme audible-only-
+  // stopp (Planrettelse 3) som den gjør, slik at skedulerte ankre overlever.
+  if (chain.cue === null && chain.name !== null) {
+    stopAudiblePersonaAudio();
+    void audioBufferEngine.playSequence([chain.name]);
+    return;
+  }
   // Epoch-guard også her (fjerde skip-lekkasje-vei, review-oppfølging): ved
   // prepare→prepare-skip innen gjettevinduet ser fase-/status-gaten fortsatt
   // 'prepare'/'running' og ville annonsert GAMMEL øvelse over ny intro.
@@ -557,10 +740,8 @@ function playPrepareIntroChain(ctx: DirectorCtx, firstEx: Exercise): void {
  * overlapp. Uten cachede klipp: samme degraderte intro-sti som ellers
  * (HTMLAudio-intro + varighetsgjetting), med rent TTS-navn til slutt.
  */
-function announceCustomPrepare(ctx: DirectorCtx, name: string): void {
-  const keys = ['intro', 'bro-naa']
-    .map((cue) => getPersonaClipKey(cue))
-    .filter((k): k is string => k !== null && audioBufferEngine.has(k));
+function announceCustomPrepare(ctx: DirectorCtx, name: string, chain: AnnounceChain): void {
+  const keys = announceChainKeys(chain);
   // Epoch-guard i TILLEGG til fase-/status-gaten: ved prepare→prepare-skip er
   // den nye fasen også 'prepare', så bare epoken avslører at kjeden ble
   // stoppet av et fasebytte (se DirectorCtx-doc). Gjelder begge stiene under.
@@ -597,7 +778,7 @@ function mirrorWork(ctx: DirectorCtx, event: PhaseStartedEvent): void {
   }, 'hopp');
 }
 
-function mirrorRest(ctx: DirectorCtx, event: PhaseStartedEvent): void {
+function mirrorRest(ctx: DirectorCtx, event: PhaseStartedEvent, chain: AnnounceChain): void {
   const snap = ctx.engine.getSnapshot();
   const { nextExercise, tone, silent } = event;
   if (!silent) {
@@ -608,7 +789,7 @@ function mirrorRest(ctx: DirectorCtx, event: PhaseStartedEvent): void {
         speechService.announceRest(nextExercise?.name, tone);
       }
     } else {
-      mirrorPersonaRest(ctx, snap, nextExercise);
+      mirrorPersonaRest(ctx, snap, nextExercise, chain);
     }
   }
   motionTrackerService.stop();
@@ -622,60 +803,48 @@ function mirrorRest(ctx: DirectorCtx, event: PhaseStartedEvent): void {
  * neste-øvelse-annonseringen DERETTER: i ÉN sample-nøyaktig kjede når begge er
  * cachet, ellers etter kjedeslutt via playChainThen — aldri overlappende tale.
  * Ucachet cue, eller tale av (cuen er stemme og respekterer tale-bryteren):
- * dagens tone + annonsering, uendret.
+ * dagens tone + annonsering, uendret. Det samme gjelder når Ø4-degraderingen
+ * skrellet cuen av for å få øvelsesnavnet fram: da markerer tonen pausestarten
+ * i cuens sted.
  */
 function mirrorPersonaRest(
   ctx: DirectorCtx,
   snap: TimerState,
-  nextExercise: Exercise | null
+  nextExercise: Exercise | null,
+  chain: AnnounceChain
 ): void {
-  const restKey = getPersonaClipKey('rest');
-  const restCued = snap.speechEnabled && restKey !== null && audioBufferEngine.has(restKey);
-  const prefixKeys = restCued && restKey ? [restKey] : [];
-  if (!restCued) {
+  const prefixKeys = chain.cue !== null ? [chain.cue] : [];
+  if (prefixKeys.length === 0) {
     audioService.playRestStart(snap.soundEnabled);
   }
   if (snap.speechEnabled && nextExercise) {
-    announceNextExercise(ctx, nextExercise, prefixKeys);
+    announceNextExercise(ctx, nextExercise, chain);
   } else if (prefixKeys.length > 0) {
     void audioBufferEngine.playSequence(prefixKeys);
   }
 }
 
 /**
- * Persona-stiens annonsering av NESTE øvelse (rest/round_rest) — rutet gjennom
- * resolveAnnouncementPlan (spec § 4-kjeden håndheves ETT sted, β3-minor som
- * lukker den aspirasjonelle docstringen):
- *  - persona: personaens eget øvelsesklipp, kjedet etter bro-neste når broen er
- *    cachet (β5 leverer klippene — sømmen er klar i dag, stien er sovende)
- *  - bridge-tts: egendefinert → bro-neste-kjede + TTS-navn (aldri overlapp)
- *  - studio/tts: dagens playClipOrFallback-kjede uendret (buffer → HTMLAudio → TTS)
+ * Persona-stiens annonsering av NESTE øvelse (rest/round_rest). Nøklene er
+ * ALLEREDE utledet av deriveAnnounceChain (som selv ruter gjennom
+ * resolveAnnouncementPlan — spec § 4-kjeden håndheves ETT sted) og evt.
+ * degradert av fitAnnounceChain; her gjenstår kun avspillingsformen:
+ *  - navnebuffer i kjeden: ÉN sample-nøyaktig kjede (persona- eller studioklipp)
+ *  - bare bro: bro-kjede + TTS-navn etter kjedeslutt (aldri overlapp)
+ *  - ingen av delene: dagens playClipOrFallback-kjede uendret
+ *    (buffer → HTMLAudio → TTS), evt. etter rest-cuen.
  */
-function announceNextExercise(ctx: DirectorCtx, next: Exercise, prefixKeys: string[] = []): void {
-  const personaKey = getPersonaClipKey('exercise-' + next.id);
-  const studioKey = 'exercise-' + next.id;
+function announceNextExercise(ctx: DirectorCtx, next: Exercise, chain: AnnounceChain): void {
+  const prefixKeys = chain.cue !== null ? [chain.cue] : [];
   const fallback = (): void => {
-    audioClipService.playClipOrFallback(studioKey, 'Neste: ' + next.name);
+    audioClipService.playClipOrFallback('exercise-' + next.id, 'Neste: ' + next.name);
   };
-  const plan = resolveAnnouncementPlan({
-    personaActive: true, // kalleren står i persona-grenen
-    personaClipCached: personaKey !== null && audioBufferEngine.has(personaKey),
-    studioClipCached: audioBufferEngine.has(studioKey),
-    isCustomExercise: isCustomExercise(next),
-    speechEnabled: true, // speech-gaten ligger hos kalleren (mirrorRest)
-  });
-  if (plan === 'persona' && personaKey) {
-    const broKey = getPersonaClipKey('bro-neste');
-    const nameKeys = broKey && audioBufferEngine.has(broKey) ? [broKey, personaKey] : [personaKey];
+  if (chain.name !== null) {
     // playSequence rejecter aldri (kontraktsfestet og NaN-vaktet i motoren) —
     // ingen redundant .catch (review-notat: én konsekvent linje, stol på kontrakten)
-    void audioBufferEngine.playSequence([...prefixKeys, ...nameKeys]);
-  } else if (plan === 'studio' && prefixKeys.length > 0) {
-    // Rest-cue + studioklipp: begge cachet (studio-planen garanterer klippet) —
-    // én kjede, aldri overlapp (BØR-1).
-    void audioBufferEngine.playSequence([...prefixKeys, studioKey]);
-  } else if (plan === 'bridge-tts') {
-    playBridgeThenTts(ctx, 'bro-neste', next.name, fallback, prefixKeys);
+    void audioBufferEngine.playSequence(announceChainKeys(chain));
+  } else if (chain.bridge !== null) {
+    playChainThen(ctx, [...prefixKeys, chain.bridge], () => speechService.speak(next.name));
   } else if (prefixKeys.length > 0) {
     // tts-plan med rest-cue foran: cuen først, fallback-kjeden (som selv ender
     // i TTS) etter kjedeslutt — epoch-/status-gatet som de andre TTS-veiene.
