@@ -20,15 +20,43 @@ import { fetchCustomWorkouts } from './services/customWorkoutsService';
 import { ProfileOnboardingModal } from './components/profile/ProfileOnboardingModal';
 import { getUserProfilesState } from './services/profileCompositionService';
 import { UserProfilesState } from './schemas/profileSchema';
+import { OnboardingFlow } from './components/onboarding/OnboardingFlow';
+import { shouldShowOnboarding } from './services/onboardingService';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('timer');
   const [userProfiles, setUserProfiles] = useState<UserProfilesState>(() => getUserProfilesState());
   const [showOnboarding, setShowOnboarding] = useState<boolean>(() => !userProfiles.hasCompletedOnboarding);
-  const [selectedWorkout, setSelectedWorkout] = useState<WorkoutTemplate>(() => {
-    const shared = getSharedWorkoutFromUrl();
-    return shared || TABATA_WORKOUT;
-  });
+  // Delingslenken leses ÉN gang: kallet KONSUMERER ?w= (renser URL-en via
+  // replaceState og teller åpnings-telemetri), så et andre kall ville sett
+  // en tom URL. Både øktvalget og velkomstgaten under leser dette resultatet.
+  const [sharedWorkoutArrival] = useState<WorkoutTemplate | null>(() =>
+    getSharedWorkoutFromUrl()
+  );
+  // Førstegangs-onboarding (C2): fullskjerms-gate for helt ferske brukere.
+  // Ingen early-return — completed-grenen over må forbli nåbar.
+  // B3: en delingslenke (?w=) undertrykker gaten DENNE økta — mottakeren skal
+  // rett til den delte økta. Ingenting markeres, så flyten kommer ved neste
+  // besøk uten delingslenke.
+  const [showWelcomeOnboarding, setShowWelcomeOnboarding] = useState<boolean>(
+    () => sharedWorkoutArrival === null && shouldShowOnboarding()
+  );
+  // B2: når flyten nettopp er fullført/hoppet over, utsettes profilmodalen til
+  // neste app-åpning (in-memory: nullstilles av seg selv ved neste besøk) —
+  // «Til første økta» skal lande med START ett trykk unna, ikke bak en ny modal.
+  const [welcomeHandledThisSession, setWelcomeHandledThisSession] = useState(false);
+
+  // B5 (spec § 3: «kan gjenåpnes fra innstillinger»): SettingsMoreView
+  // dispatcher eventen; gaten åpnes uavhengig av gate-vilkårene — fullføring
+  // re-markerer bare done-flagget, helt ufarlig.
+  useEffect(() => {
+    const openWelcome = () => setShowWelcomeOnboarding(true);
+    window.addEventListener('open-welcome-onboarding', openWelcome);
+    return () => window.removeEventListener('open-welcome-onboarding', openWelcome);
+  }, []);
+  const [selectedWorkout, setSelectedWorkout] = useState<WorkoutTemplate>(
+    () => sharedWorkoutArrival || TABATA_WORKOUT
+  );
   const [allPresets, setAllPresets] = useState<WorkoutTemplate[]>(PRESET_WORKOUTS);
   const { user } = useAuth();
   const hasSavedRef = useRef<boolean>(false);
@@ -130,8 +158,10 @@ export function App() {
           tjenestefeil når brukeren, ikke bare konsollen */}
       <ErrorToast />
 
-      {/* Hovedvisning basert på aktiv fane */}
-      <div className="flex-1 overflow-hidden">
+      {/* Hovedvisning basert på aktiv fane. inert (B4): mens velkomstflyten
+          ligger over, skal innholdet bak være utilgjengelig for fokus og
+          skjermleser — overlayet er visuelt dekkende, inert gjør det reelt. */}
+      <div className="flex-1 overflow-hidden" inert={showWelcomeOnboarding || undefined}>
         {activeTab === 'timer' ? (
           <TimerDisplay
             workout={selectedWorkout}
@@ -195,16 +225,30 @@ export function App() {
         )}
       </div>
 
-      {/* Bunnmeny (skjules under aktiv økt for maksimal fokus, i henhold til kapittel 4) */}
-      {state.status === 'idle' && (
+      {/* Bunnmeny (skjules under aktiv økt for maksimal fokus, i henhold til
+          kapittel 4; og mens velkomstflyten dekker skjermen — B4) */}
+      {state.status === 'idle' && !showWelcomeOnboarding && (
         <BottomNav
           activeTab={activeTab}
           onTabChange={setActiveTab}
         />
       )}
 
-      {/* 1-spørsmåls Onboarding for kontekstprofiler */}
-      {showOnboarding && (
+      {/* Førstegangs-onboarding (C2, spec § 3): persona + ukesmål + førsteøkt.
+          Ligger på z-[60] over profilmodalen og undertrykker den mens den
+          vises (planpresisering 5) — profilmodalens egen logikk endres ikke. */}
+      {showWelcomeOnboarding && (
+        <OnboardingFlow
+          onComplete={() => {
+            setShowWelcomeOnboarding(false);
+            setWelcomeHandledThisSession(true);
+          }}
+        />
+      )}
+
+      {/* 1-spørsmåls Onboarding for kontekstprofiler — utsatt til neste besøk
+          når velkomstflyten nettopp ble håndtert (planpresisering 6 / B2) */}
+      {showOnboarding && !showWelcomeOnboarding && !welcomeHandledThisSession && (
         <ProfileOnboardingModal
           isOpen={showOnboarding}
           onClose={(newState) => {

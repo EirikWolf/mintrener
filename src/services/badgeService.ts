@@ -1,7 +1,22 @@
 import { STARTER_CHALLENGES } from '../data/challenges';
 import { getChallengeProgress } from './challengeService';
+import { computeWeekStreak, WeekStreakResult } from './streakService';
+import { makeGoalForWeek } from './weeklyGoalService';
 import { CompletedWorkoutLog } from '../types/models';
 import { WORKOUT_HISTORY_KEY } from './workoutHistoryStorage';
+
+/**
+ * Lat, delt uke-streakberegning for ÉN badge-runde (B3): de seks
+ * uke-milepælcheckene trenger samme WeekStreakResult, og hver beregning
+ * leser mållogg/ukesmål fra localStorage. Provideren beregner først når
+ * (og hvis) et check spør, og gjenbruker svaret for resten av runden.
+ */
+type WeekStreakProvider = () => WeekStreakResult;
+
+function makeWeekStreakProvider(history: CompletedWorkoutLog[]): WeekStreakProvider {
+  let cached: WeekStreakResult | null = null;
+  return () => (cached ??= computeWeekStreak(history, makeGoalForWeek()));
+}
 
 export type BadgeCategory = 'challenge' | 'streak' | 'milestone' | 'special';
 
@@ -18,9 +33,29 @@ export interface BadgeItem {
   progressLabel?: string;
 }
 
+/**
+ * Uke-streak-milepælene (C1, spec § 2.1) som badge-data. Genereres data-drevet
+ * fordi de seks definisjonene kun skiller seg i tall/tekst — selve regelen er
+ * felles: lås opp på bestWeeks, ikke currentWeeks, slik at et seriebrudd aldri
+ * re-låser et allerede opptjent merke. Forsikrede (slinguke-)uker teller ikke
+ * +1 i serien (produkteiers valg 2026-08-29, jf. computeWeekStreak), så
+ * milepælene nås kun av faktiske treningsuker.
+ */
+const WEEK_STREAK_BADGE_DATA: ReadonlyArray<{ weeks: number; title: string; description: string; icon: string }> = [
+  { weeks: 2, title: 'To uker sterk', description: 'Nå ukesmålet ditt to uker på rad.', icon: '🔗' },
+  { weeks: 4, title: 'Månedsrytme', description: 'Fire uker på rad med ukesmålet i boks — en hel måned med rytme.', icon: '📆' },
+  { weeks: 8, title: 'Åtte uker på rad', description: 'Åtte sammenhengende uker der ukesmålet er nådd.', icon: '⚡' },
+  { weeks: 12, title: 'Kvartalsvane', description: 'Tolv uker på rad — et helt kvartal med god treningsvane.', icon: '🧭' },
+  { weeks: 26, title: 'Halvår i boks', description: 'Et halvt år med ukesmålet nådd hver eneste uke.', icon: '🌗' },
+  { weeks: 52, title: 'Ett helt år', description: 'Femtito uker på rad — et helt år med treningsrytme.', icon: '🏆' },
+];
+
 export const MILESTONE_BADGE_DEFINITIONS: Array<Omit<BadgeItem, 'isUnlocked' | 'progress' | 'maxProgress' | 'unlockedAt'> & {
   maxProgress: number;
-  check: (history: CompletedWorkoutLog[]) => { isUnlocked: boolean; progress: number; unlockedAt?: string };
+  check: (
+    history: CompletedWorkoutLog[],
+    weekStreak?: WeekStreakProvider
+  ) => { isUnlocked: boolean; progress: number; unlockedAt?: string };
 }> = [
   {
     id: 'badge-first-workout',
@@ -104,6 +139,23 @@ export const MILESTONE_BADGE_DEFINITIONS: Array<Omit<BadgeItem, 'isUnlocked' | '
       };
     },
   },
+  ...WEEK_STREAK_BADGE_DATA.map(({ weeks, title, description, icon }) => ({
+    id: `badge-week-streak-${weeks}`,
+    title,
+    description,
+    icon,
+    category: 'streak' as const,
+    maxProgress: weeks,
+    check: (history: CompletedWorkoutLog[], weekStreak?: WeekStreakProvider) => {
+      // Delt provider fra getAllUserBadges; fallback for direkte check-kall
+      const r = (weekStreak ?? makeWeekStreakProvider(history))();
+      return {
+        // bestWeeks-låsing: et merke som er opptjent forblir opplåst etter brudd
+        isUnlocked: r.currentWeeks >= weeks || r.bestWeeks >= weeks,
+        progress: Math.min(r.bestWeeks, weeks),
+      };
+    },
+  })),
   {
     id: 'badge-early-bird',
     title: 'Morgenfugl',
@@ -228,9 +280,10 @@ export function getAllUserBadges(history?: CompletedWorkoutLog[]): BadgeItem[] {
     });
   }
 
-  // 2. Milepæl- og prestasjonsmerker
+  // 2. Milepæl- og prestasjonsmerker — én delt streakberegning per runde (B3)
+  const weekStreak = makeWeekStreakProvider(workoutHistory);
   for (const def of MILESTONE_BADGE_DEFINITIONS) {
-    const res = def.check(workoutHistory);
+    const res = def.check(workoutHistory, weekStreak);
     badges.push({
       id: def.id,
       title: def.title,

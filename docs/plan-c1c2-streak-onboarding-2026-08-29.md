@@ -11,9 +11,10 @@
 **Planpresiseringer mot spec-en** (avklart under planskriving, jf. spec § der nevnt):
 1. **«ISO-uke»** implementeres som *mandag 00:00 lokal tid → søndag* — identisk med eksisterende `calculateWeeklyProgress` (`src/services/weeklyGoalService.ts:46-51`). ISO-ukenummer trengs aldri; kun ukestart-nøkler.
 2. **Slinguke-banken avledes også** (spec § 2.1 sa «persisteres»): opptjening/forbruk simuleres deterministisk fra historikken i samme rene funksjon. Det gir retroaktiv korrekthet og fjerner en synk-tilstand. Kun *feirede milepæler* og *konto-prompt-avvisninger* persisteres.
-3. **Ukesmål-endring** (spec § 2.1 «gjelder fra neste uke») krever en liten mållogg (`mintrener_weekly_goal_log_v1`) som `setWeeklyGoal` appender til; uker før loggens start dømmes etter gjeldende mål.
+3. **Ukesmål-endring** (spec § 2.1 «gjelder fra neste uke») krever en liten mållogg (`mintrener_weekly_goal_log_v1`) som `setWeeklyGoal` appender til; første ENDRING ankrer samtidig det GAMLE målet på inneværende ukenøkkel. Uker eldre enn loggens første linje dømmes etter FØRSTE linjes mål (historisk anker — en målheving skal aldri re-dømme fortiden og kollapse streak/bestWeeks retroaktivt); gjeldende mål brukes kun ved tom logg. *(Presisert i fix-løkke etter bølge 1-review, 2026-08-29.)* **FØRSTEGANGSVALG er ikke en endring:** når det ikke finnes lagret mål fra før (rått `localStorage.getItem('mintrener_weekly_goal') === null`, dvs. onboarding-scenarioet), ankres det NYE målet på INNEVÆRENDE ukenøkkel — en fersk bruker som velger 2 skal få første uke dømt etter 2, ikke etter default 3. «Fra neste uke»-regelen gjelder kun endring av et eksisterende mål. *(Fix-løkke etter bølge 3-review, 2026-08-29 — B1.)*
 4. **«Start nå» i onboardingen** (spec § 3) blir «Til første økta» som lukker flyten med timeren + anbefalt program synlig; selve START-trykket er brukergesten som låser opp lyd (WebAudio-krav) — en auto-start ville gitt stum første fase. Én-trykks-avstanden består.
 5. **Sameksistens med eksisterende `ProfileOnboardingModal`** (`src/App.tsx:206-215`): vår OnboardingFlow undertrykker profilmodalen mens den vises (`showOnboarding && !showWelcomeOnboarding`); profilmodalens egen logikk endres ikke.
+6. **Profilmodalen utsettes til neste besøk** når velkomstflyten nettopp er fullført/hoppet over (in-memory `welcomeHandledThisSession`-state i App): «Til første økta» skal lande med timeren og START ett trykk unna — ikke bak enda en modal. Profilmodalen kommer ved neste app-åpning (staten nullstilles av seg selv). *(Fix-løkke etter bølge 3-review, 2026-08-29 — B2.)*
 
 **Kjente farer for implementer:**
 - `src/hooks/__tests__/useIntervalTimer.test.ts` (23 tester) og `src/components/timer/__tests__/TimerDisplay.test.tsx` (B4) skal være GRØNNE UENDRET etter hvert task.
@@ -189,7 +190,7 @@ function readGoalLog(): GoalLogEntry[] {
   } catch { return []; }
 }
 
-/** Målet som gjaldt ved gitt ukestart. Uker før loggens start: gjeldende mål. */
+/** Målet som gjaldt ved gitt ukestart. Uker eldre enn loggens første linje: første linjes mål (historisk anker); gjeldende mål kun ved tom logg. */
 export function getGoalForWeek(targetWeekKey: string): number {
   const applicable = readGoalLog()
     .filter((e) => e.weekKey <= targetWeekKey)  // 'YYYY-MM-DD' sorterer leksikalsk = kronologisk
@@ -253,14 +254,16 @@ describe('computeWeekStreak', () => {
     expect(r.currentWeeks).toBe(3);
     expect(r.currentWeekCompleted).toBe(true);
   });
-  it('slinguke: opptjenes etter 4 fullførte uker (maks 1), forbrukes automatisk på én røket uke', () => {
-    // uke 1-4 fullført (opptjener 1), uke 5 røket (forbrukes), uke 6 fullført → streak 6
+  it('slinguke: opptjenes etter 4 fullførte uker (maks 1), forbrukes automatisk på én røket uke — serien STÅR, teller ikke +1', () => {
+    // uke 1-4 fullført (opptjener 1), uke 5 røket (forsikres — serien bevares uendret),
+    // uke 6 fullført → streak 5 (produkteiers valg 2026-08-29: forsikret uke teller ikke)
     const h = [
       ...week(2026, 1, 5, 3), ...week(2026, 1, 12, 3), ...week(2026, 1, 19, 3), ...week(2026, 1, 26, 3),
       /* uke 2026-02-02: 0 økter */ ...week(2026, 2, 9, 3),
     ];
     const r = computeWeekStreak(h, goal3, new Date(2026, 1, 18)); // ons i uka etter 2026-02-09
-    expect(r.currentWeeks).toBe(6);
+    expect(r.currentWeeks).toBe(5);
+    expect(r.bestWeeks).toBe(5);
     expect(r.insuranceInBank).toBe(0);
     expect(r.insuranceUsedWeekKeys).toEqual(['2026-02-02']);
   });
@@ -272,7 +275,7 @@ describe('computeWeekStreak', () => {
     ];
     const r = computeWeekStreak(h, goal3, new Date(2026, 1, 25));
     expect(r.currentWeeks).toBe(1);   // kun 2026-02-16-uka
-    expect(r.bestWeeks).toBe(5);      // 4 + forsikret uke
+    expect(r.bestWeeks).toBe(4);      // 4 faktiske treningsuker; forsikret uke teller ikke
   });
   it('uker FØR første økt noensinne teller ikke som brudd', () => {
     const h = week(2026, 3, 9, 3); // første og eneste uke = forrige uke
@@ -321,7 +324,8 @@ export interface WeekStreakResult {
  * Regler (spec § 2.1 + planpresisering 2):
  *  - Fullført uke = antall økter i uka >= goalForWeek(ukenøkkel).
  *  - 1 slinguke opptjenes per 4. PÅFØLGENDE fullførte uke, maks 1 i banken.
- *  - Røket uke forbruker bank automatisk (streaken fortsetter); tom bank → nullstill.
+ *  - Røket uke forbruker bank automatisk: serien BEVARES uendret (teller ikke +1;
+ *    produkteiers valg 2026-08-29); tom bank → nullstill.
  *  - Inneværende uke kan øke (hvis alt fullført) men aldri bryte.
  */
 export function computeWeekStreak(
@@ -350,7 +354,8 @@ export function computeWeekStreak(
       consecutiveSinceEarn += 1;
       if (consecutiveSinceEarn >= 4) { bank = 1; consecutiveSinceEarn = 0; }
     } else if (bank === 1) {
-      bank = 0; used.push(wk); streak += 1; consecutiveSinceEarn = 0;
+      // Produkteiers valg 2026-08-29: bevarer uten å telle — milepæler nås kun av faktiske treningsuker.
+      bank = 0; used.push(wk); consecutiveSinceEarn = 0;
     } else {
       streak = 0; consecutiveSinceEarn = 0;
     }

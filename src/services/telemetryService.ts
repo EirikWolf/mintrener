@@ -68,6 +68,43 @@ export async function recordShareLinkOpen(): Promise<void> {
   }
 }
 
+/**
+ * Engasjementstellere for C1/C2 (uke-streak + onboarding). FLATE feltnavn —
+ * setDoc med merge splitter ikke punktum-nøkler (se recordWorkoutTelemetry),
+ * og flate felt lar firestore.rules delta-validere hver teller individuelt
+ * (allowlist + increment-på-1) uten nested-map-kompromissene fra exercises.
+ * Union-typen ER kontrakten: den speiler feltallowlisten i
+ * `match /global_stats/engagement` i firestore.rules — endres den ene,
+ * MÅ den andre endres tilsvarende.
+ */
+export type EngagementCounter =
+  | 'onboarding_started' | 'onboarding_goalSet' | 'onboarding_firstWorkoutStarted' | 'onboarding_skipped'
+  | `onboarding_personaChosen_${'haugesund' | 'romsdal' | 'hardcore' | 'boyband' | 'standard'}`
+  | 'streak_weekCompleted' | 'streak_insuranceUsed' | 'streak_broken'
+  | `streak_milestone_w${2 | 4 | 8 | 12 | 26 | 52}`
+  | `accountPrompt_${'first_workout' | 'week2'}_${'shown' | 'accepted' | 'dismissed'}`;
+
+/**
+ * Teller anonymt én engasjementshendelse (onboarding-steg, streak-hendelse
+ * eller konto-prompt-respons) i global_stats/engagement. Samtykke-gatet og
+ * feiltolerant som resten av telemetrien — skal aldri forstyrre appen.
+ */
+export async function recordEngagementEvent(counter: EngagementCounter): Promise<void> {
+  if (!getTelemetryConsent() || !db) {
+    return;
+  }
+  try {
+    const engagementRef = doc(db, 'global_stats', 'engagement');
+    await setDoc(
+      engagementRef,
+      { [counter]: increment(1), lastUpdated: serverTimestamp() },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('Kunne ikke sende engagement-telemetri:', err);
+  }
+}
+
 // Bøttegrenser (ms) for lydavviks-histogrammet i global_stats/perf. p95 kan ikke
 // aggregeres på tvers av økter med rene increment()-operasjoner (Firestore har
 // ingen server-side persentil-funksjon), så hver klient klassifiserer i stedet

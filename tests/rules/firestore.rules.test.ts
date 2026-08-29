@@ -91,6 +91,14 @@ beforeEach(async () => {
       deviationOver50Ms: 0,
       lastUpdated: new Date(),
     });
+    await setDoc(doc(db, 'global_stats', 'engagement'), {
+      onboarding_started: 7,
+      onboarding_personaChosen_haugesund: 3,
+      streak_weekCompleted: 12,
+      streak_milestone_w2: 2,
+      accountPrompt_first_workout_shown: 5,
+      lastUpdated: new Date(),
+    });
     await setDoc(doc(db, 'users', 'alice'), { displayName: 'Alice' });
     await setDoc(doc(db, 'clock_sync', 'client-abc'), { ts: new Date() });
   });
@@ -276,6 +284,55 @@ describe('global_stats/perf (A5 ytelsestelemetri, regresjonsvern)', () => {
       setDoc(
         doc(db, 'global_stats', 'perf'),
         { hacked: 'yes', sessions: increment(1), lastUpdated: serverTimestamp() },
+        { merge: true }
+      )
+    );
+  });
+});
+
+describe('global_stats/engagement (C1/C2 engasjementstellere, regresjonsvern)', () => {
+  it('POSITIV: uautentisert increment-på-1 går gjennom (recordEngagementEvent-formen)', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertSucceeds(
+      setDoc(
+        doc(db, 'global_stats', 'engagement'),
+        { streak_weekCompleted: increment(1), lastUpdated: serverTimestamp() },
+        { merge: true }
+      )
+    );
+  });
+
+  it('NEGATIV: kan IKKE øke en teller med mer enn 1', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertFails(
+      setDoc(
+        doc(db, 'global_stats', 'engagement'),
+        { streak_weekCompleted: increment(2), lastUpdated: serverTimestamp() },
+        { merge: true }
+      )
+    );
+  });
+
+  it('NEGATIV: kan IKKE skrive ukjente felt til engagement', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertFails(
+      setDoc(
+        doc(db, 'global_stats', 'engagement'),
+        { hacker_field: increment(1), streak_weekCompleted: increment(1), lastUpdated: serverTimestamp() },
+        { merge: true }
+      )
+    );
+  });
+
+  it('POSITIV: første skriv (create) med gyldig inkrement går gjennom', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await deleteDoc(doc(ctx.firestore(), 'global_stats', 'engagement'));
+    });
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertSucceeds(
+      setDoc(
+        doc(db, 'global_stats', 'engagement'),
+        { onboarding_started: increment(1), lastUpdated: serverTimestamp() },
         { merge: true }
       )
     );
