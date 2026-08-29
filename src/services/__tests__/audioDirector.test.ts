@@ -11,7 +11,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   createAudioDirector,
   resolveAnnouncementPlan,
-  ANNOUNCE_HEADROOM_S,
   AudioDirectorEngine,
 } from '../audioDirector';
 import { EngineEvent } from '../../types/engineEvents';
@@ -105,6 +104,28 @@ function phaseStarted(
 // cuesPath-konvensjonen for testpersonaen (jf. COACH_PERSONAS i coachPersonaService)
 const HC = '/audio/personas/hardcore';
 
+// Buffer-lageret testene deler (reviewfunn): i produksjon leser has() og
+// getDuration() SAMME buffers-Map, så «cachet uten varighet» — og «varighet uten
+// cache» — er verdener som ikke finnes. Begge motorspørringene rutes derfor
+// gjennom ÉN kilde her, og tester setter cachen via cacheClips/cacheAllClips
+// i stedet for å mocke has() direkte.
+const DEFAULT_CLIP_S = 1;
+let clipCache: Record<string, number> = {};
+let allClipsCached = false;
+
+/** Cacher klipp med kjent varighet (array → DEFAULT_CLIP_S per nøkkel). */
+function cacheClips(keys: string[] | Record<string, number>): void {
+  const entries = Array.isArray(keys)
+    ? Object.fromEntries(keys.map((k) => [k, DEFAULT_CLIP_S]))
+    : keys;
+  clipCache = { ...clipCache, ...entries };
+}
+
+/** «Alt er cachet» — for tester der selve cache-innholdet er irrelevant. */
+function cacheAllClips(): void {
+  allClipsCached = true;
+}
+
 // La mikrotask-kjedene fra scheduleSequence().then(...) flyte gjennom.
 async function flush(): Promise<void> {
   await Promise.resolve();
@@ -133,13 +154,17 @@ describe('audioDirector (B3 β2)', () => {
     vi.spyOn(audioBufferEngine, 'setTimeBridge').mockImplementation(() => {});
     vi.spyOn(audioBufferEngine, 'scheduleSequence').mockResolvedValue(true);
     // β3 (bro + TTS): Directoren spiller bro-kjeder reaktivt via playSequence
-    // og sjekker cache-status via has() — default: ingenting cachet.
+    // og sjekker cache-status via has() — default: ingenting cachet, og dermed
+    // også ingen kjente varigheter (samme Map i produksjon, se clipCache).
     vi.spyOn(audioBufferEngine, 'playSequence').mockResolvedValue(true);
-    vi.spyOn(audioBufferEngine, 'has').mockReturnValue(false);
-    // Annonseringsprioritet (felttest-funn): default UKJENT varighet (null) —
-    // stigen skal da beholde dagens kaldstart-adferd (forsøk full → short →
-    // flagg). Testene som trenger hodroms-kortslutningen mocker varigheter selv.
-    vi.spyOn(audioBufferEngine, 'getDuration').mockReturnValue(null);
+    clipCache = {};
+    allClipsCached = false;
+    vi.spyOn(audioBufferEngine, 'has').mockImplementation(
+      (k: string) => allClipsCached || k in clipCache
+    );
+    vi.spyOn(audioBufferEngine, 'getDuration').mockImplementation((k: string) =>
+      allClipsCached ? (clipCache[k] ?? DEFAULT_CLIP_S) : (clipCache[k] ?? null)
+    );
     vi.spyOn(audioBufferEngine, 'stop').mockImplementation(() => {});
     // Planrettelse 2 (flerkjedemodell): deadlineChanged/skip kansellerer nå kun
     // det SKEDULERTE via cancelScheduled(), ikke full stop() – se testene under.
@@ -409,9 +434,10 @@ describe('audioDirector (B3 β2)', () => {
   });
 
   describe('start_321-stigen — full → short → pip (korte faser, live timing-funn A)', () => {
-    // De innspilte start_321-sporene er ~20 s; Tabatas 10 s-klargjøring/-pause
-    // har aldri plass (aldri-avkuttet-regelen svarer false). Stigen prøver den
-    // trimmede start_321_short-varianten FØR pip-fallbacken. scheduleSequence
+    // De innspilte start_321-sporene er 19,8–27,8 s (målt: hardcore 27,8 s);
+    // Tabatas 10 s-klargjøring/-pause har aldri plass (aldri-avkuttet-regelen
+    // svarer false). Stigen prøver den kortere start_321_short-varianten (egen
+    // TTS-cue per persona) FØR pip-fallbacken. scheduleSequence
     // svarer false uten sideeffekter (ucachet/for trangt/manglende bro), så et
     // short-forsøk etter false kan aldri gi dobbel avspilling.
     const FULL = `${HC}/start_321.mp3`;
@@ -506,96 +532,158 @@ describe('audioDirector (B3 β2)', () => {
     });
   });
 
-  describe('annonseringsprioritet — ANNOUNCE_HEADROOM_S (felttest: Tabata med 10 s grensefaser)', () => {
-    // Felttest-funn (Android, Klassisk Tabata): short (8,5 s hale av peptalken)
-    // ble endAt-forankret i 10 s-faser og STARTET ~1,5 s inn i fasen — den
-    // skedulerte kjeden preemptet (fade) den reaktive annonseringskjeden
-    // (rest-cue → bro-neste → øvelsesnavn), så øvelsesnavnet ble ALDRI lest opp.
-    // Med KJENT varighet skal en endAt-kandidat kun skeduleres når kjedestarten
-    // gir annonseringen minst ANNOUNCE_HEADROOM_S rom fra «nå» (motorklokken).
+  describe('annonseringsprioritet — hodrom målt fra den FAKTISKE annonseringskjeden', () => {
+    // Felttest-funn (Android, Klassisk Tabata der ALLE grensefaser er 10 s): en
+    // endAt-forankret nedtellingskjede ble hørbar MIDT i fasen og preemptet
+    // (becomeAudibleWithPreemption, fade) den reaktive annonseringskjeden
+    // (rest-cue → bro-neste → øvelsesnavn, eller intro → øvelsesnavn i prepare),
+    // så øvelsesnavnet ble ALDRI lest opp i hele økta.
+    //
+    // Hodrommet er derfor IKKE en konstant: det er summen av varighetene til
+    // NØYAKTIG de klippene den reaktive kjeden vil spille i denne fasen — samme
+    // nøkkelutledning som avspillingen bruker (deriveAnnounceChain).
     const FULL = `${HC}/start_321.mp3`;
     const SHORT = `${HC}/start_321_short.mp3`;
+    const REST_CUE = `${HC}/rest.mp3`;
+    const BRO_NESTE = `${HC}/bro-neste.mp3`;
+    const INTRO = `${HC}/intro.mp3`;
+    const EX_A_CLIP = `${HC}/exercise-kneboy.mp3`;
 
-    function mockDurations(map: Record<string, number>): void {
-      vi.mocked(audioBufferEngine.getDuration).mockImplementation((k: string) => map[k] ?? null);
-    }
+    // REELT målte klipplengder (ffprobe på public/audio/personas/hardcore/) —
+    // fasiten for hele fiksen: rest-kjeden er 4,32 + 3,44 + 6,18 = 13,94 s og
+    // får ALDRI plass i en 10 s Tabata-pause.
+    const HC_REAL: Record<string, number> = {
+      [FULL]: 27.815,
+      [SHORT]: 8.489,
+      [REST_CUE]: 4.32,
+      [BRO_NESTE]: 3.44,
+      [INTRO]: 5.68,
+      [EX_A_CLIP]: 6.185,
+    };
 
-    it('hodromskonstanten er 6 s (rest-cue + bro + øvelsesnavn får plass)', () => {
-      expect(ANNOUNCE_HEADROOM_S).toBe(6);
-    });
-
-    it('10 s fase, full (20 s) og short (8,5 s) cachet: INGEN endAt-kjede, go består, ingen pip-flagging', async () => {
+    it('FASIT (hardcore, 10 s Tabata-pause, reelle klipplengder): ingen nedtellingskjede, og navnet degraderes fram', async () => {
       usePersona();
-      mockDurations({ [FULL]: 20, [SHORT]: 8.5 });
+      cacheClips(HC_REAL);
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
-      emit(phaseStarted({ phase: 'rest', itemIndex: 0, endsAt: 10_000 }));
+      emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_A, endsAt: 10_000 }));
       await flush();
 
-      // short ville startet 1,5 s inn i fasen (10 − 8,5 < 6) — bevisst
-      // prioritering av annonseringen, IKKE degradering: ingen endAt-kjede,
-      // go-tilropet på grensen består, og countdown forblir stum (ingen pip).
+      // (a) INGEN endAt-forankret nedtellingskjede: den degraderte kjeden
+      // (navnet alene, 6,18 s) etterlater 3,82 s — for lite til short (8,49 s)
+      // og langt for lite til full (27,8 s).
       expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith([FULL], expect.anything());
-      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith([SHORT], expect.anything());
-      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith(
-        [`${HC}/go-1.mp3`],
-        { startAt: 10_000 }
+      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith(
+        [SHORT],
+        expect.anything()
       );
+      // Go-tilropet på grensen består — fasebyttet markeres fortsatt …
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([`${HC}/go-1.mp3`], {
+        startAt: 10_000,
+      });
+      // … og dette er en BEVISST prioritering, ikke en degradering: ingen pip.
       emit({ type: 'countdown', secondsLeft: 3 });
       expect(audioService.playCountdownBeep).not.toHaveBeenCalled();
+
+      // (b) Den reaktive kjeden degraderes til ØVELSESNAVNET alene: rest-cue og
+      // bro droppes (i den rekkefølgen), navnet aldri.
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([EX_A_CLIP]);
+      // Rest-cuen falt bort → dagens tone markerer pausestarten i stedet.
+      expect(audioService.playRestStart).toHaveBeenCalledWith(true);
     });
 
-    it('10 s fase med short på 3,5 s: short skeduleres (starter 6,5 s inn ≥ 6 s hodrom)', async () => {
+    it('hele kjeden får plass (30 s pause): ingen degradering, og hodrommet er kjedens sum', async () => {
       usePersona();
-      mockDurations({ [FULL]: 20, [SHORT]: 3.5 });
+      cacheClips(HC_REAL);
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
-      emit(phaseStarted({ phase: 'prepare', itemIndex: 0, endsAt: 10_000 }));
+      emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_A, endsAt: 30_000 }));
       await flush();
 
-      // full (kjent 20 s) passer aldri — forsøkes ikke engang; short direkte.
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([REST_CUE, BRO_NESTE, EX_A_CLIP]);
+      expect(audioService.playRestStart).not.toHaveBeenCalled();
+      // Hodrom 13,94 s: full ville startet etter 2,2 s (preemsjon) → aldri forsøkt;
+      // short starter etter 21,5 s og får plass.
       expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith([FULL], expect.anything());
-      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 10_000 });
-      emit({ type: 'countdown', secondsLeft: 3 });
-      expect(audioService.playCountdownBeep).not.toHaveBeenCalled();
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 30_000 });
     });
 
-    it('lang fase (30 s) med full på 20 s: full skeduleres som før (kjedestart 10 s ≥ 6 s)', async () => {
+    it('mellomtrinn (12 s pause): bro-neste droppes, rest-cue + navn beholdes', async () => {
       usePersona();
-      mockDurations({ [FULL]: 20, [SHORT]: 8.5 });
+      cacheClips(HC_REAL);
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
-      emit(phaseStarted({ phase: 'rest', itemIndex: 0, endsAt: 30_000 }));
+      // 13,94 s sprenger 12 s, men 4,32 + 6,18 = 10,50 s får plass.
+      emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_A, endsAt: 12_000 }));
       await flush();
 
-      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([FULL], { endAt: 30_000 });
-      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith([SHORT], expect.anything());
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([REST_CUE, EX_A_CLIP]);
+      expect(audioService.playRestStart).not.toHaveBeenCalled();
+    });
+
+    it('selv navnet alene får ikke plass (5 s pause): full kjede beholdes — vi kutter aldri navnet bevisst', async () => {
+      usePersona();
+      cacheClips(HC_REAL);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_A, endsAt: 5_000 }));
+      await flush();
+
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([REST_CUE, BRO_NESTE, EX_A_CLIP]);
+    });
+
+    it('prepare-kjeden degraderes til [øvelsesnavn] når intro + navn ikke får plass', async () => {
+      usePersona();
+      cacheClips(HC_REAL);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      // intro 5,68 + navn 6,18 = 11,87 s > 10 s → intro droppes; navnet spilles.
+      emit(phaseStarted({ phase: 'prepare', exercise: EX_A, durationS: 10, endsAt: 10_000 }));
+      await flush();
+
+      expect(coachPersonaService.playIntroThenExercise).not.toHaveBeenCalled();
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([EX_A_CLIP]);
+    });
+
+    it('prepare-kjeden får plass (20 s): intro-kjeden spilles som før', async () => {
+      usePersona();
+      cacheClips(HC_REAL);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', exercise: EX_A, durationS: 20, endsAt: 20_000 }));
+      await flush();
+
+      expect(coachPersonaService.playIntroThenExercise).toHaveBeenCalledWith('kneboy');
     });
 
     it('hodrommet måles mot motorklokken (engine.getNow) ved utstedelse, ikke mot 0', async () => {
       usePersona();
-      mockDurations({ [FULL]: 20, [SHORT]: 8.5 });
+      cacheClips(HC_REAL);
       const { engine, emit, setNow } = createFakeEngine();
       createAudioDirector(engine);
 
-      // Fase starter ved t=4000 med frist 19 000: short-kjedestart 10 500 ≥
-      // 4000 + 6000 → passer. (Mot 0 hadde også full på 20 s «passert» feil.)
+      // Fasen starter ved t=4000 med frist 34 000 (30 s igjen): hele kjeden
+      // (13,94 s) får plass, og short-kjedestart 25 511 ≥ 4000 + 13 940.
       setNow(4_000);
-      emit(phaseStarted({ phase: 'rest', itemIndex: 0, endsAt: 19_000 }));
+      emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_A, endsAt: 34_000 }));
       await flush();
 
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([REST_CUE, BRO_NESTE, EX_A_CLIP]);
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 34_000 });
       expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith([FULL], expect.anything());
-      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 19_000 });
     });
 
-    it('ukjent varighet (kaldstart, ucachet): dagens stige uendret — full → false → short → pip-flagg', async () => {
+    it('ingen annonseringskjede å beskytte (tomt buffercache): dagens stige uendret — full → short → pip', async () => {
       usePersona();
-      // getDuration → null (default fra beforeEach): hodrommet kan ikke avgjøres
-      // uten gjetning — degraderingsflagget + replanCurrentPhase re-evaluerer
-      // med kjente varigheter når preload er ferdig.
+      // Ingenting dekodet: hodrommet er 0, men kandidatenes varigheter er også
+      // ukjente (getDuration → null) → gaten kan ikke avgjøre, og stigen kjører
+      // som før. Degraderingsflagget + replanCurrentPhase retter opp senere.
       vi.mocked(audioBufferEngine.scheduleSequence).mockResolvedValue(false);
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
@@ -607,6 +695,117 @@ describe('audioDirector (B3 β2)', () => {
       expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 10_000 });
       emit({ type: 'countdown', secondsLeft: 3 });
       expect(audioService.playCountdownBeep).toHaveBeenCalledWith(true);
+    });
+
+    it('kaldstart (Ø2): short-nøkkelen finnes men bufferen er udekodet → scheduleSequence svarer false, og BÅDE pip og replan-flagg settes', async () => {
+      usePersona();
+      // Kommentaren i issuePending påsto at «mangler-short» konsekvent gir
+      // ingen kjede og ingen flagg. Det gjelder KUN når nøkkelen er null: med
+      // nøkkel + udekodet buffer kalles scheduleSequence, svarer false, og
+      // beepFallback + lookaheadDegraded settes begge (riktig kaldstart-adferd).
+      vi.mocked(audioBufferEngine.scheduleSequence).mockResolvedValue(false);
+      const { engine, emit } = createFakeEngine();
+      const director = createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', itemIndex: 0, endsAt: 10_000 }));
+      await flush();
+
+      // beepFallback: pipene markerer grensen
+      emit({ type: 'countdown', secondsLeft: 3 });
+      expect(audioService.playCountdownBeep).toHaveBeenCalledWith(true);
+
+      // lookaheadDegraded: replan re-utsteder når bufferne omsider er dekodet
+      vi.mocked(audioBufferEngine.scheduleSequence).mockClear();
+      vi.mocked(audioBufferEngine.scheduleSequence).mockResolvedValue(true);
+      director.replanCurrentPhase();
+
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([FULL], { endAt: 10_000 });
+    });
+
+    it('full cachet og innenfor hodrommet, men scheduleSequence svarer false: stigen faller til short', async () => {
+      usePersona();
+      // Kjente varigheter, ingen annonseringskjede (intro/navn ucachet) → hodrom
+      // 0: full (27,8 s) får plass i 40 s-fasen og forsøkes. Motoren svarer
+      // likevel false (f.eks. for trangt vindu i praksis) → short.
+      cacheClips({ [FULL]: 27.815, [SHORT]: 8.489 });
+      vi.mocked(audioBufferEngine.scheduleSequence).mockImplementation(
+        async (keys: string[]) => keys[0] !== FULL
+      );
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', itemIndex: 0, endsAt: 40_000 }));
+      await flush();
+
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([FULL], { endAt: 40_000 });
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 40_000 });
+      emit({ type: 'countdown', secondsLeft: 3 });
+      expect(audioService.playCountdownBeep).not.toHaveBeenCalled();
+    });
+
+    describe('hodromsgaten gjelder KUN fasestart-veien (B2)', () => {
+      // handleDeadlineChanged (resume/dvale-reanker/catch-up) og
+      // replanCurrentPhase re-utsteder lookaheaden, men spiller ALDRI noen
+      // reaktiv annonsering på nytt — der er det ingenting å beskytte, og en
+      // aktiv hodromsgate ville gitt total stillhet inn mot grensen (verken
+      // 3-2-1 eller pip, siden grenen bevisst ikke setter beepFallback).
+      it('workout:resumed: nedtellingen reskeduleres selv om fasestartens kjede sprengte fasen', async () => {
+        usePersona();
+        cacheClips(HC_REAL);
+        const { engine, emit } = createFakeEngine();
+        createAudioDirector(engine);
+
+        emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_A, endsAt: 10_000 }));
+        await flush();
+        expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith(
+          [SHORT],
+          expect.anything()
+        );
+        vi.mocked(audioBufferEngine.scheduleSequence).mockClear();
+
+        emit({ type: 'workout:resumed', endsAt: 12_000 });
+        await flush();
+
+        expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([FULL], { endAt: 12_000 });
+      });
+
+      it('phase:deadlineChanged (dvale-reanker): samme — gaten gjelder ikke', async () => {
+        usePersona();
+        cacheClips(HC_REAL);
+        const { engine, emit } = createFakeEngine();
+        createAudioDirector(engine);
+
+        emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_A, endsAt: 10_000 }));
+        await flush();
+        vi.mocked(audioBufferEngine.scheduleSequence).mockClear();
+
+        emit({ type: 'phase:deadlineChanged', endsAt: 11_000 });
+        await flush();
+
+        expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([FULL], { endAt: 11_000 });
+      });
+
+      it('replanCurrentPhase: samme — nedtellingen re-utstedes når preloaden lander', async () => {
+        usePersona();
+        // Ved fasestart er annonseringskjeden dekodet, men nedtellingsklippene
+        // ikke → dagens stige kjører og degraderingsflagget settes.
+        cacheClips({ [REST_CUE]: 4.32, [BRO_NESTE]: 3.44, [EX_A_CLIP]: 6.185 });
+        vi.mocked(audioBufferEngine.scheduleSequence).mockResolvedValue(false);
+        const { engine, emit } = createFakeEngine();
+        const director = createAudioDirector(engine);
+
+        emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_A, endsAt: 10_000 }));
+        await flush();
+
+        // Preloaden lander: nå er også nedtellingsklippene dekodet.
+        cacheClips({ [FULL]: 27.815, [SHORT]: 8.489 });
+        vi.mocked(audioBufferEngine.scheduleSequence).mockClear();
+        vi.mocked(audioBufferEngine.scheduleSequence).mockResolvedValue(true);
+
+        director.replanCurrentPhase();
+
+        expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([FULL], { endAt: 10_000 });
+      });
     });
   });
 
@@ -898,7 +1097,7 @@ describe('audioDirector (B3 β2)', () => {
 
     it('rest med egendefinert neste: playSequence([bro-neste]) og DERETTER (await kjedeslutt) speak(navn)', async () => {
       usePersona();
-      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/bro-neste.mp3`);
+      cacheClips([`${HC}/bro-neste.mp3`]);
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
@@ -914,7 +1113,7 @@ describe('audioDirector (B3 β2)', () => {
 
     it('isCustom-flagget (uten custom-prefiks) behandles likt', async () => {
       usePersona();
-      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/bro-neste.mp3`);
+      cacheClips([`${HC}/bro-neste.mp3`]);
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
@@ -941,7 +1140,7 @@ describe('audioDirector (B3 β2)', () => {
 
     it('TTS-navnet leses IKKE hvis økten ikke lenger kjører når kjeden slutter (pause under broen)', async () => {
       usePersona();
-      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/bro-neste.mp3`);
+      cacheClips([`${HC}/bro-neste.mp3`]);
       const { engine, emit, snapshot } = createFakeEngine();
       createAudioDirector(engine);
 
@@ -954,9 +1153,7 @@ describe('audioDirector (B3 β2)', () => {
 
     it('persona-øvelsesklipp cachet (β5-sømmen): [bro-neste, persona-klipp] som ÉN kjede, ingen TTS', async () => {
       usePersona();
-      vi.mocked(audioBufferEngine.has).mockImplementation(
-        (k: string) => k === `${HC}/bro-neste.mp3` || k === `${HC}/exercise-utfall-forover.mp3`
-      );
+      cacheClips([`${HC}/bro-neste.mp3`, `${HC}/exercise-utfall-forover.mp3`]);
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
@@ -973,9 +1170,7 @@ describe('audioDirector (B3 β2)', () => {
 
     it('prepare med egendefinert øvelse: [intro, bro-naa]-kjede og DERETTER speak(navn)', async () => {
       usePersona();
-      vi.mocked(audioBufferEngine.has).mockImplementation(
-        (k: string) => k === `${HC}/intro.mp3` || k === `${HC}/bro-naa.mp3`
-      );
+      cacheClips([`${HC}/intro.mp3`, `${HC}/bro-naa.mp3`]);
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
@@ -1018,9 +1213,7 @@ describe('audioDirector (B3 β2)', () => {
 
     it('landing work med bro + studioklipp cachet: ÉN kjede [bro-resync, exercise-<id>]', async () => {
       usePersona();
-      vi.mocked(audioBufferEngine.has).mockImplementation(
-        (k: string) => k === `${HC}/bro-resync.mp3` || k === 'exercise-kneboy'
-      );
+      cacheClips([`${HC}/bro-resync.mp3`, 'exercise-kneboy']);
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
@@ -1037,7 +1230,7 @@ describe('audioDirector (B3 β2)', () => {
 
     it('landing work med kun bro cachet: bro-kjede og DERETTER speak(navn)', async () => {
       usePersona();
-      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/bro-resync.mp3`);
+      cacheClips([`${HC}/bro-resync.mp3`]);
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
@@ -1051,7 +1244,7 @@ describe('audioDirector (B3 β2)', () => {
 
     it('landing rest: navnedelen er NESTE øvelse', async () => {
       usePersona();
-      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/bro-resync.mp3`);
+      cacheClips([`${HC}/bro-resync.mp3`]);
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
@@ -1063,9 +1256,7 @@ describe('audioDirector (B3 β2)', () => {
 
     it('persona-øvelsesklipp cachet (β5-sømmen): kjeden bruker personaens klipp', async () => {
       usePersona();
-      vi.mocked(audioBufferEngine.has).mockImplementation(
-        (k: string) => k === `${HC}/bro-resync.mp3` || k === `${HC}/exercise-kneboy.mp3`
-      );
+      cacheClips([`${HC}/bro-resync.mp3`, `${HC}/exercise-kneboy.mp3`]);
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
@@ -1111,7 +1302,7 @@ describe('audioDirector (B3 β2)', () => {
 
     it('skip midt i bro-kjeden (rest): TTS-navnet leses IKKE etter at ny fase har startet', async () => {
       usePersona();
-      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/bro-neste.mp3`);
+      cacheClips([`${HC}/bro-neste.mp3`]);
       let resolveChain!: (v: boolean) => void;
       vi.mocked(audioBufferEngine.playSequence).mockImplementationOnce(
         () =>
@@ -1135,9 +1326,7 @@ describe('audioDirector (B3 β2)', () => {
 
     it('prepare→prepare-skip: fase-gaten alene hjelper ikke — epoch-guarden stopper TTS', async () => {
       usePersona();
-      vi.mocked(audioBufferEngine.has).mockImplementation(
-        (k: string) => k === `${HC}/intro.mp3` || k === `${HC}/bro-naa.mp3`
-      );
+      cacheClips([`${HC}/intro.mp3`, `${HC}/bro-naa.mp3`]);
       let resolveChain!: (v: boolean) => void;
       vi.mocked(audioBufferEngine.playSequence).mockImplementationOnce(
         () =>
@@ -1181,7 +1370,7 @@ describe('audioDirector (B3 β2)', () => {
 
     it('resync-TTS-grenen avbrutt av fasebytte: ingen speak', async () => {
       usePersona();
-      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/bro-resync.mp3`);
+      cacheClips([`${HC}/bro-resync.mp3`]);
       let resolveChain!: (v: boolean) => void;
       vi.mocked(audioBufferEngine.playSequence).mockImplementationOnce(
         () =>
@@ -1220,9 +1409,7 @@ describe('audioDirector (B3 β2)', () => {
 
     it('rest-cue + studioklipp cachet: ÉN kjede [rest, exercise-<id>] i stedet for tonen', () => {
       usePersona();
-      vi.mocked(audioBufferEngine.has).mockImplementation(
-        (k: string) => k === `${HC}/rest.mp3` || k === 'exercise-utfall-forover'
-      );
+      cacheClips([`${HC}/rest.mp3`, 'exercise-utfall-forover']);
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
@@ -1238,7 +1425,7 @@ describe('audioDirector (B3 β2)', () => {
 
     it('rest-cue cachet, annonsering ucachet (tts-plan): cue først, fallback-kjeden ETTER kjedeslutt', async () => {
       usePersona();
-      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/rest.mp3`);
+      cacheClips([`${HC}/rest.mp3`]);
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
@@ -1257,9 +1444,7 @@ describe('audioDirector (B3 β2)', () => {
 
     it('egendefinert neste + rest-cue: [rest, bro-neste]-kjede og DERETTER speak(navn)', async () => {
       usePersona();
-      vi.mocked(audioBufferEngine.has).mockImplementation(
-        (k: string) => k === `${HC}/rest.mp3` || k === `${HC}/bro-neste.mp3`
-      );
+      cacheClips([`${HC}/rest.mp3`, `${HC}/bro-neste.mp3`]);
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
@@ -1276,7 +1461,7 @@ describe('audioDirector (B3 β2)', () => {
 
     it('rest-cue cachet uten neste øvelse: cuen spilles alene', () => {
       usePersona();
-      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/rest.mp3`);
+      cacheClips([`${HC}/rest.mp3`]);
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
@@ -1288,7 +1473,7 @@ describe('audioDirector (B3 β2)', () => {
 
     it('speechEnabled=false: dagens tone, aldri cue (stemme respekterer tale-bryteren)', () => {
       usePersona();
-      vi.mocked(audioBufferEngine.has).mockReturnValue(true);
+      cacheAllClips();
       const { engine, emit } = createFakeEngine({ speechEnabled: false });
       createAudioDirector(engine);
 
@@ -1299,7 +1484,7 @@ describe('audioDirector (B3 β2)', () => {
     });
 
     it('standard persona: playRestStart + announceRest, aldri cue (uendret)', () => {
-      vi.mocked(audioBufferEngine.has).mockReturnValue(true);
+      cacheAllClips();
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
@@ -1312,7 +1497,7 @@ describe('audioDirector (B3 β2)', () => {
 
     it('skip under rest-cuen (tts-plan): fallback-annonseringen undertrykkes (epoch-guard)', async () => {
       usePersona();
-      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/rest.mp3`);
+      cacheClips([`${HC}/rest.mp3`]);
       let resolveChain!: (v: boolean) => void;
       vi.mocked(audioBufferEngine.playSequence).mockImplementationOnce(
         () =>
