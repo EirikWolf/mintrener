@@ -96,10 +96,21 @@ export class AudioBufferEngine {
   // lenger (→0). Uten refcount ville f.eks. cancelScheduled() av en ALDRI
   // hørbar kjede kunnet trigge et feilaktig unduck mens en annen kjede spiller.
   private audibleCount = 0;
-  // Teller opp for hvert stop() slik at en sekvens som venter på ctx.resume()
-  // kan oppdage at et stopp (eksternt, eller fra en nyere sekvens) traff i
-  // await-vinduet – stop/skedulering er ellers ikke atomisk over den awaiten
-  private stopEpoch = 0;
+  // Epoch-tellere: en sekvens som venter på ctx.resume() må kunne oppdage at
+  // et stopp traff i await-vinduet – stop/skedulering er ikke atomisk over den
+  // awaiten. Planrettelse 4 (fix 3): SPLITTET i to tellere (valgt fremfor
+  // per-kjede-epoch fordi invalideringen skjer FØR kjeden finnes – i resume-
+  // await-vinduet er det ingen kjede å henge en epoch på):
+  //  - audibleEpoch: bumpes av stop() og stopAudibleChains(). Målgruppe:
+  //    ventende playSequence (dens kjede ville blitt hørbar straks).
+  //  - scheduledEpoch: bumpes av stop() og cancelScheduled(). Målgruppe:
+  //    ventende scheduleSequence (dens kjede ville vært en skedulert
+  //    fremtidskjede – nettopp det cancelScheduled retter seg mot).
+  // Uten splitten invaliderte en reaktiv cue (stopAudibleChains via
+  // playSequence) en ventende scheduleSequence den aldri skulle rørt – og
+  // true-svaret undertrykte pip-fallbacken.
+  private audibleEpoch = 0;
+  private scheduledEpoch = 0;
   // Offset (sekunder) mellom motorens klokke (TimerEngine.now(), ms) og
   // AudioContext.currentTime, målt én gang ved setTimeBridge(). Null = ikke
   // brodd ennå – da nekter scheduleSequence heller enn å gjette et anker.
@@ -199,7 +210,7 @@ export class AudioBufferEngine {
 
     const ctx = audioService.getContext();
     if (ctx.state !== 'running') {
-      const epochBeforeResume = this.stopEpoch;
+      const epochBeforeResume = this.audibleEpoch;
       try {
         await ctx.resume();
       } catch {
@@ -212,11 +223,12 @@ export class AudioBufferEngine {
       // (Assertion til full union: TS narrower ellers bort 'running' over awaiten
       // og tror sammenligningen er umulig – resume() kan faktisk ha endret state.)
       if ((ctx.state as AudioContextState) !== 'running') return false;
-      // Et stop() traff mens vi ventet på resume (brukeren pauset, eller en
-      // nyere sekvens tok over): den nyeste intensjonen vinner, så vi skedulerer
-      // ingenting. true = «bevisst stoppet» – samme kontrakt som stop() på en
-      // spilt kjede, slik at kallere ikke spiller fallback oppå et stopp.
-      if (this.stopEpoch !== epochBeforeResume) return true;
+      // Et stopp av hørbar tale traff mens vi ventet på resume (brukeren pauset,
+      // eller en nyere sekvens tok over): den nyeste intensjonen vinner, så vi
+      // skedulerer ingenting. true = «bevisst stoppet» – samme kontrakt som
+      // stop() på en spilt kjede, slik at kallere ikke spiller fallback oppå et
+      // stopp. (audibleEpoch: cancelScheduled() rører ikke denne stien.)
+      if (this.audibleEpoch !== epochBeforeResume) return true;
     }
 
     const crossfadeS = opts?.crossfadeS ?? DEFAULT_CROSSFADE_S;
@@ -307,7 +319,7 @@ export class AudioBufferEngine {
     // ved deadlineChanged/skip, stop() ved pause/reset) å avgjøre hva som kanselleres.
 
     if (ctx.state !== 'running') {
-      const epochBeforeResume = this.stopEpoch;
+      const epochBeforeResume = this.scheduledEpoch;
       try {
         await ctx.resume();
       } catch {
@@ -315,7 +327,11 @@ export class AudioBufferEngine {
       }
       // (Assertion til full union: se identisk kommentar i playSequence.)
       if ((ctx.state as AudioContextState) !== 'running') return false;
-      if (this.stopEpoch !== epochBeforeResume) return true;
+      // scheduledEpoch (fix 3): kun stop() og cancelScheduled() invaliderer en
+      // ventende skedulert kjede – en reaktiv cue (stopAudibleChains) gjør det
+      // IKKE, ellers ville f.eks. halfway drept en lovlig lookahead-kjede og
+      // true-svaret undertrykt pip-fallbacken på grensen.
+      if (this.scheduledEpoch !== epochBeforeResume) return true;
     }
 
     const schedule = computeSequenceSchedule(durations, crossfadeS, startAt);
@@ -336,11 +352,17 @@ export class AudioBufferEngine {
     // "avspilling starter" er samme øyeblikk for øret, men et scheduleSequence-
     // anker kan ligge sekunder frem – øyeblikkelig ducking ville dempet
     // bakgrunnslyd lenge før klippet faktisk høres.
+    // Forbehold (Planrettelse 4, minor): setTimeout throttles i bakgrunnsfaner
+    // (typisk til >= 1 s oppløsning), så markAudible/preempsjon/ducking kan
+    // fyre sent når skjermen er av – selve AVSPILLINGEN er upåvirket (den er
+    // skedulert på AudioContext-klokken), verste fall er sen demping av
+    // bakgrunnslyd og et kort to-stemmer-overlapp i bakgrunn. Akseptert:
+    // alternativet (polling mot lydklokken) koster mer enn det smaker.
     const duckDelayMs = Math.max(0, (startAt - ctx.currentTime) * 1000);
 
     return new Promise<boolean>((resolve) => {
       const chain: ActiveChain = { nodes, resolve, audible: false };
-      chain.duckTimer = setTimeout(() => this.markAudible(chain), duckDelayMs);
+      chain.duckTimer = setTimeout(() => this.becomeAudibleWithPreemption(chain), duckDelayMs);
       this.chains.push(chain);
       nodes[nodes.length - 1].source.onended = () => {
         this.disconnectNodes(nodes);
@@ -361,7 +383,9 @@ export class AudioBufferEngine {
    * forsvinne stille, uten å kutte noe som faktisk spiller nå.
    */
   public cancelScheduled(): void {
-    this.stopEpoch++;
+    // scheduledEpoch (fix 3): også en scheduleSequence som fortsatt venter i
+    // resume-await er en «skedulert kjede» og skal kanselleres av dette kallet.
+    this.scheduledEpoch++;
     const scheduled = this.chains.filter((c) => !c.audible);
     if (scheduled.length === 0) return;
     const now = audioService.getContext().currentTime;
@@ -407,6 +431,25 @@ export class AudioBufferEngine {
 
     source.start(entry.start);
     return { source, gain };
+  }
+
+  /**
+   * Planrettelse 4 (fix 4): en skedulert kjede som når sitt startAt og blir
+   * hørbar preempter andre HØRBARE kjeder (fade) – «én stemme om gangen»
+   * gjelder også når stemmen som starter er en lookahead-kjede (f.eks.
+   * start_321 som treffer mens en intro-kjede fortsatt spiller i en kort
+   * prepare). Søsken-SKEDULERTE kjeder er urørt: kun audibleEpoch bumpes
+   * (epoch-splitten fra fix 3), aldri scheduledEpoch. Rekkefølgen (markAudible
+   * FØR preempsjonen) holder duck-refcounten > 0 gjennom hele stemmebyttet –
+   * ingen unduck/duck-flapp i overgangen.
+   */
+  private becomeAudibleWithPreemption(chain: ActiveChain): void {
+    this.markAudible(chain);
+    this.audibleEpoch++;
+    const others = this.chains.filter((c) => c.audible && c !== chain);
+    if (others.length === 0) return;
+    const now = audioService.getContext().currentTime;
+    others.forEach((c) => this.fadeStopChain(c, now, DEFAULT_STOP_FADE_S));
   }
 
   /**
@@ -510,13 +553,25 @@ export class AudioBufferEngine {
    * playSequence før en ny reaktiv kjede skedulerer.
    */
   private stopAudibleChains(fadeOutS = DEFAULT_STOP_FADE_S): void {
-    // Teller alltid – også uten hørbare kjeder – slik at en sekvens midt i
-    // resume-vinduet ser stoppet (se stopEpoch-kommentaren over)
-    this.stopEpoch++;
+    // Teller alltid – også uten hørbare kjeder – slik at en playSequence midt i
+    // resume-vinduet ser stoppet. KUN audibleEpoch (fix 3): en ventende
+    // scheduleSequence er ikke i denne stiens målgruppe.
+    this.audibleEpoch++;
     const audible = this.chains.filter((c) => c.audible);
     if (audible.length === 0) return;
     const now = audioService.getContext().currentTime;
     audible.forEach((chain) => this.fadeStopChain(chain, now, fadeOutS));
+  }
+
+  /**
+   * Offentlig audible-only-stopp (Planrettelse 3): hørbare kjeder fades ut,
+   * skedulerte fremtidskjeder (Directorens lookahead-ankre start_321/go/last5)
+   * er URØRT. Brukes av coachPersonaService sine REAKTIVE cue-stier
+   * (playPersonaCue/playIntroThenExercise) – full stop() er forbeholdt
+   * pause/reset, der også det skedulerte skal bort.
+   */
+  public stopAudible(fadeOutS = DEFAULT_STOP_FADE_S): void {
+    this.stopAudibleChains(fadeOutS);
   }
 
   /**
@@ -527,8 +582,10 @@ export class AudioBufferEngine {
    */
   public stop(fadeOutS = DEFAULT_STOP_FADE_S): void {
     // Teller alltid – også uten aktive kjeder – slik at en sekvens midt i
-    // resume-vinduet ser stoppet (se stopEpoch-kommentaren over)
-    this.stopEpoch++;
+    // resume-vinduet ser stoppet. Fullt stopp bumper BEGGE epochene (fix 3):
+    // både ventende playSequence og ventende scheduleSequence skal dø her.
+    this.audibleEpoch++;
+    this.scheduledEpoch++;
     if (this.chains.length === 0) return;
 
     const now = audioService.getContext().currentTime;

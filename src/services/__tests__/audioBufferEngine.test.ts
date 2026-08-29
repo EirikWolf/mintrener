@@ -462,6 +462,23 @@ describe('AudioBufferEngine – tidsbro (setTimeBridge / toAudioTime)', () => {
   it('toAudioTime kaster hvis broen aldri er satt', () => {
     expect(() => engine.toAudioTime(1000)).toThrow();
   });
+
+  it('Planrettelse 4 (fix 1): re-måling etter frossen ctx-klokke gir korrekte ankre igjen', () => {
+    // Scenario: mid-økt-suspensjon fryser ctx.currentTime mens motorklokken
+    // løper videre — den gamle broen ville gjort alle ankre permanent sene.
+    const { ctx } = createMockContext({}, 10);
+    vi.spyOn(audioService, 'getContext').mockReturnValue(ctx as unknown as AudioContext);
+
+    engine.setTimeBridge(1000); // offset = 10 - 1 = 9
+    expect(engine.toAudioTime(6000)).toBeCloseTo(15, 6); // gammel bro: 6 + 9
+
+    // Motorklokken har løpt til 5000 ms; ctx.currentTime står fortsatt på 10.
+    // Re-måling (Directoren gjør dette per fase) gir offset = 10 - 5 = 5.
+    engine.setTimeBridge(5000);
+
+    expect(engine.toAudioTime(5000)).toBeCloseTo(10, 6); // "nå" er nå
+    expect(engine.toAudioTime(6000)).toBeCloseTo(11, 6); // 1 s frem — ikke 15
+  });
 });
 
 describe('AudioBufferEngine.scheduleSequence (absolutt anker + tidsbro)', () => {
@@ -664,6 +681,23 @@ describe('AudioBufferEngine.scheduleSequence (absolutt anker + tidsbro)', () => 
     await expect(played).resolves.toBe(true);
   });
 
+  it('stopAudible(): offentlig audible-only-stopp – hørbar kjede fades, skedulert kjede står (Planrettelse 3)', async () => {
+    const { sources } = await setupBridgedEngine();
+
+    const audible = engine.playSequence(['exercise-burpees']);
+    const scheduled = engine.scheduleSequence(['exercise-planke'], { startAt: 15000 });
+    expect(sources).toHaveLength(2);
+
+    engine.stopAudible();
+
+    expect(sources[0].stop).toHaveBeenCalledTimes(1);
+    expect(sources[1].stop).not.toHaveBeenCalled();
+    await expect(audible).resolves.toBe(true);
+
+    sources[1].onended?.();
+    await expect(scheduled).resolves.toBe(true);
+  });
+
   it('duck-balanse: ingen prematurt unduck mens en annen kjede fortsatt er hørbar', async () => {
     vi.useFakeTimers();
     const { sources } = await setupBridgedEngine(10);
@@ -690,6 +724,134 @@ describe('AudioBufferEngine.scheduleSequence (absolutt anker + tidsbro)', () => 
     sources[1].onended?.();
     await expect(second).resolves.toBe(true);
     expect(duckStopSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Planrettelse 4 (fix 3): epoch-splitt. Kun stop() (og audible-stopp for
+  // playSequence-familien) skal invalidere en sekvens som venter i resume-await;
+  // en reaktiv cue (stopAudibleChains) skal ALDRI drepe en ventende
+  // scheduleSequence — mens cancelScheduled() SKAL (skedulerte kjeder er nettopp
+  // dens målgruppe, også de som ennå bare finnes som en pending await).
+  // ---------------------------------------------------------------------------
+
+  /** Fanger alle resume-promiser og gir én utløser som slipper dem samlet. */
+  function deferResume(mock: { ctx: { state: string; resume: Mock } }): () => void {
+    const resolvers: Array<() => void> = [];
+    mock.ctx.state = 'suspended';
+    mock.ctx.resume = vi.fn().mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvers.push(resolve);
+        })
+    );
+    return () => {
+      mock.ctx.state = 'running';
+      resolvers.splice(0).forEach((r) => r());
+    };
+  }
+
+  it('epoch-splitt: reaktiv playSequence under scheduleSequence-resume-await dreper IKKE den skedulerte', async () => {
+    // Krysskontamineringen fra samle-reviewen: playSequence sin stopAudibleChains
+    // bumpet den GLOBALE epochen, så en scheduleSequence som ventet på resume ble
+    // invalidert (true-svar → pip-fallback undertrykt → stillhet på grensen).
+    const mock = await setupBridgedEngine();
+    const release = deferResume(mock);
+
+    const scheduled = engine.scheduleSequence(['exercise-planke'], { startAt: 15000 });
+    const played = engine.playSequence(['exercise-burpees']); // reaktiv cue midt i vinduet
+
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // BEGGE kjedene er skedulert: den skedulerte på sitt anker, den reaktive på nå+lead
+    expect(mock.sources).toHaveLength(2);
+    expect(mock.sources[0].start.mock.calls[0][0]).toBeCloseTo(24, 6); // toAudioTime(15000)
+    expect(mock.sources[1].start.mock.calls[0][0]).toBeCloseTo(10.03, 6);
+
+    mock.sources[0].onended?.();
+    await expect(scheduled).resolves.toBe(true);
+    mock.sources[1].onended?.();
+    await expect(played).resolves.toBe(true);
+  });
+
+  it('epoch-splitt: cancelScheduled() i resume-await-vinduet kansellerer den ventende skedulerte kjeden', async () => {
+    // cancelScheduled retter seg mot skedulerte kjeder — også en som bare finnes
+    // som pending await ennå. true = «bevisst kansellert» (samme kontrakt som
+    // silentCancelChain), så kalleren ikke spiller fallback oppå en kansellering.
+    const mock = await setupBridgedEngine();
+    const release = deferResume(mock);
+
+    const pending = engine.scheduleSequence(['exercise-burpees'], { startAt: 15000 });
+    engine.cancelScheduled();
+
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mock.ctx.createBufferSource).not.toHaveBeenCalled();
+    await expect(pending).resolves.toBe(true);
+  });
+
+  it('epoch-splitt: cancelScheduled() i resume-await-vinduet rører IKKE en ventende playSequence', async () => {
+    const mock = await setupBridgedEngine();
+    const release = deferResume(mock);
+
+    const pending = engine.playSequence(['exercise-burpees']);
+    engine.cancelScheduled();
+
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mock.sources).toHaveLength(1);
+    mock.sources[0].onended?.();
+    await expect(pending).resolves.toBe(true);
+  });
+
+  it('epoch-splitt: fullt stop() i resume-await-vinduet vinner fortsatt over scheduleSequence', async () => {
+    const mock = await setupBridgedEngine();
+    const release = deferResume(mock);
+
+    const pending = engine.scheduleSequence(['exercise-burpees'], { startAt: 15000 });
+    engine.stop();
+
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mock.ctx.createBufferSource).not.toHaveBeenCalled();
+    await expect(pending).resolves.toBe(true);
+  });
+
+  it('Planrettelse 4 (fix 4): skedulert kjede som når startAt preempter hørbar reaktiv kjede, søsken urørt', async () => {
+    vi.useFakeTimers();
+    const { sources } = await setupBridgedEngine(10);
+
+    // Reaktiv kjede spiller (hørbar med det samme)
+    const reactive = engine.playSequence(['exercise-burpees']);
+    expect(duckStartSpy).toHaveBeenCalledTimes(1);
+
+    // To skedulerte søsken: én når startAt om 2 s, én om 4 s
+    const sched1 = engine.scheduleSequence(['exercise-planke'], { startAt: 3000 }); // toAudioTime=12
+    const sched2 = engine.scheduleSequence(['exercise-burpees'], { startAt: 5000 }); // toAudioTime=14
+
+    await vi.advanceTimersByTimeAsync(2000); // sched1 blir hørbar
+
+    // Den reaktive kjeden er fade-stoppet («én stemme om gangen» også når
+    // stemmen som starter er en lookahead-kjede)...
+    expect(sources[0].stop).toHaveBeenCalledTimes(1);
+    await expect(reactive).resolves.toBe(true);
+    // ...men søsken-skedulerte kjeder lever videre (epoch-splitten: preempsjonen
+    // bumper aldri scheduled-epochen)
+    expect(sources[1].stop).not.toHaveBeenCalled();
+    expect(sources[2].stop).not.toHaveBeenCalled();
+
+    // Ingen duck-flap i byttet: refcounten var aldri 0 (markAudible før preempt)
+    expect(duckStartSpy).toHaveBeenCalledTimes(1);
+    expect(duckStopSpy).not.toHaveBeenCalled();
+
+    sources[1].onended?.();
+    await expect(sched1).resolves.toBe(true);
+    // sched2 kansellert som opprydding — ikke en del av assertions over
+    engine.stop();
+    await expect(sched2).resolves.toBe(true);
   });
 
   it('stop() rydder duck-timere for ALLE skedulerte kjeder (ingen sen duck-start etter global stopp)', async () => {
