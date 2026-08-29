@@ -604,6 +604,8 @@ describe('audioDirector (B3 β2)', () => {
       expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([`${HC}/go-1.mp3`], {
         startAt: 10_000,
       });
+      // BØR-4: cuen ble skrelt av av timing-hensyn → ingen tone oppå navnet.
+      expect(audioService.playRestStart).not.toHaveBeenCalled();
       // Nedtellingen kommer som stemme → ingen pip oppå den.
       emit({ type: 'countdown', secondsLeft: 3 });
       expect(audioService.playCountdownBeep).not.toHaveBeenCalled();
@@ -683,7 +685,24 @@ describe('audioDirector (B3 β2)', () => {
       // (b) Den reaktive kjeden degraderes til ØVELSESNAVNET alene: rest-cue og
       // bro droppes (i den rekkefølgen), navnet aldri.
       expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([EX_A_CLIP]);
-      // Rest-cuen falt bort → dagens tone markerer pausestarten i stedet.
+      // (c) BØR-4 (produkteiers avgjørelse): cuen ble skrelt av av TIMING-
+      // hensyn, ikke fordi den manglet — da skal tonen IKKE fyres. Den ville
+      // kommet synkront rett før playSequence, altså som et pip oppå navnets
+      // første ~200 ms. Fasebyttet er allerede markert av go-tilropet.
+      expect(audioService.playRestStart).not.toHaveBeenCalled();
+    });
+
+    it('BØR-4: rest-cuen MANGLER (ucachet) → dagens tone består', async () => {
+      usePersona();
+      // Alt unntatt rest-cuen er dekodet: cuen ble aldri skrelt av, den fantes
+      // bare ikke. Da er tonen fortsatt eneste markør for pausestarten.
+      cacheClips({ [BRO_NESTE]: 3.44, [EX_MED_CLIP]: 2.115, [FULL]: 27.815, [SHORT]: 4.44 });
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_MED, endsAt: 10_000 }));
+      await flush();
+
       expect(audioService.playRestStart).toHaveBeenCalledWith(true);
     });
 
