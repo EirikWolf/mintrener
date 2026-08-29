@@ -208,6 +208,19 @@ function deriveRestChain(event: PhaseStartedEvent): AnnounceChain {
   return { ...EMPTY_ANNOUNCE_CHAIN, cue };
 }
 
+/**
+ * Varigheten (ms) av nedtellingens short-cue i en grensefase — budsjettposten
+ * fitAnnounceChain reserverer til den (BL-2). 0 = «ukjent»: ikke-grensefase,
+ * short-cue utenfor manifestet, eller udekodet buffer (kaldstart). Da faller
+ * budsjettet tilbake til fasens egen lengde, som før.
+ */
+function shortCueBudgetMs(phase: IntervalPhase): number {
+  if (!BOUNDARY_PHASES.includes(phase)) return 0;
+  const key = getPersonaClipKey('start_321_short');
+  const durationS = key === null ? null : audioBufferEngine.getDuration(key);
+  return durationS === null ? 0 : durationS * 1000;
+}
+
 /** Kjedens samlede varighet i ms — null når et ledd mangler kjent varighet. */
 function announceChainMs(chain: AnnounceChain): number | null {
   let total = 0;
@@ -226,29 +239,66 @@ export interface FittedAnnounceChain {
   readonly chain: AnnounceChain;
   /** null = ukjent varighet → ingen hodromsgate (dagens stige uendret). */
   readonly headroomMs: number | null;
+  /**
+   * true når degraderingen skrelte bort en cue som FANTES (timing), til forskjell
+   * fra en cue som aldri var der (ucachet/utenfor manifestet). Styrer om rest-
+   * tonen fyres i cuens sted — se mirrorPersonaRest (BØR-4).
+   */
+  readonly cueDroppedForTiming: boolean;
 }
 
 /**
  * Degraderingsrekkefølgen (Ø4, produkteier-godkjent): produkteiers klage er at
- * ØVELSESNAVNET mangler, så når hele kjeden ikke rekker fram til fasegrensen
- * skrelles broen av først, deretter cuen — navnet aldri. Får ikke engang navnet
- * alene plass, beholdes dagens fulle kjede: bedre å bli preemptet enn å tie.
- * Kjeder uten målbart navneledd (TTS-navn) degraderes ikke; der er det ingen
- * bufferlyd å prioritere mellom.
+ * ØVELSESNAVNET mangler, så når hele kjeden ikke rekker fram skrelles broen av
+ * først, deretter cuen — navnet aldri. Får ikke engang navnet alene plass,
+ * beholdes dagens fulle kjede: bedre å bli preemptet enn å tie. Kjeder uten
+ * målbart navneledd (TTS-navn) degraderes ikke; der er det ingen bufferlyd å
+ * prioritere mellom.
+ *
+ * BL-2 (andre review, empirisk): budsjettet er IKKE fasens lengde alene. Målte
+ * vi bare mot fasegrensen, degraderte vi akkurat nok til at kjeden fylte fasen
+ * — og da hadde nedtellingen ikke plass. Gate-grenen i issueBoundaryLadder
+ * setter bevisst ikke beepFallback, så resultatet ble TAUSHET der brukeren før
+ * fikk pip (i 9 av 11 målte persona/lengde-kombinasjoner i en 10 s pause, og i
+ * prepare 10 s: økta startet med 2,2 s stillhet før GO). Riktig budsjett er
+ * derfor fasen MINUS short-cuens faktiske varighet (samme margin som
+ * fitsHeadroom bruker, ellers kunne kjeden bestått budsjettet og likevel blitt
+ * avvist av gaten). Får ikke engang navnet plass i det strenge budsjettet,
+ * faller vi tilbake til fasens egen lengde — navnet er fortsatt viktigst.
+ *
+ * shortCueMs = 0 betyr «ukjent» (ucachet short-cue eller ikke-grensefase): da
+ * er dagens budsjett uendret.
  */
-export function fitAnnounceChain(chain: AnnounceChain, timeLeftMs: number): FittedAnnounceChain {
+export function fitAnnounceChain(
+  chain: AnnounceChain,
+  timeLeftMs: number,
+  shortCueMs = 0
+): FittedAnnounceChain {
   const fullMs = announceChainMs(chain);
-  if (fullMs === null) return { chain, headroomMs: null };
-  if (chain.name === null || fullMs <= timeLeftMs) return { chain, headroomMs: fullMs };
-  const degradations: AnnounceChain[] = [
+  if (fullMs === null) return { chain, headroomMs: null, cueDroppedForTiming: false };
+  if (chain.name === null) return { chain, headroomMs: fullMs, cueDroppedForTiming: false };
+  const candidates: AnnounceChain[] = [
+    chain,
     { ...chain, bridge: null },
     { ...chain, bridge: null, cue: null },
   ];
-  for (const candidate of degradations) {
-    const ms = announceChainMs(candidate);
-    if (ms !== null && ms <= timeLeftMs) return { chain: candidate, headroomMs: ms };
+  const strictBudget = timeLeftMs - shortCueMs - ANNOUNCE_SAFETY_MS;
+  const budgets = shortCueMs > 0 && strictBudget > 0 ? [strictBudget, timeLeftMs] : [timeLeftMs];
+  for (const budget of budgets) {
+    for (const candidate of candidates) {
+      const ms = announceChainMs(candidate);
+      if (ms !== null && ms <= budget) {
+        return {
+          chain: candidate,
+          headroomMs: ms,
+          // BØR-4: skiller «cuen ble skrelt av for å rekke fram» fra «cuen
+          // fantes aldri» — kun det siste skal få dagens rest-tone.
+          cueDroppedForTiming: chain.cue !== null && candidate.cue === null,
+        };
+      }
+    }
   }
-  return { chain, headroomMs: fullMs };
+  return { chain, headroomMs: fullMs, cueDroppedForTiming: false };
 }
 
 /**
@@ -512,16 +562,22 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
 
     // B1: kjeden utledes ÉN gang og brukes både til avspilling (mirror*) og som
     // hodrom for lookaheaden — de kan derfor ikke drifte fra hverandre. Ø4:
-    // fitAnnounceChain degraderer kjeden når den ikke rekker fram til grensen.
-    const fitted =
+    // fitAnnounceChain degraderer kjeden når den ikke rekker fram til grensen,
+    // og budsjetterer (BL-2) plass til nedtellingens short-cue i samme slengen.
+    const fitted: FittedAnnounceChain =
       e.endsAt === null
-        ? { chain: deriveAnnounceChain(e, engine.getSnapshot()), headroomMs: null }
+        ? {
+            chain: deriveAnnounceChain(e, engine.getSnapshot()),
+            headroomMs: null,
+            cueDroppedForTiming: false,
+          }
         : fitAnnounceChain(
             deriveAnnounceChain(e, engine.getSnapshot()),
-            e.endsAt - engine.getNow()
+            e.endsAt - engine.getNow(),
+            shortCueBudgetMs(e.phase)
           );
 
-    mirrorLegacyPhaseStarted(ctx, e, fitted.chain);
+    mirrorLegacyPhaseStarted(ctx, e, fitted);
     planLookahead(e, fitted.headroomMs);
   }
 
@@ -665,15 +721,15 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
 function mirrorLegacyPhaseStarted(
   ctx: DirectorCtx,
   event: PhaseStartedEvent,
-  chain: AnnounceChain
+  fitted: FittedAnnounceChain
 ): void {
   const { phase } = event;
   if (phase === 'prepare') {
-    mirrorPrepare(ctx, event, chain);
+    mirrorPrepare(ctx, event, fitted.chain);
   } else if (phase === 'work') {
     mirrorWork(ctx, event);
   } else if (phase === 'rest' || phase === 'round_rest') {
-    mirrorRest(ctx, event, chain);
+    mirrorRest(ctx, event, fitted);
   } else if (phase === 'complete') {
     mirrorComplete(ctx, event);
   }
@@ -789,7 +845,7 @@ function mirrorWork(ctx: DirectorCtx, event: PhaseStartedEvent): void {
   }, 'hopp');
 }
 
-function mirrorRest(ctx: DirectorCtx, event: PhaseStartedEvent, chain: AnnounceChain): void {
+function mirrorRest(ctx: DirectorCtx, event: PhaseStartedEvent, fitted: FittedAnnounceChain): void {
   const snap = ctx.engine.getSnapshot();
   const { nextExercise, tone, silent } = event;
   if (!silent) {
@@ -800,7 +856,7 @@ function mirrorRest(ctx: DirectorCtx, event: PhaseStartedEvent, chain: AnnounceC
         speechService.announceRest(nextExercise?.name, tone);
       }
     } else {
-      mirrorPersonaRest(ctx, snap, nextExercise, chain);
+      mirrorPersonaRest(ctx, snap, nextExercise, fitted);
     }
   }
   motionTrackerService.stop();
@@ -822,8 +878,9 @@ function mirrorPersonaRest(
   ctx: DirectorCtx,
   snap: TimerState,
   nextExercise: Exercise | null,
-  chain: AnnounceChain
+  fitted: FittedAnnounceChain
 ): void {
+  const chain = fitted.chain;
   const prefixKeys = chain.cue !== null ? [chain.cue] : [];
   if (prefixKeys.length === 0) {
     audioService.playRestStart(snap.soundEnabled);
