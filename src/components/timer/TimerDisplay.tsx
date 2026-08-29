@@ -25,6 +25,8 @@ import { getActiveChallengeId, getChallengeProgress } from '../../services/chall
 import { getFavoriteProgramIds } from '../../services/favoritesService';
 import { TRAINING_PROGRAMS } from '../../data/programs';
 import { getInterruptedSession, clearInterruptedSession, InterruptedSession } from '../../services/sessionRecoveryService';
+import { useFocusGestures } from '../../hooks/useFocusGestures';
+import { useIdleDim } from '../../hooks/useIdleDim';
 import { checkAdaptiveProgression, ProgressionSuggestion } from '../../services/adaptiveProgressionService';
 import { WORKOUT_HISTORY_KEY } from '../../services/workoutHistoryStorage';
 import {
@@ -306,8 +308,51 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   // (revisjon §3.1: tunnelsyn og lavt arbeidsminne i HR-sone 4/5).
   const isFocusMode = state.status === 'running' || state.status === 'paused';
 
+  // B6.2 (revisjon § 3.2): gestflate på bakgrunnsflaten — dobbelttrykk =
+  // pause/gjenoppta, horisontal sveip = neste/forrige. KUN aktiv i fokusmodus
+  // og ulåst; gester som starter på knapper ignoreres i hooken (event-target-
+  // sjekk), så knappenes klikk-semantikk er uberørt. Gestene utløser nøyaktig
+  // samme handlere som knappene, og er et rent tillegg (UU: alt kan fortsatt
+  // gjøres med knappene).
+  const gestureHandlers = useFocusGestures({
+    enabled: isFocusMode && !state.isLocked,
+    onDoubleTap: () => {
+      if (state.status === 'running') onPause();
+      else if (state.status === 'paused') onResume();
+    },
+    onSwipeLeft: onSkipNext,
+    onSwipeRight: onPrevious,
+  });
+
+  // B6.3 (revisjon § 4.4): dimme-modus etter 10 s uten interaksjon under
+  // running. Kun et brightness-filter — ingenting skjules, kritisk info er
+  // fortsatt synlig (UU-rammen). Berøring/tastatur vekker via hookens egne
+  // window-lyttere; faseovergang og fasens siste 5 sekunder vekker via wake()
+  // under, slik at skjermen alltid er lys når en ny øvelse nærmer seg/starter.
+  // Suspendert mens TV-modus er åpen: et filter på rot-diven gjør den til
+  // containing block for fixed-etterkommere (CSS Filter Effects § 3), som
+  // ville re-scope TvBigScreenDisplay (fixed inset-0) fra viewport til
+  // mobilkolonnen og klippe den mot overflow-hidden — og TV-flaten har
+  // uansett ikke mobilens batterihensyn.
+  const { isDimmed, wake: wakeDim } = useIdleDim(state.status === 'running' && !isTvModeOpen);
+  const inFinalCountdown = state.phaseRemainingSeconds <= 5;
+  React.useEffect(() => {
+    wakeDim();
+  }, [state.phase, inFinalCountdown, wakeDim]);
+
   return (
     <div
+      data-testid="workout-surface"
+      data-dimmed={isDimmed ? 'true' : undefined}
+      {...gestureHandlers}
+      style={{
+        // Transisjonen dekker både dimmefilteret og fasefargen (erstatter
+        // transition-colors-klassens virkefelt for background-color).
+        // prefers-reduced-motion nulles globalt i index.css (!important
+        // vinner over inline-stil), så ingen ny animasjon omgår den.
+        filter: isDimmed ? 'brightness(0.6)' : 'none',
+        transition: 'filter 500ms ease, background-color 500ms ease',
+      }}
       className={`relative flex flex-col justify-between w-full h-full max-w-md mx-auto px-4 pt-1.5 pb-2 select-none overflow-hidden transition-colors duration-500 ${phaseStyle.bg}`}
     >
       {/* Fokusmodus: minimal flytende stripe (lås + lyd + evt. stemmestyring) erstatter
@@ -743,6 +788,10 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             className={`flex items-center gap-2 font-bold tracking-wider text-zinc-400 uppercase ${
               isFocusMode ? 'text-sm sm:text-base' : 'text-[10px] sm:text-xs'
             }`}
+            // B6.1 (revisjon § 3.3 nivå 1): rundelinjen tar personaens aksentfarge
+            // i fokusmodus. Variabelen settes av coachPersonaService; fallbacken
+            // matcher text-zinc-400 slik at visningen er identisk uten persona.
+            style={isFocusMode ? { color: 'var(--persona-accent, #a1a1aa)' } : undefined}
           >
             {state.totalRounds > 1 ? (
               <>
@@ -763,6 +812,9 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             className={`rounded-full tracking-widest uppercase shadow-md transition-all ${phaseStyle.badgeBg} ${
               isFocusMode ? 'px-4 py-1 text-sm' : 'px-3 py-0.5 text-[10px] sm:text-xs'
             }`}
+            // B6.1: fasebadgens KANT tar persona-aksenten i fokusmodus — tekst- og
+            // bakgrunnsfargene beholder fasesemantikken (WCAG 1.4.1, aldri kun farge).
+            style={isFocusMode ? { borderColor: 'var(--persona-accent, #a1a1aa)' } : undefined}
           >
             {phaseStyle.badgeText}
           </span>

@@ -13,6 +13,12 @@
 }
 
 @layer base {
+  :root {
+    /* B6.1: persona-aksent settes av coachPersonaService.applyPersonaAccent()
+       ved oppstart og persona-bytte; zinc-400 som nøytral fallback. */
+    --persona-accent: #a1a1aa;
+  }
+
   * {
     -webkit-tap-highlight-color: transparent;
   }

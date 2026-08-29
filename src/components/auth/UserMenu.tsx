@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { PrivacyPolicyModal } from '../legal/PrivacyPolicyModal';
 import { AboutGuideModal } from '../help/AboutGuideModal';
 import { User as UserIcon, LogOut, Trash2, X, Shield, HelpCircle } from 'lucide-react';
+import { showErrorToast } from '../../services/errorToastService';
 
 interface UserMenuProps {
   onOpenCurator?: () => void;
@@ -38,7 +39,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
       setIsConfirmingDelete(false);
     } catch (err) {
       console.error('Feil ved sletting av konto:', err);
-      alert('Kunne ikke slette kontoen. Vennligst logg inn på nytt og prøv igjen.');
+      showErrorToast('Kunne ikke slette kontoen. Logg inn på nytt og prøv igjen.');
     } finally {
       setIsDeleting(false);
     }

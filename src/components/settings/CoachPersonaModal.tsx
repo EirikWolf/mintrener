@@ -32,7 +32,7 @@ export const CoachPersonaModal: React.FC<CoachPersonaModalProps> = ({ onClose })
     // lydbanken er offline-tilgjengelig før første økt. Fire-and-forget:
     // preload feiler aldri kalleren (motoren logger og hopper over), UI
     // blokkeres ikke.
-    preloadPersonaAudio(id);
+    void preloadPersonaAudio(id);
   };
 
   const handleTogglePreview = async (e: React.MouseEvent, id: CoachPersonaId) => {

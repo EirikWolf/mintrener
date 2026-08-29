@@ -1,4 +1,8 @@
+import { z } from 'zod';
+
 const FAVORITES_STORAGE_KEY = 'mintrener_favorite_program_ids';
+
+const FavoriteIdsSchema = z.array(z.string());
 
 export const DEFAULT_FAVORITE_IDS = [
   'tabata-classic',
@@ -11,12 +15,18 @@ export function getFavoriteProgramIds(): string[] {
   try {
     const raw = localStorage.getItem(FAVORITES_STORAGE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+      // Skjemavalidering (revisjon § 2.4): korrupt lagring → trygg default
+      const result = FavoriteIdsSchema.safeParse(JSON.parse(raw));
+      if (result.success && result.data.length > 0) {
+        return result.data;
+      }
+      if (!result.success) {
+        console.warn('Favoritter i localStorage besto ikke skjemavalidering — bruker standard.');
       }
     }
-  } catch {}
+  } catch (err) {
+    console.warn('Kunne ikke lese favoritter fra localStorage:', err);
+  }
   return DEFAULT_FAVORITE_IDS;
 }
 

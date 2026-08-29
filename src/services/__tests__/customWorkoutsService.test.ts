@@ -70,4 +70,24 @@ describe('Custom Workouts Service', () => {
     await deleteCustomWorkout(mockWorkout.id);
     expect(getLocalCustomWorkouts()).toEqual([]);
   });
+
+  it('faller tilbake til tom liste ved korrupt JSON i localStorage', () => {
+    localStorage.setItem('mintrener_custom_workouts', 'ikke gyldig json');
+    expect(getLocalCustomWorkouts()).toEqual([]);
+  });
+
+  it('faller tilbake til tom liste når lagret verdi ikke er en liste', () => {
+    localStorage.setItem('mintrener_custom_workouts', JSON.stringify({ hacked: true }));
+    expect(getLocalCustomWorkouts()).toEqual([]);
+  });
+
+  it('filtrerer bort ugyldige økter men beholder gyldige (skjemavalidering per element)', () => {
+    localStorage.setItem(
+      'mintrener_custom_workouts',
+      JSON.stringify([mockWorkout, { id: 'bad', name: 'Halvferdig' }])
+    );
+    const result = getLocalCustomWorkouts();
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('my-custom-workout');
+  });
 });

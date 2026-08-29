@@ -160,7 +160,7 @@ describe('generate-audio-manifest – extractExerciseIds (forventet-listen fra d
 });
 
 describe('generate-audio-manifest – REQUIRED_CUES', () => {
-  it('dekker de 11 manuskript-cuene + start_321 (fasit: scripts/voicebank-manuskript.json)', () => {
+  it('dekker de 11 manuskript-cuene + start_321 + start_321_short (fasit: scripts/voicebank-manuskript.json)', () => {
     expect([...REQUIRED_CUES].sort()).toEqual(
       [
         'intro',
@@ -175,6 +175,7 @@ describe('generate-audio-manifest – REQUIRED_CUES', () => {
         'bro-naa',
         'bro-resync',
         'start_321',
+        'start_321_short',
       ].sort()
     );
   });

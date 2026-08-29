@@ -4,10 +4,15 @@ import App from './App'
 import { AuthProvider } from './contexts/AuthContext'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { migrateWorkoutHistoryKeys } from './services/workoutHistoryStorage'
+import { applyPersonaAccent } from './services/coachPersonaService'
 import './index.css'
 
 // Flytt lokal historikk fra utdaterte nøkler før noe leser den
 migrateWorkoutHistoryKeys()
+
+// B6.1: sett persona-aksentfargen (--persona-accent) fra lagret persona-valg
+// før første render, slik at fokusmodus aldri blinker fra fallback til aksent.
+applyPersonaAccent()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

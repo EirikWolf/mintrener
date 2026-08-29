@@ -93,6 +93,41 @@ export const COACH_PERSONAS: CoachPersona[] = [
 const STORAGE_KEY = 'mintrener_coach_persona';
 let activeAudioElement: HTMLAudioElement | null = null;
 
+/**
+ * B6.1 (revisjon § 3.3 nivå 1): persona-aksentfarge som CSS-variabel.
+ * Avledet av personaens eksisterende `color`-felt (Tailwind-fargenavn) slik at
+ * lydmanifest og visuell identitet deler én kilde. 400-nyansene er valgt fordi
+ * de holder WCAG AA (>= 4.5:1, verifisert i personaAccent.test.ts) mot alle
+ * tre fokusmodus-bakgrunnene (zinc-950 og fase-950-fargene med 80 % dekning).
+ */
+const ACCENT_BY_TAILWIND_COLOR: Record<string, string> = {
+  emerald: '#34d399', // emerald-400
+  blue: '#60a5fa', // blue-400
+  rose: '#fb7185', // rose-400
+  purple: '#c084fc', // purple-400
+  zinc: '#a1a1aa', // zinc-400
+};
+
+/** Nøytral fallback (zinc-400) — speiler --persona-accent-defaulten i index.css. */
+const ACCENT_FALLBACK = '#a1a1aa';
+
+/** Aksentfargen (hex) for en persona; aktiv persona når id utelates. */
+export function getPersonaAccentColor(id?: CoachPersonaId): string {
+  const personaId = id || getActiveCoachPersona();
+  const persona = COACH_PERSONAS.find((p) => p.id === personaId);
+  return ACCENT_BY_TAILWIND_COLOR[persona?.color ?? ''] ?? ACCENT_FALLBACK;
+}
+
+/**
+ * Setter --persona-accent på rot-elementet slik at fokusmodus-elementene
+ * (rundelinje, fasebadge) plukker den opp via CSS. Kalles ved oppstart
+ * (main.tsx) og ved hvert persona-valg (setActiveCoachPersona).
+ */
+export function applyPersonaAccent(id?: CoachPersonaId): void {
+  if (typeof document === 'undefined') return;
+  document.documentElement.style.setProperty('--persona-accent', getPersonaAccentColor(id));
+}
+
 export function getActiveCoachPersona(): CoachPersonaId {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -112,6 +147,9 @@ export function setActiveCoachPersona(id: CoachPersonaId): void {
   } catch (err) {
     console.warn('Kunne ikke lagre trenerstemme:', err);
   }
+  // B6.1: aksentfargen følger persona-valget umiddelbart. Utenfor try-blokken
+  // av samme grunn som eviksjonen under — riktig uansett localStorage-utfall.
+  applyPersonaAccent(id);
   // BØR-2 (β6): et persona-bytte evikterer de ANDRE personaenes dekodede
   // buffere – 17–35 MB PCM per persona, så persona-shopping må ikke akkumulere.
   // Den valgte personaens buffere beholdes (re-valg = varm cache), og delte
@@ -181,7 +219,16 @@ function getPersonaBufferUrls(id: CoachPersonaId): string[] {
   return persona?.cuesPath ? PERSONA_CUES.map((cue) => `${persona.cuesPath}/${cue}.mp3`) : [];
 }
 
-export function preloadPersonaAudio(personaId?: CoachPersonaId): void {
+/**
+ * Returnerer buffer-dekodingens promise (Oppgave B): hooken bruker det til å
+ * re-planlegge Directorens lookahead når en KALDSTART-preload fullfører etter
+ * at første fase alt har startet. Promiset rejecter aldri (audioBufferEngine.
+ * preload logger og hopper over feil), så kallere trenger ingen .catch.
+ * Returtypen inkluderer void slik at fire-and-forget-kallere (og testdobler
+ * som mocker uten returverdi) forblir gyldige — hooken pakker svaret i
+ * Promise.resolve før .then.
+ */
+export function preloadPersonaAudio(personaId?: CoachPersonaId): Promise<void> | void {
   const id = personaId || getActiveCoachPersona();
 
   // HELE manifest-settet varmes i buffer-motoren (β5): det er dette som
@@ -190,27 +237,29 @@ export function preloadPersonaAudio(personaId?: CoachPersonaId): void {
   // studio/TTS. Utenfor manifestet: kjerne-cuene etter cuesPath-konvensjonen
   // (samme sett som før β5).
   const bufferUrls = getPersonaBufferUrls(id);
-  if (bufferUrls.length === 0) return;
+  if (bufferUrls.length === 0) return Promise.resolve();
 
   // Dekodede AudioBuffere gir latensfri, sample-nøyaktig avspilling og kjeding
-  void audioBufferEngine.preload(bufferUrls);
+  const decoded = audioBufferEngine.preload(bufferUrls);
 
   // HTMLAudio-varming KUN for de reaktive kjerne-cuene: de er eneste klipp med
   // degradert HTMLAudio-fallback (playPersonaCue) — 37 Audio-elementer per
   // persona ville vært unødig ressursbruk uten noen avspillingssti.
-  if (typeof Audio === 'undefined') return;
-  PERSONA_CUES.forEach((cue) => {
-    const url = lookupPersonaClipUrl(id, cue);
-    if (url && !cueAudioCache[url]) {
-      try {
-        const audio = new Audio(url);
-        audio.preload = 'auto';
-        cueAudioCache[url] = audio;
-      } catch {
-        // Ignorer i miljøer uten lydstøtte
+  if (typeof Audio !== 'undefined') {
+    PERSONA_CUES.forEach((cue) => {
+      const url = lookupPersonaClipUrl(id, cue);
+      if (url && !cueAudioCache[url]) {
+        try {
+          const audio = new Audio(url);
+          audio.preload = 'auto';
+          cueAudioCache[url] = audio;
+        } catch {
+          // Ignorer i miljøer uten lydstøtte
+        }
       }
-    }
-  });
+    });
+  }
+  return decoded;
 }
 
 /** Pauser og nullstiller et aktivt HTMLAudio-spor (delt av begge stopp-variantene). */

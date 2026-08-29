@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { exportFullUserDataset } from '../../services/exportDataService';
+import { showErrorToast } from '../../services/errorToastService';
 import {
   getTelemetryConsent,
   setTelemetryConsent,
@@ -163,8 +164,10 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
     try {
       await deleteAccount();
       setIsDeleteAccountModalOpen(false);
-    } catch (err: any) {
-      alert('Kunne ikke slette konto: ' + (err.message || 'Ukjent feil'));
+    } catch (err) {
+      // Feil-toast (revisjon § 2.4): konto-sletting er en kritisk skriveoperasjon
+      console.error('Feil ved sletting av konto:', err);
+      showErrorToast('Kunne ikke slette kontoen. Logg inn på nytt og prøv igjen.');
     } finally {
       setIsDeleting(false);
     }
