@@ -10,6 +10,7 @@ import {
   getPersonaClipKey,
   playPersonaCue,
   playIntroThenExercise,
+  resolveIntroExerciseKeys,
   stopAudiblePersonaAudio,
   stopCurrentPersonaAudio,
 } from './coachPersonaService';
@@ -171,13 +172,13 @@ function derivePrepareChain(event: PhaseStartedEvent): AnnounceChain {
   if (isCustomExercise(first)) {
     return { cue, bridge: cachedPersonaKey('bro-naa'), name: null };
   }
-  // Speiler playIntroThenExercise: personaens eget klipp foran studioklippet,
-  // og kjeden krever at BEGGE ledd er dekodet (ellers degradert HTMLAudio-sti).
-  const personaEx = getPersonaClipKey('exercise-' + first.id);
-  const nameKey =
-    personaEx !== null && audioBufferEngine.has(personaEx) ? personaEx : 'exercise-' + first.id;
-  if (cue === null || !audioBufferEngine.has(nameKey)) return EMPTY_ANNOUNCE_CHAIN;
-  return { cue, bridge: null, name: nameKey };
+  // BØR-2 (andre review): nøkkelutledningen er IKKE lenger duplisert her.
+  // resolveIntroExerciseKeys er den ene definisjonen av spec § 4-kjeden for
+  // prepare, og brukes både av avspillingen (playIntroThenExercise) og av
+  // hodrommet/Ø4-degraderingen (her) — de kan ikke drifte fra hverandre.
+  const keys = resolveIntroExerciseKeys(first.id);
+  if (keys === null) return EMPTY_ANNOUNCE_CHAIN;
+  return { cue: keys.introKey, bridge: null, name: keys.nameKey };
 }
 
 /** rest/round_rest: [rest-cue, bro-neste, øvelsesnavn] etter spec § 4-prioriteten. */
@@ -801,13 +802,20 @@ function mirrorPrepare(ctx: DirectorCtx, event: PhaseStartedEvent, chain: Announ
  * Intro + øvelsesnavn som ÉN sample-nøyaktig bufferkjede — introens faktiske
  * varighet styrer skjøten, ingen gjetting.
  *
+ * BØR-2 (andre review): nøklene utledes ikke lenger to steder. Både denne
+ * veien (via playIntroThenExercise) og derivePrepareChain — som hodrommet og
+ * Ø4-degraderingen regnes fra — går gjennom coachPersonaService
+ * .resolveIntroExerciseKeys. Selve avspillingskallet beholdes fordi fasiten
+ * (useIntervalTimer-testene) pinner playIntroThenExercise som sømmen mot
+ * hooken; det som er fjernet er den PARALLELLE utledningen, altså muligheten
+ * for at hodrommet regnes fra andre klipp enn de som faktisk spilles.
+ *
  * Rekkefølge-notat (Planrettelse 4-tillegget): mirror* kjøres FØR planLookahead
  * i handlePhaseStarted, så suksess-stien her stoppet historisk tale FØR
  * prepare-ankrene (start_321/go) fantes — den overlevde altså kun i kraft av
- * den rekkefølgen. Den degraderte .then-grenen kjører derimot ETTER at
- * planLookahead har skedulert ankrene. Begge stiene er nå ufarlige fordi
- * playIntroThenExercise/playPersonaCue bruker audible-only-stopp
- * (Planrettelse 3, stopAudiblePersonaAudio) som aldri rører skedulerte kjeder —
+ * den rekkefølgen. Den degraderte grenen kjører derimot ETTER at planLookahead
+ * har skedulert ankrene. Begge stiene er ufarlige fordi stoppet er audible-only
+ * (Planrettelse 3, stopAudiblePersonaAudio) og aldri rører skedulerte kjeder —
  * men rekkefølgen skal ikke «ryddes» uten denne historikken.
  */
 function playPrepareIntroChain(ctx: DirectorCtx, firstEx: Exercise, chain: AnnounceChain): void {

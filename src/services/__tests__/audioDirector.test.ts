@@ -147,8 +147,8 @@ describe('audioDirector (B3 β2)', () => {
     vi.spyOn(speechService, 'announceComplete').mockImplementation(() => {});
     vi.spyOn(audioClipService, 'playClipOrFallback').mockResolvedValue(undefined);
     vi.spyOn(coachPersonaService, 'playPersonaCue').mockResolvedValue(true);
+    vi.spyOn(coachPersonaService, 'playIntroThenExercise').mockResolvedValue(true);
     vi.spyOn(coachPersonaService, 'stopCurrentPersonaAudio').mockImplementation(() => {});
-    vi.spyOn(coachPersonaService, 'stopAudiblePersonaAudio').mockImplementation(() => {});
     vi.spyOn(motionTrackerService, 'start').mockImplementation(() => {});
     vi.spyOn(motionTrackerService, 'stop').mockImplementation(() => {});
     vi.spyOn(audioBufferEngine, 'setTimeBridge').mockImplementation(() => {});
@@ -760,7 +760,24 @@ describe('audioDirector (B3 β2)', () => {
       emit(phaseStarted({ phase: 'prepare', exercise: EX_A, durationS: 10, endsAt: 10_000 }));
       await flush();
 
+      expect(coachPersonaService.playIntroThenExercise).not.toHaveBeenCalled();
       expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([EX_A_CLIP]);
+    });
+
+    it('BØR-2: prepare-hodrommet regnes fra SAMME nøkler som spilles (studioklipp når persona-klippet er ucachet)', async () => {
+      usePersona();
+      // Kun introen og STUDIO-klippet er dekodet: den delte utledningen
+      // (resolveIntroExerciseKeys) skal velge studioklippet, og hodrommet må
+      // regnes fra nettopp det — ellers degraderer vi mot feil varighet.
+      cacheClips({ [INTRO]: 5.68, 'exercise-kneboy': 6.185, [SHORT]: 4.44, [FULL]: 27.815 });
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', exercise: EX_A, durationS: 10, endsAt: 10_000 }));
+      await flush();
+
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith(['exercise-kneboy']);
+      expect(coachPersonaService.playIntroThenExercise).not.toHaveBeenCalled();
     });
 
     it('prepare-kjeden får plass (20 s): intro-kjeden spilles som før', async () => {
@@ -772,7 +789,7 @@ describe('audioDirector (B3 β2)', () => {
       emit(phaseStarted({ phase: 'prepare', exercise: EX_A, durationS: 20, endsAt: 20_000 }));
       await flush();
 
-      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([INTRO, EX_A_CLIP]);
+      expect(coachPersonaService.playIntroThenExercise).toHaveBeenCalledWith('kneboy');
     });
 
     it('hodrommet måles mot motorklokken (engine.getNow) ved utstedelse, ikke mot 0', async () => {
@@ -1145,35 +1162,15 @@ describe('audioDirector (B3 β2)', () => {
   });
 
   describe('persona-speiling av adapteren (reaktiv sti beholdt)', () => {
-    it('prepare persona (durationS >= 6) med dekodede buffere: [intro, øvelsesklipp] som ÉN kjede', async () => {
+    it('prepare persona (durationS >= 6): playIntroThenExercise', async () => {
       usePersona();
-      cacheClips([`${HC}/intro.mp3`, `${HC}/exercise-kneboy.mp3`]);
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
       emit(phaseStarted({ phase: 'prepare', durationS: 10, endsAt: 10_000 }));
       await flush();
 
-      expect(coachPersonaService.stopAudiblePersonaAudio).toHaveBeenCalledTimes(1);
-      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([
-        `${HC}/intro.mp3`,
-        `${HC}/exercise-kneboy.mp3`,
-      ]);
-    });
-
-    it('prepare persona uten persona-øvelsesklipp: studioklippet kjedes etter introen (spec § 4)', async () => {
-      usePersona();
-      cacheClips([`${HC}/intro.mp3`, 'exercise-kneboy']);
-      const { engine, emit } = createFakeEngine();
-      createAudioDirector(engine);
-
-      emit(phaseStarted({ phase: 'prepare', durationS: 10, endsAt: 10_000 }));
-      await flush();
-
-      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([
-        `${HC}/intro.mp3`,
-        'exercise-kneboy',
-      ]);
+      expect(coachPersonaService.playIntroThenExercise).toHaveBeenCalledWith('kneboy');
     });
 
     it('phase:halfway persona + speech: playPersonaCue("halfway")', () => {
@@ -1393,6 +1390,7 @@ describe('audioDirector (B3 β2)', () => {
 
       emit(phaseStarted({ phase: 'prepare', exercise: CUSTOM_EX, durationS: 10, endsAt: 10_000 }));
 
+      expect(coachPersonaService.playIntroThenExercise).not.toHaveBeenCalled();
       expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([
         `${HC}/intro.mp3`,
         `${HC}/bro-naa.mp3`,
@@ -1409,6 +1407,7 @@ describe('audioDirector (B3 β2)', () => {
 
       emit(phaseStarted({ phase: 'prepare', exercise: CUSTOM_EX, durationS: 10, endsAt: 10_000 }));
 
+      expect(coachPersonaService.playIntroThenExercise).not.toHaveBeenCalled();
       expect(coachPersonaService.playPersonaCue).toHaveBeenCalledWith('intro');
       expect(audioBufferEngine.playSequence).not.toHaveBeenCalled();
     });
@@ -1569,7 +1568,7 @@ describe('audioDirector (B3 β2)', () => {
       // prepare-fasen — kun epoch-guarden avslører skipet.
       vi.useFakeTimers();
       usePersona();
-      // Ingen dekodede buffere → tom kjede → den degraderte HTMLAudio-stien.
+      vi.mocked(coachPersonaService.playIntroThenExercise).mockResolvedValue(false);
       const { engine, emit, setNow } = createFakeEngine();
       createAudioDirector(engine);
 
@@ -1862,15 +1861,14 @@ describe('audioDirector (B3 β2)', () => {
       const { engine, emit } = createFakeEngine();
       const director = createAudioDirector(engine);
 
-      cacheClips([`${HC}/intro.mp3`, `${HC}/exercise-kneboy.mp3`]);
       emit(phaseStarted({ phase: 'prepare', durationS: 10, endsAt: 10_000 }));
       await coldStart();
-      expect(audioBufferEngine.playSequence).toHaveBeenCalledTimes(1);
+      expect(coachPersonaService.playIntroThenExercise).toHaveBeenCalledTimes(1);
 
       director.replanCurrentPhase();
       await flush();
 
-      expect(audioBufferEngine.playSequence).toHaveBeenCalledTimes(1);
+      expect(coachPersonaService.playIntroThenExercise).toHaveBeenCalledTimes(1);
       expect(coachPersonaService.playPersonaCue).not.toHaveBeenCalled();
     });
 
