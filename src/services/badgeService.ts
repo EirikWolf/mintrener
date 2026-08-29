@@ -1,5 +1,7 @@
 import { STARTER_CHALLENGES } from '../data/challenges';
 import { getChallengeProgress } from './challengeService';
+import { computeWeekStreak } from './streakService';
+import { getGoalForWeek } from './weeklyGoalService';
 import { CompletedWorkoutLog } from '../types/models';
 import { WORKOUT_HISTORY_KEY } from './workoutHistoryStorage';
 
@@ -17,6 +19,23 @@ export interface BadgeItem {
   maxProgress: number;
   progressLabel?: string;
 }
+
+/**
+ * Uke-streak-milepælene (C1, spec § 2.1) som badge-data. Genereres data-drevet
+ * fordi de seks definisjonene kun skiller seg i tall/tekst — selve regelen er
+ * felles: lås opp på bestWeeks, ikke currentWeeks, slik at et seriebrudd aldri
+ * re-låser et allerede opptjent merke. Forsikrede (slinguke-)uker teller ikke
+ * +1 i serien (produkteiers valg 2026-08-29, jf. computeWeekStreak), så
+ * milepælene nås kun av faktiske treningsuker.
+ */
+const WEEK_STREAK_BADGE_DATA: ReadonlyArray<{ weeks: number; title: string; description: string; icon: string }> = [
+  { weeks: 2, title: 'To uker sterk', description: 'Nå ukesmålet ditt to uker på rad.', icon: '🔗' },
+  { weeks: 4, title: 'Månedsrytme', description: 'Fire uker på rad med ukesmålet i boks — en hel måned med rytme.', icon: '📆' },
+  { weeks: 8, title: 'Åtte uker på rad', description: 'Åtte sammenhengende uker der ukesmålet er nådd.', icon: '⚡' },
+  { weeks: 12, title: 'Kvartalsvane', description: 'Tolv uker på rad — et helt kvartal med god treningsvane.', icon: '🧭' },
+  { weeks: 26, title: 'Halvår i boks', description: 'Et halvt år med ukesmålet nådd hver eneste uke.', icon: '🌗' },
+  { weeks: 52, title: 'Ett helt år', description: 'Femtito uker på rad — et helt år med treningsrytme.', icon: '🏆' },
+];
 
 export const MILESTONE_BADGE_DEFINITIONS: Array<Omit<BadgeItem, 'isUnlocked' | 'progress' | 'maxProgress' | 'unlockedAt'> & {
   maxProgress: number;
@@ -104,6 +123,22 @@ export const MILESTONE_BADGE_DEFINITIONS: Array<Omit<BadgeItem, 'isUnlocked' | '
       };
     },
   },
+  ...WEEK_STREAK_BADGE_DATA.map(({ weeks, title, description, icon }) => ({
+    id: `badge-week-streak-${weeks}`,
+    title,
+    description,
+    icon,
+    category: 'streak' as const,
+    maxProgress: weeks,
+    check: (history: CompletedWorkoutLog[]) => {
+      const r = computeWeekStreak(history, getGoalForWeek);
+      return {
+        // bestWeeks-låsing: et merke som er opptjent forblir opplåst etter brudd
+        isUnlocked: r.currentWeeks >= weeks || r.bestWeeks >= weeks,
+        progress: Math.min(r.bestWeeks, weeks),
+      };
+    },
+  })),
   {
     id: 'badge-early-bird',
     title: 'Morgenfugl',
