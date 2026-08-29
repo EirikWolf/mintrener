@@ -30,7 +30,7 @@ describe('CoachPersonaModal – preload ved persona-valg (β6)', () => {
   it('valg av persona setter aktiv persona OG fyrer fire-and-forget preload', () => {
     render(<CoachPersonaModal onClose={() => {}} />);
 
-    fireEvent.click(screen.getByText('Jostein'));
+    fireEvent.click(screen.getByText('Jossa'));
 
     expect(setActiveCoachPersona).toHaveBeenCalledWith('haugesund');
     expect(preloadPersonaAudio).toHaveBeenCalledWith('haugesund');
