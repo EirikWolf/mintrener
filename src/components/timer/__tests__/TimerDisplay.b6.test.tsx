@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { TimerDisplay } from '../TimerDisplay';
 import { TimerState, WorkoutTemplate } from '../../../types/workout';
 
@@ -256,5 +256,88 @@ describe('TimerDisplay – gestflate i fokusmodus (B6.2)', () => {
     tap(pauseButton);
     tap(pauseButton);
     expect(handlers.onPause).not.toHaveBeenCalled();
+  });
+});
+
+describe('TimerDisplay – dimme-modus (B6.3)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function rerenderDisplay(
+    utils: ReturnType<typeof renderDisplay>,
+    state: TimerState
+  ) {
+    utils.rerender(
+      <TimerDisplay
+        workout={workout}
+        state={state}
+        presets={[workout]}
+        {...utils.handlers}
+      />
+    );
+  }
+
+  it('dimmer økt-visningen med brightness(0.6) etter 10 s uten interaksjon under running', () => {
+    renderDisplay(makeState({ status: 'running', phase: 'work' }));
+    const surface = screen.getByTestId('workout-surface') as HTMLElement;
+
+    expect(surface.style.filter).toBe('none');
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(surface.style.filter).toBe('brightness(0.6)');
+    expect(surface.dataset.dimmed).toBe('true');
+  });
+
+  it('berøring opphever dimmingen umiddelbart', () => {
+    renderDisplay(makeState({ status: 'running', phase: 'work' }));
+    const surface = screen.getByTestId('workout-surface') as HTMLElement;
+
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(surface.style.filter).toBe('brightness(0.6)');
+
+    fireEvent.pointerDown(surface, { clientX: 100, clientY: 100, pointerId: 1 });
+    expect(surface.style.filter).toBe('none');
+  });
+
+  it('faseovergang vekker skjermen (lys ved ny øvelse)', () => {
+    const utils = renderDisplay(makeState({ status: 'running', phase: 'work' }));
+    const surface = screen.getByTestId('workout-surface') as HTMLElement;
+
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(surface.style.filter).toBe('brightness(0.6)');
+
+    rerenderDisplay(utils, makeState({ status: 'running', phase: 'rest' }));
+    expect(surface.style.filter).toBe('none');
+  });
+
+  it('siste 5 sekunder av en fase vekker skjermen (§ 4.4)', () => {
+    const utils = renderDisplay(
+      makeState({ status: 'running', phase: 'work', phaseRemainingSeconds: 20 })
+    );
+    const surface = screen.getByTestId('workout-surface') as HTMLElement;
+
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(surface.style.filter).toBe('brightness(0.6)');
+
+    rerenderDisplay(
+      utils,
+      makeState({ status: 'running', phase: 'work', phaseRemainingSeconds: 5 })
+    );
+    expect(surface.style.filter).toBe('none');
+  });
+
+  it('dimmer ikke i idle eller pause', () => {
+    const utils = renderDisplay(makeState({ status: 'idle' }));
+    const surface = screen.getByTestId('workout-surface') as HTMLElement;
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(surface.style.filter).toBe('none');
+
+    rerenderDisplay(utils, makeState({ status: 'paused', phase: 'work' }));
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(surface.style.filter).toBe('none');
   });
 });

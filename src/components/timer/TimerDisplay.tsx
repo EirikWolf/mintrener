@@ -26,6 +26,7 @@ import { getFavoriteProgramIds } from '../../services/favoritesService';
 import { TRAINING_PROGRAMS } from '../../data/programs';
 import { getInterruptedSession, clearInterruptedSession, InterruptedSession } from '../../services/sessionRecoveryService';
 import { useFocusGestures } from '../../hooks/useFocusGestures';
+import { useIdleDim } from '../../hooks/useIdleDim';
 import { checkAdaptiveProgression, ProgressionSuggestion } from '../../services/adaptiveProgressionService';
 import {
   Play,
@@ -322,10 +323,30 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
     onSwipeRight: onPrevious,
   });
 
+  // B6.3 (revisjon § 4.4): dimme-modus etter 10 s uten interaksjon under
+  // running. Kun et brightness-filter — ingenting skjules, kritisk info er
+  // fortsatt synlig (UU-rammen). Berøring/tastatur vekker via hookens egne
+  // window-lyttere; faseovergang og fasens siste 5 sekunder vekker via wake()
+  // under, slik at skjermen alltid er lys når en ny øvelse nærmer seg/starter.
+  const { isDimmed, wake: wakeDim } = useIdleDim(state.status === 'running');
+  const inFinalCountdown = state.phaseRemainingSeconds <= 5;
+  React.useEffect(() => {
+    wakeDim();
+  }, [state.phase, inFinalCountdown, wakeDim]);
+
   return (
     <div
       data-testid="workout-surface"
+      data-dimmed={isDimmed ? 'true' : undefined}
       {...gestureHandlers}
+      style={{
+        // Transisjonen dekker både dimmefilteret og fasefargen (erstatter
+        // transition-colors-klassens virkefelt for background-color).
+        // prefers-reduced-motion nulles globalt i index.css (!important
+        // vinner over inline-stil), så ingen ny animasjon omgår den.
+        filter: isDimmed ? 'brightness(0.6)' : 'none',
+        transition: 'filter 500ms ease, background-color 500ms ease',
+      }}
       className={`relative flex flex-col justify-between w-full h-full max-w-md mx-auto px-4 pt-1.5 pb-2 select-none overflow-hidden transition-colors duration-500 ${phaseStyle.bg}`}
     >
       {/* Fokusmodus: minimal flytende stripe (lås + lyd + evt. stemmestyring) erstatter
