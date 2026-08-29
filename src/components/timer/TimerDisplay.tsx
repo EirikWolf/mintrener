@@ -25,6 +25,7 @@ import { getActiveChallengeId, getChallengeProgress } from '../../services/chall
 import { getFavoriteProgramIds } from '../../services/favoritesService';
 import { TRAINING_PROGRAMS } from '../../data/programs';
 import { getInterruptedSession, clearInterruptedSession, InterruptedSession } from '../../services/sessionRecoveryService';
+import { useFocusGestures } from '../../hooks/useFocusGestures';
 import { checkAdaptiveProgression, ProgressionSuggestion } from '../../services/adaptiveProgressionService';
 import {
   Play,
@@ -305,8 +306,26 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   // (revisjon §3.1: tunnelsyn og lavt arbeidsminne i HR-sone 4/5).
   const isFocusMode = state.status === 'running' || state.status === 'paused';
 
+  // B6.2 (revisjon § 3.2): gestflate på bakgrunnsflaten — dobbelttrykk =
+  // pause/gjenoppta, horisontal sveip = neste/forrige. KUN aktiv i fokusmodus
+  // og ulåst; gester som starter på knapper ignoreres i hooken (event-target-
+  // sjekk), så knappenes klikk-semantikk er uberørt. Gestene utløser nøyaktig
+  // samme handlere som knappene, og er et rent tillegg (UU: alt kan fortsatt
+  // gjøres med knappene).
+  const gestureHandlers = useFocusGestures({
+    enabled: isFocusMode && !state.isLocked,
+    onDoubleTap: () => {
+      if (state.status === 'running') onPause();
+      else if (state.status === 'paused') onResume();
+    },
+    onSwipeLeft: onSkipNext,
+    onSwipeRight: onPrevious,
+  });
+
   return (
     <div
+      data-testid="workout-surface"
+      {...gestureHandlers}
       className={`relative flex flex-col justify-between w-full h-full max-w-md mx-auto px-4 pt-1.5 pb-2 select-none overflow-hidden transition-colors duration-500 ${phaseStyle.bg}`}
     >
       {/* Fokusmodus: minimal flytende stripe (lås + lyd + evt. stemmestyring) erstatter

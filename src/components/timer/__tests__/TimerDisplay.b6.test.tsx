@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { TimerDisplay } from '../TimerDisplay';
 import { TimerState, WorkoutTemplate } from '../../../types/workout';
 
@@ -108,6 +108,39 @@ beforeEach(() => {
   localStorage.setItem('mintrener_favorite_program_ids', JSON.stringify([workout.id]));
 });
 
+// jsdom 26 mangler PointerEvent — Testing Library faller da tilbake på
+// window.Event og MISTER clientX/clientY. En minimal polyfill oppå MouseEvent
+// gir fireEvent.pointerDown/Up ekte koordinater, som gest-testene krever.
+beforeAll(() => {
+  if (typeof window.PointerEvent === 'undefined') {
+    class FakePointerEvent extends MouseEvent {
+      pointerId: number;
+      constructor(type: string, init: PointerEventInit = {}) {
+        super(type, init);
+        this.pointerId = init.pointerId ?? 1;
+      }
+    }
+    (window as unknown as { PointerEvent: typeof FakePointerEvent }).PointerEvent =
+      FakePointerEvent;
+  }
+});
+
+/** Simulerer en pekerbevegelse fra (x1,y1) til (x2,y2) på et element. */
+function pointerGesture(el: Element, x1: number, y1: number, x2: number, y2: number) {
+  fireEvent.pointerDown(el, { clientX: x1, clientY: y1, pointerId: 1 });
+  fireEvent.pointerUp(el, { clientX: x2, clientY: y2, pointerId: 1 });
+}
+
+/** Ett enkelt trykk (ingen bevegelse) på et element. */
+function tap(el: Element, x = 180, y = 300) {
+  pointerGesture(el, x, y, x, y);
+}
+
+/** Bakgrunnsflaten gestene skal virke på (ikke-interaktivt element i main). */
+function getGestureSurface(): Element {
+  return screen.getByTestId('workout-surface');
+}
+
 describe('TimerDisplay – persona-aksent i fokusmodus (B6.1)', () => {
   it('rundelinjen leser aksentfargen fra --persona-accent i fokusmodus', () => {
     renderDisplay(makeState({ status: 'running', phase: 'work' }));
@@ -131,5 +164,97 @@ describe('TimerDisplay – persona-aksent i fokusmodus (B6.1)', () => {
     expect(roundLine!.style.color).toBe('');
     const badge = screen.getByText('Klargjøring');
     expect(badge.style.borderColor).toBe('');
+  });
+});
+
+describe('TimerDisplay – gestflate i fokusmodus (B6.2)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('sveip mot venstre på bakgrunnsflaten utløser neste øvelse', () => {
+    const { handlers } = renderDisplay(makeState({ status: 'running', phase: 'work' }));
+    pointerGesture(getGestureSurface(), 250, 300, 180, 305);
+    expect(handlers.onSkipNext).toHaveBeenCalledTimes(1);
+    expect(handlers.onPrevious).not.toHaveBeenCalled();
+  });
+
+  it('sveip mot høyre på bakgrunnsflaten utløser forrige øvelse', () => {
+    const { handlers } = renderDisplay(makeState({ status: 'running', phase: 'work' }));
+    pointerGesture(getGestureSurface(), 100, 300, 190, 295);
+    expect(handlers.onPrevious).toHaveBeenCalledTimes(1);
+    expect(handlers.onSkipNext).not.toHaveBeenCalled();
+  });
+
+  it('avviser for kort sveip og for bratt diagonal', () => {
+    const { handlers } = renderDisplay(makeState({ status: 'running', phase: 'work' }));
+    // 40 px < 50 px-terskelen
+    pointerGesture(getGestureSurface(), 200, 300, 160, 300);
+    // 60 px horisontalt, men 45 graders vinkel
+    pointerGesture(getGestureSurface(), 200, 300, 140, 360);
+    expect(handlers.onSkipNext).not.toHaveBeenCalled();
+    expect(handlers.onPrevious).not.toHaveBeenCalled();
+  });
+
+  it('dobbelttrykk pauser en kjørende økt', () => {
+    const { handlers } = renderDisplay(makeState({ status: 'running', phase: 'work' }));
+    const surface = getGestureSurface();
+    tap(surface);
+    tap(surface);
+    expect(handlers.onPause).toHaveBeenCalledTimes(1);
+  });
+
+  it('dobbelttrykk gjenopptar en pauset økt', () => {
+    const { handlers } = renderDisplay(makeState({ status: 'paused', phase: 'work' }));
+    const surface = getGestureSurface();
+    tap(surface);
+    tap(surface);
+    expect(handlers.onResume).toHaveBeenCalledTimes(1);
+    expect(handlers.onPause).not.toHaveBeenCalled();
+  });
+
+  it('enkelttrykk og to trege trykk (> 300 ms mellomrom) pauser IKKE', () => {
+    vi.useFakeTimers();
+    const { handlers } = renderDisplay(makeState({ status: 'running', phase: 'work' }));
+    const surface = getGestureSurface();
+
+    tap(surface);
+    vi.advanceTimersByTime(400);
+    expect(handlers.onPause).not.toHaveBeenCalled();
+
+    tap(surface);
+    vi.advanceTimersByTime(400);
+    expect(handlers.onPause).not.toHaveBeenCalled();
+  });
+
+  it('gestene er inaktive i idle', () => {
+    const { handlers } = renderDisplay(makeState({ status: 'idle' }));
+    const surface = getGestureSurface();
+    pointerGesture(surface, 250, 300, 150, 300);
+    tap(surface);
+    tap(surface);
+    expect(handlers.onSkipNext).not.toHaveBeenCalled();
+    expect(handlers.onPause).not.toHaveBeenCalled();
+  });
+
+  it('gestene er inaktive når skjermen er låst', () => {
+    const { handlers } = renderDisplay(
+      makeState({ status: 'running', phase: 'work', isLocked: true })
+    );
+    const surface = getGestureSurface();
+    pointerGesture(surface, 250, 300, 150, 300);
+    expect(handlers.onSkipNext).not.toHaveBeenCalled();
+  });
+
+  it('gest som starter på en knapp ignoreres (kolliderer ikke med knappene)', () => {
+    const { handlers } = renderDisplay(makeState({ status: 'running', phase: 'work' }));
+    const pauseButton = screen.getByRole('button', { name: 'PAUSE' });
+    // Sveip som starter på PAUSE-knappen skal verken sveipe...
+    pointerGesture(pauseButton, 250, 300, 150, 300);
+    expect(handlers.onSkipNext).not.toHaveBeenCalled();
+    // ...eller telle som trykk i dobbelttrykk-vinduet
+    tap(pauseButton);
+    tap(pauseButton);
+    expect(handlers.onPause).not.toHaveBeenCalled();
   });
 });
