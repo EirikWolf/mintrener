@@ -50,4 +50,27 @@ describe('Session Recovery Service', () => {
     clearInterruptedSession();
     expect(getInterruptedSession()).toBeNull();
   });
+
+  it('faller trygt tilbake til null ved korrupt JSON i localStorage (og rydder opp)', () => {
+    localStorage.setItem('mintrener_interrupted_session', '{{{ikke json');
+    expect(getInterruptedSession()).toBeNull();
+    expect(localStorage.getItem('mintrener_interrupted_session')).toBeNull();
+  });
+
+  it('forkaster lagret økt med feil form (skjemavalidering) uten kræsj', () => {
+    localStorage.setItem(
+      'mintrener_interrupted_session',
+      JSON.stringify({
+        workout: { id: 'x' }, // mangler alle andre påkrevde felt
+        phase: 'yoga', // ugyldig fase
+        currentRound: 'to',
+        currentItemIndex: 0,
+        totalElapsedSeconds: 10,
+        savedAt: Date.now(),
+      })
+    );
+    expect(getInterruptedSession()).toBeNull();
+    // Korrupt innslag skal fjernes slik at det ikke prøves på nytt hver oppstart
+    expect(localStorage.getItem('mintrener_interrupted_session')).toBeNull();
+  });
 });
