@@ -913,6 +913,47 @@ describe('audioDirector (B3 β2)', () => {
       expect(audioService.playCountdownBeep).not.toHaveBeenCalled();
     });
 
+    it('BØR-3: resync-annonseringen får SAMME hodromsbeskyttelse som fasestartens kjede', async () => {
+      usePersona();
+      cacheClips({ ...HC_REAL, [`${HC}/bro-resync.mp3`]: 2.5 });
+      const { engine, emit, setNow } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_MED, endsAt: 30_000 }));
+      await flush();
+
+      // 12 s inn: fasestartens kjede er ferdig, men catch-up lander og
+      // resync-cuen begynner å spille (bro-resync 2,5 s + navnet 2,115 s).
+      setNow(12_000);
+      emit({
+        type: 'resync',
+        skippedPhases: 1,
+        landingPhase: 'rest',
+        exercise: EX_A,
+        nextExercise: EX_MED,
+        tone: 'rolig',
+      });
+      await flush();
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([
+        `${HC}/bro-resync.mp3`,
+        EX_MED_CLIP,
+      ]);
+      vi.mocked(audioBufferEngine.scheduleSequence).mockClear();
+
+      // Dvale-reankeren fyrer rett etterpå — uten beskyttelse ville full
+      // start_321 (27,8 s) startet 2,2 s inn i fasen, altså midt i resync-
+      // annonseringen som nettopp begynte.
+      setNow(13_000);
+      emit({ type: 'phase:deadlineChanged', endsAt: 30_000 });
+      await flush();
+
+      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith(
+        [FULL],
+        expect.anything()
+      );
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 30_000 });
+    });
+
     describe('BL-1: hodrommet overlever fristflytt så lenge kjeden fortsatt SPILLER', () => {
       // Andre reviews probe mot den ekte Directoren (hardcore, 30 s pause,
       // kjede 9,88 s med median-øvelsen):
