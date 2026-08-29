@@ -1,6 +1,14 @@
 import { IntervalPhase, WorkoutTemplate } from '../types/workout';
 import { Exercise } from '../types/workout';
 import { VoiceTone } from '../schemas/profileSchema';
+import { InterruptedSession } from '../services/sessionRecoveryService';
+
+/**
+ * Øktdata for avbrutt-økt-lagring — formen motorens injiserte onPersist-callback
+ * bærer (savedAt stemples av sessionRecoveryService selv). Eneste definisjon
+ * (α5-review M3) — brukes av TimerEngine og persistenceSubscriber.
+ */
+export type PersistPayload = Omit<InterruptedSession, 'savedAt'>;
 
 /** Domenehendelser fra TimerEngine. Trigger aldri render — kun abonnenter (lyd/vibrasjon/persistens/MediaSession). */
 export type EngineEvent =

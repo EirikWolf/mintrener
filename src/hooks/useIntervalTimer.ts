@@ -52,6 +52,16 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     engine.setWorkout(workout);
   }, [workout, engine]);
 
+  // Låseskjerm-kontrollene (V1, PR-α-review): play/pause fra MediaSession må gå
+  // via HOOKENS resumeWorkout/pauseWorkout (audio-unlock/speech-init/wake lock)
+  // — ikke rene engine-kall. Abonnent-effekten monteres før callbackene er
+  // garantert stabile, så abonnenten leser ferskeste versjon via ref ved
+  // invokasjon i stedet for å fange en potensielt foreldet closure.
+  const mediaControlsRef = useRef<{ pause: () => void; resume: () => Promise<void> }>({
+    pause: () => {},
+    resume: async () => {},
+  });
+
   // Abonnentene kobles fra FØRSTE commit — altså før noe startWorkout-kall kan
   // skje (callbacks er ubrukelige før render). Viktig: MediaSession-abonnenten
   // fanger øktnavnet fra workout:started/restored — en sent koblet abonnent
@@ -61,7 +71,10 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       createLegacyAudioAdapter(engine),
       createVibrationSubscriber(engine),
       createPersistenceSubscriber(engine),
-      createMediaSessionSubscriber(engine),
+      createMediaSessionSubscriber(engine, {
+        onPlay: () => void mediaControlsRef.current.resume(),
+        onPause: () => mediaControlsRef.current.pause(),
+      }),
     ];
     return () => subs.forEach((unsubscribe) => unsubscribe());
   }, [engine]);
@@ -141,14 +154,22 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     engine.resume();
   }, [engine]);
 
+  // Hold ref-en fersk hvert render — invokasjoner skjer alltid etter commit.
+  mediaControlsRef.current = { pause: pauseWorkout, resume: resumeWorkout };
+
   const resetWorkout = useCallback(() => {
     // A5: reset er en avbrutt økt — stopp målingen, men forkast rapporten
     // bevisst (ingen recordPerfTelemetry). Trygt no-op hvis økten allerede ble
     // fullført (fullførings-effekten stoppet den) eller aldri startet.
     perfMonitorService.stopWorkoutMonitoring();
     engine.reset();
+    // Speil motorens M1-adferd: reset() tar et ventende workout-bytte fra
+    // propen (setWorkout utenfor idle lagret det kun) — workout-dep'en holder
+    // closuren fersk, akkurat som gamle hookens resetWorkout([setupPhase →
+    // workout])-kjede gjorde.
+    activeWorkoutRef.current = workout;
     wakeLockService.releaseLock();
-  }, [engine]);
+  }, [engine, workout]);
 
   const restoreSession = useCallback((session: InterruptedSession) => {
     engine.restore(session);

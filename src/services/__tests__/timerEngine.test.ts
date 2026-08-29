@@ -812,6 +812,25 @@ describe('TimerEngine – toggles og setWorkout', () => {
     expect(Object.is(engine.getSnapshot(), after)).toBe(true);
   });
 
+  it('M1 (α5-review): reset etter setWorkout midt i økten tar det ventende workout-byttet', () => {
+    // setWorkout utenfor idle lagrer kun propWorkout (testen under) — reset()
+    // skal deretter re-synkronisere activeWorkout fra det ventende byttet, slik
+    // at neste start() uten argument ikke kjører en foreldet økt.
+    const { engine } = createRigg();
+    engine.start();
+    engine.skipNext(); // -> work
+    engine.setWorkout(MULTI_ROUND_WORKOUT); // ignoreres utenfor idle
+
+    engine.reset();
+
+    const s = engine.getSnapshot();
+    expect(s.status).toBe('idle');
+    expect(s.phase).toBe('prepare');
+    expect(s.totalRounds).toBe(2);
+    expect(s.totalItems).toBe(1);
+    expect(s.currentExercise?.name).toBe('Knebøy');
+  });
+
   it('setWorkout utenfor idle rører ikke kjørende økt (plan-låst semantikk)', () => {
     const { engine } = createRigg();
     engine.start();

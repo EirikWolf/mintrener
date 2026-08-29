@@ -1,7 +1,9 @@
-import { EngineEvent } from '../types/engineEvents';
-import { InterruptedSession, saveInterruptedSession, clearInterruptedSession } from './sessionRecoveryService';
+import { EngineEvent, PersistPayload } from '../types/engineEvents';
+import { saveInterruptedSession, clearInterruptedSession } from './sessionRecoveryService';
 
-export type PersistPayload = Omit<InterruptedSession, 'savedAt'>;
+// Re-eksport for eksisterende importsteder (definisjonen bor i engineEvents.ts,
+// α5-review M3).
+export type { PersistPayload } from '../types/engineEvents';
 
 export interface PersistenceSubscriberEngine {
   subscribeEvents(handler: (e: EngineEvent) => void): () => void;

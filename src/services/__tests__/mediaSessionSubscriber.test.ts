@@ -211,6 +211,33 @@ describe('mediaSessionSubscriber (karakterisering, B3 α4)', () => {
     expect(previous).toHaveBeenCalledTimes(1);
   });
 
+  it('V1: injiserte onPlay/onPause-callbacks brukes i stedet for engine.resume/pause', () => {
+    // PR-α-sluttreview V1: fra låseskjermen må play/pause gå via HOOKENS
+    // resumeWorkout/pauseWorkout (audio-unlock, speech-init, wake lock) — rene
+    // engine-kall mister de sideeffektene. onNext/onPrevious forblir engine-kall
+    // (var ekvivalente også i den gamle kjeden).
+    const { engine, emitEvent, notify, snapshot, pause, resume, skipNext, previous } = createFakeEngine({ status: 'idle' });
+    const onPlay = vi.fn();
+    const onPause = vi.fn();
+    createMediaSessionSubscriber(engine, { onPlay, onPause });
+    emitEvent({ type: 'workout:started', workout: TABATA_WORKOUT });
+    snapshot.status = 'running';
+    notify();
+
+    const call = vi.mocked(mediaSessionService.updateMediaSession).mock.calls[0][0];
+    call.onPlay?.();
+    call.onPause?.();
+    call.onNext?.();
+    call.onPrevious?.();
+
+    expect(onPlay).toHaveBeenCalledTimes(1);
+    expect(onPause).toHaveBeenCalledTimes(1);
+    expect(resume).not.toHaveBeenCalled();
+    expect(pause).not.toHaveBeenCalled();
+    expect(skipNext).toHaveBeenCalledTimes(1);
+    expect(previous).toHaveBeenCalledTimes(1);
+  });
+
   it('unsubscribe stopper videre reaksjon', () => {
     const { engine, notify } = createFakeEngine({ status: 'idle' });
     const unsub = createMediaSessionSubscriber(engine);

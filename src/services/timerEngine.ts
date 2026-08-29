@@ -1,5 +1,5 @@
 import { WorkoutTemplate, TimerState, IntervalPhase } from '../types/workout';
-import { EngineEvent } from '../types/engineEvents';
+import { EngineEvent, PersistPayload } from '../types/engineEvents';
 import { InterruptedSession } from './sessionRecoveryService';
 
 // Terskel (sekunder) for å skille normal tick-drift (fanen synlig) fra en reell
@@ -47,9 +47,6 @@ interface EngineState {
   lastTickWallMs: number;
   lastTickPerfMs: number;
 }
-
-/** Øktdata for avbrutt-økt-lagring — samme form som saveInterruptedSession tar imot. */
-type PersistPayload = Omit<InterruptedSession, 'savedAt'>;
 
 /**
  * Rammeverksfri fasemaskin for intervalløkter (B3, spec § 3). Ren klasse —
@@ -654,6 +651,10 @@ export class TimerEngine {
     // (LegacyAudioAdapter og persistenceSubscriber lytter i α4);
     // wakeLockService.releaseLock() eies av hook-bindingen (α5).
     this.emit({ type: 'workout:reset' });
+    // M1 (α5-review): prop-workouten kan ha byttet midt i økten (setWorkout
+    // ignorerer bytte utenfor idle) — nå som vi ER idle, ta det ventende
+    // byttet, slik at neste start() uten argument ikke kjører en foreldet økt.
+    this.state.activeWorkout = this.propWorkout;
     this.setupPhase('prepare', 1, 0, true); // silent reset!
     this.state.totalElapsed = 0;
     this.state.phaseRemaining = this.state.activeWorkout?.prepareDurationSeconds || 5;
@@ -714,12 +715,12 @@ export class TimerEngine {
 
   /**
    * Prop-sync fra hook-bindingen — kun i idle. BEVISST AVVIK fra hooken (plan-
-   * låst): hooken byttet activeWorkout (React-state) ubetinget også midt i en
-   * kjørende økt, slik at VISNINGSFELTENE (navn/øvelser/totaler) byttet workout
-   * mens fasemaskinen (stateRef.current.workout) beholdt den gamle — en
-   * inkonsistent split-brain-tilstand. Motoren holder alt urørt utenfor idle
-   * (coherent-by-design); propWorkout-speilet oppdateres uansett som
-   * setupPhase-fallback.
+   * låst; beskrivelse korrigert i α5-review M2): hooken re-tildelte
+   * stateRef.current.workout fra activeWorkout-state hvert render, så også
+   * FASEMASKINEN byttet workout midt i en kjørende økt — med indeks/runde-
+   * tilstand fra den gamle økten anvendt på den nye øktens items. Motoren
+   * holder i stedet alt urørt utenfor idle (coherent-by-design); propWorkout-
+   * speilet oppdateres uansett og tas i bruk ved neste reset()/idle-sync.
    */
   setWorkout(w: WorkoutTemplate): void {
     if (this.propWorkout === w) return;

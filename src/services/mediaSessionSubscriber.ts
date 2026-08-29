@@ -12,6 +12,19 @@ export interface MediaSessionSubscriberEngine {
   previous(): void;
 }
 
+/**
+ * Hook-nivå-callbacks for låseskjerm-kontrollene (PR-α-sluttreview V1): den
+ * gamle kjeden koblet onPlay/onPause til HOOKENS resumeWorkout/pauseWorkout
+ * (via App.tsx), som gjør audio-unlock/speech-init/wake lock — rene
+ * engine.resume()/pause()-kall mister de sideeffektene. Utelates de, faller
+ * abonnenten tilbake til engine-metodene (test-stubber forblir meningsfulle).
+ * onNext/onPrevious forblir engine-kall — de var ekvivalente også før.
+ */
+export interface MediaSessionCallbacks {
+  onPlay?: () => void;
+  onPause?: () => void;
+}
+
 function phaseName(phase: TimerState['phase']): string {
   return phase === 'work' ? 'Jobb' : phase === 'rest' ? 'Pause' : 'Klargjøring';
 }
@@ -25,7 +38,10 @@ function phaseName(phase: TimerState['phase']): string {
  * (restore() — planrettelse etter α4-rapportens mappinggap, se timerEngine.ts
  * sin restore()) dekker til sammen alle stier som setter en aktiv økt.
  */
-export function createMediaSessionSubscriber(engine: MediaSessionSubscriberEngine): () => void {
+export function createMediaSessionSubscriber(
+  engine: MediaSessionSubscriberEngine,
+  callbacks?: MediaSessionCallbacks
+): () => void {
   let workoutName = '';
   // Speiler den porterte effektens avhengighetsliste (status/phase/exercise/
   // workoutName/round/totalRounds) — engine.subscribe varsler på ALLE
@@ -52,14 +68,18 @@ export function createMediaSessionSubscriber(engine: MediaSessionSubscriberEngin
         artist: `Min Trener • ${phaseName(s.phase)}`,
         album: `${workoutName} • Runde ${s.currentRound}/${s.totalRounds}`,
         artworkUrl: s.currentExercise ? `/images/exercises/${s.currentExercise.id}-0.png` : undefined,
-        onPlay: () => engine.resume(),
-        onPause: () => engine.pause(),
+        // V1: play/pause må gjennom hook-callbackene når de finnes — se
+        // MediaSessionCallbacks-kommentaren over.
+        onPlay: () => (callbacks?.onPlay ? callbacks.onPlay() : engine.resume()),
+        onPause: () => (callbacks?.onPause ? callbacks.onPause() : engine.pause()),
         onNext: () => engine.skipNext(),
         onPrevious: () => engine.previous(),
       });
     } else {
       if (lastKey === 'CLEARED') return;
       lastKey = 'CLEARED';
+      // Clear ved completed/idle er en BEVISST forbedring over den gamle
+      // TimerDisplay-effekten, som manglet opprydning ved fullføring (M4).
       clearMediaSession();
     }
   };
