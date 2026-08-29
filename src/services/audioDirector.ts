@@ -141,6 +141,19 @@ function playBridgeThenTts(
   playChainThen(ctx, [...prefixKeys, key], () => speechService.speak(name));
 }
 
+/** Offentlig flate mot hook-bindingen (β4 + Oppgave B): frakobling + kaldstart-replan. */
+export interface AudioDirectorHandle {
+  /** Kobler Directoren fra motorens hendelsesstrøm (hookens cleanup). */
+  unsubscribe: () => void;
+  /**
+   * Re-planlegger aktiv fases lookahead (kaldstart, live timing-funn B):
+   * kalles av hooken når preloadPersonaAudio-promiset løses ETTER at en fase
+   * alt har startet — planLookahead så da ucachede buffere og degraderte til
+   * pip. Guardet på status/aktiv fase; no-op ellers.
+   */
+  replanCurrentPhase: () => void;
+}
+
 /**
  * AudioDirector (B3 β2, spec § 4): eneste lydabonnent når den kobles i β4.
  * Standard-stien (persona 'standard') speiler LegacyAudioAdapter ordrett —
@@ -154,7 +167,7 @@ function playBridgeThenTts(
  * motionTracker-ansvaret fulgte med fra adapteren (slettet i β4); Directoren
  * kobles av hook-bindingen i useIntervalTimer (β4) og er eneste lydabonnent.
  */
-export function createAudioDirector(engine: AudioDirectorEngine): () => void {
+export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorHandle {
   // Per-fase-tilstand i lukning:
   // pending: hva som er skedulert (overlever pause slik at resume kan reskedulere).
   // currentDeadline: forrige phase:started sin frist — skip-deteksjon.
@@ -162,10 +175,14 @@ export function createAudioDirector(engine: AudioDirectorEngine): () => void {
   // arver countdown-pipene grensen i persona-modus («aldri avkuttet tale»).
   // phaseEpoch: vakt mot at et SENT false-svar fra en forrige fases skedulering
   // setter fallback-flagget for feil fase.
+  // currentPhaseEvent: siste phase:started — grunnlaget for replanCurrentPhase
+  // (Oppgave B); nullstilles ved reset så en sen preload aldri replanlegger
+  // en forlatt økt.
   let pending: PendingLookahead | null = null;
   let currentDeadline: number | null = null;
   let beepFallback = false;
   let phaseEpoch = 0;
+  let currentPhaseEvent: PhaseStartedEvent | null = null;
 
   // Delt med speil-funksjonene: gir TTS-etter-kjede-veiene tilgang til
   // fase-epoken (guard mot skip-lekkasje — se DirectorCtx).
@@ -261,9 +278,34 @@ export function createAudioDirector(engine: AudioDirectorEngine): () => void {
     pending = null;
     beepFallback = false;
     currentDeadline = e.endsAt;
+    currentPhaseEvent = e;
 
     mirrorLegacyPhaseStarted(ctx, e);
     planLookahead(e);
+  }
+
+  /**
+   * Kaldstart-replan (Oppgave B, live timing-funn B): preloadPersonaAudio
+   * fullførte ETTER at fasen startet — planLookahead så ucachede buffere,
+   * scheduleSequence svarte false og fasen degraderte til pip. Re-kjør KUN
+   * lookahead-planleggingen for aktiv fase (aldri de reaktive annonseringene —
+   * intro/rest-cuen skal ikke spilles på nytt), mot GJELDENDE frist
+   * (currentDeadline kan ha flyttet seg siden fasestart via deadlineChanged/
+   * resume). Samme hygiene som handleDeadlineChanged: fersk tidsbro, nullstilt
+   * pip-flagg, og cancelScheduled FØR ny utstedelse — en allerede vellykket
+   * lookahead re-utstedes da identisk (nett-effekt uendret), aldri dobbelt.
+   * Epoch-vakten er implisitt: issuePending fanger gjeldende phaseEpoch, og
+   * kalles replan etter et fasebytte er currentPhaseEvent alt den NYE fasens
+   * hendelse — gamle ankre re-utstedes aldri.
+   */
+  function replanCurrentPhase(): void {
+    if (currentPhaseEvent === null || currentDeadline === null) return;
+    if (engine.getSnapshot().status !== 'running') return;
+    audioBufferEngine.setTimeBridge(engine.getNow());
+    beepFallback = false;
+    pending = null;
+    audioBufferEngine.cancelScheduled();
+    planLookahead({ ...currentPhaseEvent, endsAt: currentDeadline });
   }
 
   function handleDeadlineChanged(endsAt: number): void {
@@ -299,7 +341,7 @@ export function createAudioDirector(engine: AudioDirectorEngine): () => void {
     }
   }
 
-  return engine.subscribeEvents((event) => {
+  const unsubscribe = engine.subscribeEvents((event) => {
     switch (event.type) {
       case 'workout:started':
         // Første bro-måling — motorklokke ↔ AudioContext-klokke har samme rate,
@@ -340,11 +382,14 @@ export function createAudioDirector(engine: AudioDirectorEngine): () => void {
         pending = null;
         currentDeadline = null;
         beepFallback = false;
+        currentPhaseEvent = null;
         break;
       default:
         break;
     }
   });
+
+  return { unsubscribe, replanCurrentPhase };
 }
 
 // ---------------------------------------------------------------------------

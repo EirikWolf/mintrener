@@ -181,7 +181,16 @@ function getPersonaBufferUrls(id: CoachPersonaId): string[] {
   return persona?.cuesPath ? PERSONA_CUES.map((cue) => `${persona.cuesPath}/${cue}.mp3`) : [];
 }
 
-export function preloadPersonaAudio(personaId?: CoachPersonaId): void {
+/**
+ * Returnerer buffer-dekodingens promise (Oppgave B): hooken bruker det til å
+ * re-planlegge Directorens lookahead når en KALDSTART-preload fullfører etter
+ * at første fase alt har startet. Promiset rejecter aldri (audioBufferEngine.
+ * preload logger og hopper over feil), så kallere trenger ingen .catch.
+ * Returtypen inkluderer void slik at fire-and-forget-kallere (og testdobler
+ * som mocker uten returverdi) forblir gyldige — hooken pakker svaret i
+ * Promise.resolve før .then.
+ */
+export function preloadPersonaAudio(personaId?: CoachPersonaId): Promise<void> | void {
   const id = personaId || getActiveCoachPersona();
 
   // HELE manifest-settet varmes i buffer-motoren (β5): det er dette som
@@ -190,27 +199,29 @@ export function preloadPersonaAudio(personaId?: CoachPersonaId): void {
   // studio/TTS. Utenfor manifestet: kjerne-cuene etter cuesPath-konvensjonen
   // (samme sett som før β5).
   const bufferUrls = getPersonaBufferUrls(id);
-  if (bufferUrls.length === 0) return;
+  if (bufferUrls.length === 0) return Promise.resolve();
 
   // Dekodede AudioBuffere gir latensfri, sample-nøyaktig avspilling og kjeding
-  void audioBufferEngine.preload(bufferUrls);
+  const decoded = audioBufferEngine.preload(bufferUrls);
 
   // HTMLAudio-varming KUN for de reaktive kjerne-cuene: de er eneste klipp med
   // degradert HTMLAudio-fallback (playPersonaCue) — 37 Audio-elementer per
   // persona ville vært unødig ressursbruk uten noen avspillingssti.
-  if (typeof Audio === 'undefined') return;
-  PERSONA_CUES.forEach((cue) => {
-    const url = lookupPersonaClipUrl(id, cue);
-    if (url && !cueAudioCache[url]) {
-      try {
-        const audio = new Audio(url);
-        audio.preload = 'auto';
-        cueAudioCache[url] = audio;
-      } catch {
-        // Ignorer i miljøer uten lydstøtte
+  if (typeof Audio !== 'undefined') {
+    PERSONA_CUES.forEach((cue) => {
+      const url = lookupPersonaClipUrl(id, cue);
+      if (url && !cueAudioCache[url]) {
+        try {
+          const audio = new Audio(url);
+          audio.preload = 'auto';
+          cueAudioCache[url] = audio;
+        } catch {
+          // Ignorer i miljøer uten lydstøtte
+        }
       }
-    }
-  });
+    });
+  }
+  return decoded;
 }
 
 /** Pauser og nullstiller et aktivt HTMLAudio-spor (delt av begge stopp-variantene). */

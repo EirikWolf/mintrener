@@ -1224,14 +1224,180 @@ describe('audioDirector (B3 β2)', () => {
   });
 
   describe('unsubscribe', () => {
-    it('returnert opprydningsfunksjon stopper videre reaksjon på hendelser', () => {
+    it('handle.unsubscribe stopper videre reaksjon på hendelser', () => {
       const { engine, emit } = createFakeEngine();
-      const unsub = createAudioDirector(engine);
-      unsub();
+      const { unsubscribe } = createAudioDirector(engine);
+      unsubscribe();
 
       emit({ type: 'workout:paused' });
 
       expect(coachPersonaService.stopCurrentPersonaAudio).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('replanCurrentPhase — preload fullført ETTER fasestart (kaldstart, funn B)', () => {
+    it('re-skedulerer aktiv grensefases lookahead mot gjeldende frist, cancelScheduled FØRST', () => {
+      usePersona();
+      const { engine, emit } = createFakeEngine();
+      const director = createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', itemIndex: 0, endsAt: 10_000 }));
+      vi.mocked(audioBufferEngine.scheduleSequence).mockClear();
+
+      director.replanCurrentPhase();
+
+      expect(audioBufferEngine.cancelScheduled).toHaveBeenCalledTimes(1);
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith(
+        [`${HC}/start_321.mp3`],
+        { endAt: 10_000 }
+      );
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith(
+        [`${HC}/go-1.mp3`],
+        { startAt: 10_000 }
+      );
+      // Aldri dobbel-skedulering: kanselleringen skjer FØR re-utstedelsen, slik
+      // at en allerede vellykket lookahead re-utstedes identisk (nett-effekt uendret).
+      const cancelOrder = vi.mocked(audioBufferEngine.cancelScheduled).mock.invocationCallOrder[0];
+      const firstScheduleOrder = vi.mocked(audioBufferEngine.scheduleSequence).mock
+        .invocationCallOrder[0];
+      expect(cancelOrder).toBeLessThan(firstScheduleOrder);
+    });
+
+    it('bruker GJELDENDE frist etter deadlineChanged, ikke fasestartens endsAt', () => {
+      usePersona();
+      const { engine, emit } = createFakeEngine();
+      const director = createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', itemIndex: 0, endsAt: 10_000 }));
+      emit({ type: 'phase:deadlineChanged', endsAt: 12_000 });
+      vi.mocked(audioBufferEngine.scheduleSequence).mockClear();
+
+      director.replanCurrentPhase();
+
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith(
+        [`${HC}/start_321.mp3`],
+        { endAt: 12_000 }
+      );
+      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith(
+        [`${HC}/start_321.mp3`],
+        { endAt: 10_000 }
+      );
+    });
+
+    it('status !== running (pause): no-op', () => {
+      usePersona();
+      const { engine, emit, snapshot } = createFakeEngine();
+      const director = createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', endsAt: 10_000 }));
+      snapshot.status = 'paused';
+      vi.mocked(audioBufferEngine.scheduleSequence).mockClear();
+      vi.mocked(audioBufferEngine.cancelScheduled).mockClear();
+
+      director.replanCurrentPhase();
+
+      expect(audioBufferEngine.cancelScheduled).not.toHaveBeenCalled();
+      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalled();
+    });
+
+    it('før noen fase har startet: no-op', () => {
+      usePersona();
+      const { engine } = createFakeEngine();
+      const director = createAudioDirector(engine);
+
+      director.replanCurrentPhase();
+
+      expect(audioBufferEngine.cancelScheduled).not.toHaveBeenCalled();
+      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalled();
+    });
+
+    it('etter workout:reset: no-op (fasen er glemt)', () => {
+      usePersona();
+      const { engine, emit } = createFakeEngine();
+      const director = createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', endsAt: 10_000 }));
+      emit({ type: 'workout:reset' });
+      vi.mocked(audioBufferEngine.scheduleSequence).mockClear();
+      vi.mocked(audioBufferEngine.cancelScheduled).mockClear();
+
+      director.replanCurrentPhase();
+
+      expect(audioBufferEngine.cancelScheduled).not.toHaveBeenCalled();
+      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalled();
+    });
+
+    it('re-kjører ALDRI de reaktive annonseringene (ingen ny intro/cue)', async () => {
+      usePersona();
+      const { engine, emit } = createFakeEngine();
+      const director = createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', durationS: 10, endsAt: 10_000 }));
+      await flush();
+      expect(coachPersonaService.playIntroThenExercise).toHaveBeenCalledTimes(1);
+
+      director.replanCurrentPhase();
+      await flush();
+
+      expect(coachPersonaService.playIntroThenExercise).toHaveBeenCalledTimes(1);
+      expect(coachPersonaService.playPersonaCue).not.toHaveBeenCalled();
+    });
+
+    it('etter fasebytte: planlegger KUN den aktive fasen — gamle ankre re-utstedes aldri', () => {
+      usePersona();
+      const { engine, emit, setNow } = createFakeEngine();
+      const director = createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', itemIndex: 0, endsAt: 10_000 }));
+      setNow(10_050);
+      emit(phaseStarted({ phase: 'work', durationS: 20, endsAt: 30_050 }));
+      vi.mocked(audioBufferEngine.scheduleSequence).mockClear();
+
+      director.replanCurrentPhase();
+
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith(
+        [`${HC}/last5.mp3`],
+        { startAt: 25_050 }
+      );
+      const scheduledKeys = vi
+        .mocked(audioBufferEngine.scheduleSequence)
+        .mock.calls.map(([keys]) => keys[0]);
+      expect(scheduledKeys).not.toContain(`${HC}/start_321.mp3`);
+      expect(scheduledKeys).not.toContain(`${HC}/start_321_short.mp3`);
+    });
+
+    it('kaldstart-pipeflagget nullstilles når replan lykkes: ingen pip oppå skedulert tale', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.scheduleSequence).mockResolvedValue(false);
+      const { engine, emit } = createFakeEngine();
+      const director = createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', endsAt: 10_000 }));
+      await flush();
+      emit({ type: 'countdown', secondsLeft: 3 });
+      expect(audioService.playCountdownBeep).toHaveBeenCalledTimes(1);
+
+      // Preload fullførte: bufferne er nå dekodet og skeduleringen lykkes
+      vi.mocked(audioBufferEngine.scheduleSequence).mockResolvedValue(true);
+      director.replanCurrentPhase();
+      await flush();
+
+      emit({ type: 'countdown', secondsLeft: 2 });
+      expect(audioService.playCountdownBeep).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-måler tidsbroen før re-utstedelsen (samme hygiene som deadlineChanged)', () => {
+      usePersona();
+      const { engine, emit, setNow } = createFakeEngine();
+      const director = createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', endsAt: 10_000 }));
+      setNow(3_000);
+      vi.mocked(audioBufferEngine.setTimeBridge).mockClear();
+
+      director.replanCurrentPhase();
+
+      expect(audioBufferEngine.setTimeBridge).toHaveBeenCalledWith(3_000);
     });
   });
 });
