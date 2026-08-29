@@ -150,12 +150,15 @@ export function createAudioDirector(engine: AudioDirectorEngine): () => void {
   }
 
   function handlePhaseStarted(e: PhaseStartedEvent): void {
-    // Skip/previous: ny fase FØR forrige frist → lyd planlagt for den gamle
-    // grensen skal aldri høres — fade-kanseller (plan Task β2). En NORMAL
-    // overgang skjer ved/etter fristen (ticken oppdager remaining <= 0), og da
-    // spiller go-tilropet akkurat nå og skal IKKE kuttes.
+    // Skip/previous: ny fase FØR forrige frist → lyd SKEDULERT for den gamle
+    // grensen (start_321/go/last5, ikke startet ennå) skal aldri høres —
+    // kanseller den stille (Planrettelse 2: cancelScheduled(), IKKE full
+    // stop() — en evt. reaktiv cue som allerede spiller akkurat nå (f.eks.
+    // halfway) skal ikke kuttes av selve skip-hendelsen). En NORMAL overgang
+    // skjer ved/etter fristen (ticken oppdager remaining <= 0), og da spiller
+    // go-tilropet akkurat nå og skal IKKE kanselleres.
     if (currentDeadline !== null && engine.getNow() < currentDeadline) {
-      audioBufferEngine.stop();
+      audioBufferEngine.cancelScheduled();
     }
     phaseEpoch++;
     pending = null;
@@ -169,11 +172,14 @@ export function createAudioDirector(engine: AudioDirectorEngine): () => void {
   function handleDeadlineChanged(endsAt: number): void {
     currentDeadline = endsAt;
     if (!pending) return;
-    // Kanseller planlagte kjeder og reskeduler mot ny frist. Motoren emitter
+    // Kanseller planlagte (ikke-hørbare) kjeder og reskeduler mot ny frist.
+    // Planrettelse 2: cancelScheduled(), IKKE full stop() — en pause/dvale-
+    // reanker skjer mens f.eks. rest-annonseringen fortsatt kan spille hørbart,
+    // og den skal ikke kuttes bare fordi grensen flyttet seg. Motoren emitter
     // KUN fremtidige frister (past-deadline-reankringer undertrykkes — catch-up
     // sin landing overtar), så ankeret er alltid gyldig; holder vinduet likevel
     // ikke, svarer scheduleSequence false → pip-fallback, aldri avkuttet tale.
-    audioBufferEngine.stop();
+    audioBufferEngine.cancelScheduled();
     issuePending(endsAt);
   }
 

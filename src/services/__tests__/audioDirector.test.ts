@@ -123,6 +123,9 @@ describe('audioDirector (B3 β2)', () => {
     vi.spyOn(audioBufferEngine, 'setTimeBridge').mockImplementation(() => {});
     vi.spyOn(audioBufferEngine, 'scheduleSequence').mockResolvedValue(true);
     vi.spyOn(audioBufferEngine, 'stop').mockImplementation(() => {});
+    // Planrettelse 2 (flerkjedemodell): deadlineChanged/skip kansellerer nå kun
+    // det SKEDULERTE via cancelScheduled(), ikke full stop() – se testene under.
+    vi.spyOn(audioBufferEngine, 'cancelScheduled').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -283,7 +286,9 @@ describe('audioDirector (B3 β2)', () => {
   });
 
   describe('phase:deadlineChanged — kansellering + reskedulering', () => {
-    it('med planlagt grensekjede: stop() + reskedulering mot ny frist', () => {
+    it('med planlagt grensekjede: cancelScheduled() + reskedulering mot ny frist (Planrettelse 2)', () => {
+      // Ikke full stop(): en reanker/pause må ikke kutte en samtidig HØRBAR
+      // reaktiv cue (f.eks. rest-annonseringen) – kun det skedulerte fjernes.
       usePersona();
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
@@ -293,7 +298,8 @@ describe('audioDirector (B3 β2)', () => {
 
       emit({ type: 'phase:deadlineChanged', endsAt: 12_000 });
 
-      expect(audioBufferEngine.stop).toHaveBeenCalledTimes(1);
+      expect(audioBufferEngine.cancelScheduled).toHaveBeenCalledTimes(1);
+      expect(audioBufferEngine.stop).not.toHaveBeenCalled();
       expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith(
         [`${HC}/start_321.mp3`],
         { endAt: 12_000 }
@@ -304,7 +310,7 @@ describe('audioDirector (B3 β2)', () => {
       );
     });
 
-    it('med planlagt last5: stop() + reskedulering til ny frist - 5000', () => {
+    it('med planlagt last5: cancelScheduled() + reskedulering til ny frist - 5000', () => {
       usePersona();
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
@@ -314,21 +320,21 @@ describe('audioDirector (B3 β2)', () => {
 
       emit({ type: 'phase:deadlineChanged', endsAt: 22_000 });
 
-      expect(audioBufferEngine.stop).toHaveBeenCalledTimes(1);
+      expect(audioBufferEngine.cancelScheduled).toHaveBeenCalledTimes(1);
       expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith(
         [`${HC}/last5.mp3`],
         { startAt: 17_000 }
       );
     });
 
-    it('uten planlagt kjede (standard persona): ingen stop, ingen skedulering', () => {
+    it('uten planlagt kjede (standard persona): ingen kansellering, ingen skedulering', () => {
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
       emit(phaseStarted({ phase: 'prepare', endsAt: 10_000 }));
       emit({ type: 'phase:deadlineChanged', endsAt: 12_000 });
 
-      expect(audioBufferEngine.stop).not.toHaveBeenCalled();
+      expect(audioBufferEngine.cancelScheduled).not.toHaveBeenCalled();
       expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalled();
     });
   });
@@ -404,7 +410,9 @@ describe('audioDirector (B3 β2)', () => {
       expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalled();
     });
 
-    it('skip (phase:started FØR forrige frist) → stop() med fade på planlagt lyd', () => {
+    it('skip (phase:started FØR forrige frist) → cancelScheduled() (Planrettelse 2, IKKE full stop)', () => {
+      // Kun det skedulerte (mot den forlatte grensen) kanselleres stille; en
+      // evt. hørbar cue som spiller akkurat idet skipet skjer, kuttes ikke.
       usePersona();
       const { engine, emit, setNow } = createFakeEngine();
       createAudioDirector(engine);
@@ -414,10 +422,11 @@ describe('audioDirector (B3 β2)', () => {
       setNow(4_000);
       emit(phaseStarted({ phase: 'work', durationS: 20, endsAt: 24_000 }));
 
-      expect(audioBufferEngine.stop).toHaveBeenCalledTimes(1);
+      expect(audioBufferEngine.cancelScheduled).toHaveBeenCalledTimes(1);
+      expect(audioBufferEngine.stop).not.toHaveBeenCalled();
     });
 
-    it('normal faseovergang (ved/etter fristen) → INGEN stop (go-tilropet spiller akkurat nå)', () => {
+    it('normal faseovergang (ved/etter fristen) → INGEN kansellering (go-tilropet spiller akkurat nå)', () => {
       usePersona();
       const { engine, emit, setNow } = createFakeEngine();
       createAudioDirector(engine);
@@ -427,6 +436,7 @@ describe('audioDirector (B3 β2)', () => {
       setNow(10_050);
       emit(phaseStarted({ phase: 'work', durationS: 20, endsAt: 30_050 }));
 
+      expect(audioBufferEngine.cancelScheduled).not.toHaveBeenCalled();
       expect(audioBufferEngine.stop).not.toHaveBeenCalled();
     });
   });

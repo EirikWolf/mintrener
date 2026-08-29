@@ -582,13 +582,18 @@ describe('AudioBufferEngine.scheduleSequence (absolutt anker + tidsbro)', () => 
     engine.stop();
 
     expect(sources[0].stop).toHaveBeenCalledTimes(1);
-    // Kjeden telles som "spilt" (stop() sin kontrakt) selv om avspilling aldri
-    // faktisk nådde audioContext-klokken – ducking ryddes uansett via finishChain.
-    expect(duckStopSpy).toHaveBeenCalledTimes(1);
+    // Planrettelse 2: ducking er nå refcount-balansert per kjede. Denne kjeden
+    // ble ALDRI hørbar (kansellert før startAt), så den rakk aldri å demme opp
+    // duck-telleren – å kalle stopDucking her ville vært et FEILAKTIG unduck
+    // dersom en annen kjede samtidig var hørbar. Se "duck-balanse"-testene under.
+    expect(duckStopSpy).not.toHaveBeenCalled();
     await expect(pending).resolves.toBe(true);
   });
 
-  it('en ny sekvens kansellerer en tidligere skedulert-men-ikke-startet kjede', async () => {
+  it('en ny skedulert sekvens kansellerer IKKE en tidligere skedulert-men-ikke-startet kjede (Planrettelse 2: additiv)', async () => {
+    // Gammel β1-kontrakt («ny sekvens kansellerer skedulert») er erstattet:
+    // Directoren skedulerer FLERE samtidige kjeder (start_321/go/last5) i samme
+    // fase, og scheduleSequence skal aldri stoppe noe – se flerkjedemodellen.
     const { sources } = await setupBridgedEngine();
 
     const first = engine.scheduleSequence(['exercise-burpees'], { startAt: 15000 });
@@ -596,10 +601,110 @@ describe('AudioBufferEngine.scheduleSequence (absolutt anker + tidsbro)', () => 
 
     const second = engine.scheduleSequence(['exercise-planke'], { startAt: 16000 });
     expect(sources).toHaveLength(2);
-    expect(sources[0].stop).toHaveBeenCalledTimes(1);
+    expect(sources[0].stop).not.toHaveBeenCalled();
 
+    sources[0].onended?.();
     await expect(first).resolves.toBe(true);
     sources[1].onended?.();
     await expect(second).resolves.toBe(true);
+  });
+
+  it('tre samtidige skedulerte kjeder skedulerer alle tre kilder (ingen kansellert)', async () => {
+    const { sources } = await setupBridgedEngine();
+
+    const a = engine.scheduleSequence(['exercise-burpees'], { startAt: 15000 });
+    const b = engine.scheduleSequence(['exercise-planke'], { startAt: 16000 });
+    const c = engine.scheduleSequence(['exercise-burpees'], { startAt: 17000 });
+
+    expect(sources).toHaveLength(3);
+    sources.forEach((s) => expect(s.stop).not.toHaveBeenCalled());
+
+    sources.forEach((s) => s.onended?.());
+    await expect(Promise.all([a, b, c])).resolves.toEqual([true, true, true]);
+  });
+
+  it('playSequence under en ventende skedulert kjede: den skedulerte overlever, kun den hørbare stoppes', async () => {
+    const { sources } = await setupBridgedEngine();
+
+    // Skedulert grensekjede (fremtid, ikke hørbar ennå)
+    const scheduled = engine.scheduleSequence(['exercise-planke'], { startAt: 15000 });
+    expect(sources).toHaveLength(1);
+
+    // Reaktiv avspilling (f.eks. halfway-cue) – blir hørbar med det samme
+    const played = engine.playSequence(['exercise-burpees']);
+    expect(sources).toHaveLength(2);
+
+    // Den skedulerte (ikke-hørbare) kjeden er urørt
+    expect(sources[0].stop).not.toHaveBeenCalled();
+
+    sources[0].onended?.();
+    await expect(scheduled).resolves.toBe(true);
+    sources[1].onended?.();
+    await expect(played).resolves.toBe(true);
+  });
+
+  it('cancelScheduled() lar en hørbar kjede fortsette å spille', async () => {
+    const { sources } = await setupBridgedEngine();
+
+    const played = engine.playSequence(['exercise-burpees']);
+    expect(sources).toHaveLength(1);
+
+    const scheduled = engine.scheduleSequence(['exercise-planke'], { startAt: 15000 });
+    expect(sources).toHaveLength(2);
+
+    engine.cancelScheduled();
+
+    // Skedulert (ikke-hørbar) kjede kansellert...
+    expect(sources[1].stop).toHaveBeenCalledTimes(1);
+    // ...men den hørbare fra playSequence er UPÅVIRKET
+    expect(sources[0].stop).not.toHaveBeenCalled();
+
+    await expect(scheduled).resolves.toBe(true);
+    sources[0].onended?.();
+    await expect(played).resolves.toBe(true);
+  });
+
+  it('duck-balanse: ingen prematurt unduck mens en annen kjede fortsatt er hørbar', async () => {
+    vi.useFakeTimers();
+    const { sources } = await setupBridgedEngine(10);
+
+    // Kjede 1: hørbar med det samme (playSequence)
+    const first = engine.playSequence(['exercise-burpees']);
+    expect(duckStartSpy).toHaveBeenCalledTimes(1);
+
+    // Kjede 2: skedulert til å bli hørbar 2s frem (startAt-anker gir toAudioTime
+    // 2s etter ctx.currentTime=10, altså duck-timeren fyrer om 2000 ms)
+    const second = engine.scheduleSequence(['exercise-planke'], { startAt: 3000 }); // toAudioTime(3000)=3+9=12
+    await vi.advanceTimersByTimeAsync(2000);
+
+    // Kjede 2 er nå også hørbar – ducking var allerede aktivt (refcount 1→2),
+    // så startDucking skal IKKE kalles på nytt (bare på 0→1-overgangen).
+    expect(duckStartSpy).toHaveBeenCalledTimes(1);
+
+    // Kjede 1 avsluttes – kjede 2 er fortsatt hørbar, så INGEN unduck ennå.
+    sources[0].onended?.();
+    await expect(first).resolves.toBe(true);
+    expect(duckStopSpy).not.toHaveBeenCalled();
+
+    // Kjede 2 avsluttes – nå er ingen kjeder hørbare, unduck skal skje.
+    sources[1].onended?.();
+    await expect(second).resolves.toBe(true);
+    expect(duckStopSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('stop() rydder duck-timere for ALLE skedulerte kjeder (ingen sen duck-start etter global stopp)', async () => {
+    vi.useFakeTimers();
+    const { sources } = await setupBridgedEngine(10);
+
+    engine.scheduleSequence(['exercise-burpees'], { startAt: 3000 }); // toAudioTime=12
+    engine.scheduleSequence(['exercise-planke'], { startAt: 4000 }); // toAudioTime=13
+    expect(sources).toHaveLength(2);
+
+    engine.stop();
+
+    // Begge duck-timerne skal være ryddet av stop() – å spole forbi tidspunktene
+    // de skulle fyrt på skal IKKE trigge ducking i ettertid.
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(duckStartSpy).not.toHaveBeenCalled();
   });
 });
