@@ -1,5 +1,5 @@
 {
-  "$comment": "Maskinlesbar batch-input for Chatterbox-lydbanken. Speiler docs/manuskript-persona-lydbank-2026-08-29.md (GODKJENT 2026-08-29). Tekniske id-er (haugesund, romsdal, ...) er stabile noekler; displayName/region er visning. Filer legges under /audio/personas/<persona-id>/<file>. Oevelsestekstene er felles for alle personas: samme ttsText genereres per persona-seed.",
+  "$comment": "Maskinlesbar batch-input for Chatterbox-lydbanken. Speiler docs/manuskript-persona-lydbank-2026-08-29.md (GODKJENT 2026-08-29). Tekniske id-er (haugesund, romsdal, ...) er stabile noekler; displayName/region er visning. Filer legges under /audio/personas/<persona-id>/<file>. Oevelsestekstene er felles for alle personas: samme ttsText genereres per persona-seed. Valgfritt felt ttsLang per oevelse overstyrer TTS-spraaket for akkurat den oppgaven (default 'no' naar feltet mangler).",
   "language": "no",
   "personas": {
     "haugesund": {
@@ -84,7 +84,7 @@
     { "id": "push-ups", "displayText": "Armhevinger", "ttsText": "Armhevinger", "file": "exercise-push-ups.mp3" },
     { "id": "utfall-forover", "displayText": "Utfall forover", "ttsText": "Utfall forover", "file": "exercise-utfall-forover.mp3" },
     { "id": "planke", "displayText": "Planke", "ttsText": "Planke", "file": "exercise-planke.mp3" },
-    { "id": "mountain-climbers", "displayText": "Mountain Climbers", "ttsText": "Mauntn klaimers", "file": "exercise-mountain-climbers.mp3" },
+    { "id": "mountain-climbers", "displayText": "Mountain Climbers", "ttsText": "Mountain Climbers", "ttsLang": "en", "file": "exercise-mountain-climbers.mp3" },
     { "id": "burpees", "displayText": "Burpees", "ttsText": "Børpis", "file": "exercise-burpees.mp3" },
     { "id": "sideplanke", "displayText": "Sideplanke", "ttsText": "Sideplanke", "file": "exercise-sideplanke.mp3" },
     { "id": "rygghev-superman", "displayText": "Rygghev", "ttsText": "Rygghev", "file": "exercise-rygghev-superman.mp3" },

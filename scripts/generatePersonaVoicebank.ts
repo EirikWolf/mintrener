@@ -3,13 +3,20 @@
  *
  * Genererer 144 TTS-klipp (4 personas × (11 cues + 25 øvelser)) via Chatterbox
  * voice-clone på Kitor, og etterbehandler de 4 innspilte Tre-To-En-sporene.
- * Alle klipp (TTS + innspilt) går gjennom samme ffmpeg-kjede: silenceremove,
- * ~10 ms fade ut og loudnorm til felles nivå. Ingen manifest-generering her —
+ * TTS-nedlastinger caches rått i audio/raw-cache/ (gitignorert) slik at
+ * etterbehandlings-iterasjon er gratis etter én GPU-runde: `--reprocess`
+ * regenererer output fra cachen uten nettverk/token. TTS-klipp får v2-kjeden
+ * (denoise/trim med pre-roll/mykgjøring/loudnorm); innspilte spor får kun den
+ * skånsomme trim+fade+loudnorm-kjeden. Ingen manifest-generering her —
  * det er en egen byggtidsoppgave (β5).
  *
  * Bruk:
  *   npx tsx scripts/generatePersonaVoicebank.ts [--dry-run] [--persona <id>]
- *     [--only <cueId|exerciseId>] [--force] [--skip-recorded]
+ *     [--only <cueId|exerciseId>] [--force] [--skip-recorded] [--reprocess] [--refetch]
+ *
+ * Flaggvalg: --force re-prosesserer output (cache gjenbrukes), --reprocess er
+ * kun ffmpeg fra cache (uten nettverk/token), --refetch henter ny TTS (ny
+ * stokastisk take) selv om cachen er fersk.
  */
 
 import fs from 'node:fs';
@@ -23,8 +30,12 @@ import {
   MAX_CONSECUTIVE_FAILURES,
   NonRetryableError,
   buildClonePayload,
-  buildFfmpegArgs,
+  buildRecordedFfmpegArgs,
   buildTaskList,
+  buildTtsFfmpegArgs,
+  cacheIsFresh,
+  decideTtsAction,
+  persistRawCache,
   isRetryableHttpStatus,
   parseCliArgs,
   parseManifest,
@@ -63,10 +74,14 @@ function assertFfmpeg(): void {
   }
 }
 
-/** Kjør ffmpeg-kjeden på input og erstatt output atomisk via .tmp.mp3 + rename. */
-function postProcess(inputPath: string, outputPath: string): void {
+/** Kjør en ffmpeg-kjede på input og erstatt output atomisk via .tmp.mp3 + rename. */
+function postProcess(
+  inputPath: string,
+  outputPath: string,
+  argsBuilder: (input: string, output: string) => string[],
+): void {
   const tmpPath = `${outputPath}.tmp.mp3`;
-  const res = spawnSync('ffmpeg', buildFfmpegArgs(inputPath, tmpPath), {
+  const res = spawnSync('ffmpeg', argsBuilder(inputPath, tmpPath), {
     encoding: 'utf-8',
   });
   if (res.status !== 0) {
@@ -97,7 +112,7 @@ async function fetchTtsOnce(task: TtsTask, token: string): Promise<Buffer> {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify(buildClonePayload(task.text, task.seedFile)),
+    body: JSON.stringify(buildClonePayload(task.text, task.seedFile, task.lang)),
     signal: AbortSignal.timeout(TTS_TIMEOUT_MS),
   });
   if (!res.ok) {
@@ -144,34 +159,69 @@ export async function fetchTtsWithRetries(
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
-async function runTtsTask(task: TtsTask, token: string, force: boolean): Promise<TaskOutcome> {
+/** Leser sidecaren (<cachefil>.json) hvis den finnes; null ellers. */
+function readSidecar(sidecarPath: string): string | null {
+  return fs.existsSync(sidecarPath) ? fs.readFileSync(sidecarPath, 'utf-8') : null;
+}
+
+async function runTtsTask(task: TtsTask, token: string, opts: CliOptions): Promise<TaskOutcome> {
   const outputPath = toAbsolute(task.outputRelPath);
-  if (!force && fs.existsSync(outputPath)) {
+  const cachePath = toAbsolute(task.cacheRelPath);
+  const sidecarPath = `${cachePath}.json`;
+  // «Finnes» = fila ligger der OG sidecaren matcher dagens tekst/språk;
+  // redigert manuskript invaliderer cachen automatisk.
+  const rawExists = fs.existsSync(cachePath);
+  const cacheExists = rawExists && cacheIsFresh(readSidecar(sidecarPath), task);
+  if (rawExists && !cacheExists) {
+    console.log(`♻️ [${task.personaId}/${task.id}] cache utdatert (tekst/språk endret)`);
+  }
+  const action = decideTtsAction({
+    cacheExists,
+    outputExists: fs.existsSync(outputPath),
+    force: opts.force,
+    reprocess: opts.reprocess,
+    refetch: opts.refetch,
+  });
+
+  if (action === 'skip-existing') {
     console.log(`⏩ Hopper over eksisterende: ${task.personaId}/${task.id}`);
     return 'skipped';
   }
+  if (action === 'missing-cache') {
+    console.error(
+      `   ❌ [${task.personaId}/${task.id}] --reprocess uten gyldig cache-fil (${task.cacheRelPath}) — kjør TTS-runden først.`,
+    );
+    return 'failed';
+  }
+
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  const rawPath = `${outputPath}.raw.mp3`;
   try {
-    console.log(`🎙️ [${task.personaId}/${task.id}] "${shorten(task.text)}"`);
-    const buffer = await fetchTtsWithRetries(task, token);
-    fs.writeFileSync(rawPath, buffer);
-    postProcess(rawPath, outputPath);
+    if (action === 'fetch-then-process') {
+      console.log(`🎙️ [${task.personaId}/${task.id}] "${shorten(task.text)}" (${task.lang})`);
+      const buffer = await fetchTtsWithRetries(task, token);
+      // Rå-cachen er permanent: neste etterbehandlings-iterasjon koster null
+      // GPU-tid. Sidecaren gjør at manuskript-endringer re-henter automatisk;
+      // persistRawCache skriver i kræsjtrygg rekkefølge (sidecar slettes først).
+      fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+      persistRawCache(cachePath, sidecarPath, buffer, { text: task.text, lang: task.lang }, fs);
+    } else {
+      console.log(`📦 [${task.personaId}/${task.id}] etterbehandler fra rå-cache`);
+    }
+    postProcess(cachePath, outputPath, buildTtsFfmpegArgs);
     const kb = Math.round(fs.statSync(outputPath).size / 1024);
     console.log(`   ✅ ${task.outputRelPath} (${kb} KB)`);
     return 'generated';
   } catch (err) {
     console.error(`   ❌ Feilet: ${err instanceof Error ? err.message : String(err)}`);
     return 'failed';
-  } finally {
-    fs.rmSync(rawPath, { force: true });
   }
 }
 
-function runRecordedTask(task: RecordedTask, force: boolean): TaskOutcome {
+function runRecordedTask(task: RecordedTask, opts: CliOptions): TaskOutcome {
   const outputPath = toAbsolute(task.outputRelPath);
   const sourcePath = toAbsolute(task.sourceRelPath);
-  if (!force && fs.existsSync(outputPath)) {
+  // --reprocess regenererer også innspilte spor (kilden ligger alltid lokalt).
+  if (!opts.force && !opts.reprocess && fs.existsSync(outputPath)) {
     console.log(`⏩ Hopper over eksisterende: ${task.personaId}/start_321`);
     return 'skipped';
   }
@@ -181,8 +231,8 @@ function runRecordedTask(task: RecordedTask, force: boolean): TaskOutcome {
   }
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   try {
-    console.log(`🎛️ [${task.personaId}/start_321] etterbehandler innspilt spor`);
-    postProcess(sourcePath, outputPath);
+    console.log(`🎛️ [${task.personaId}/start_321] etterbehandler innspilt spor (skånsom kjede)`);
+    postProcess(sourcePath, outputPath, buildRecordedFfmpegArgs);
     console.log(`   ✅ ${task.outputRelPath}`);
     return 'generated';
   } catch (err) {
@@ -212,11 +262,14 @@ function printDryRun(tasks: readonly VoicebankTask[]): void {
 async function runAll(tasks: readonly VoicebankTask[], opts: CliOptions): Promise<void> {
   assertFfmpeg();
   let token = '';
-  try {
-    token = getKitorToken(ROOT_DIR);
-  } catch (err) {
-    console.error(`❌ ${err instanceof Error ? err.message : String(err)}`);
-    process.exit(1);
+  if (!opts.reprocess) {
+    // --reprocess er ren lokal etterbehandling — trenger verken token eller nett.
+    try {
+      token = getKitorToken(ROOT_DIR);
+    } catch (err) {
+      console.error(`❌ ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }
   }
 
   cleanupStaleTempFiles();
@@ -228,8 +281,8 @@ async function runAll(tasks: readonly VoicebankTask[], opts: CliOptions): Promis
   for (const task of tasks) {
     const outcome =
       task.kind === 'tts'
-        ? await runTtsTask(task, token, opts.force)
-        : runRecordedTask(task, opts.force);
+        ? await runTtsTask(task, token, opts)
+        : runRecordedTask(task, opts);
     counts[outcome]++;
     if (outcome === 'failed') failedIds.push(`${task.personaId}/${task.id}`);
     consecutiveFailures = updateConsecutiveFailures(consecutiveFailures, outcome);
@@ -262,6 +315,7 @@ async function main(): Promise<void> {
   console.log('====================================================');
   console.log(`Kitor-endepunkt: ${KITOR_TTS_URL}`);
   console.log(`Dry run: ${opts.dryRun ? 'JA' : 'NEI'}`);
+  console.log(`Reprocess (kun lokal etterbehandling fra rå-cache): ${opts.reprocess ? 'JA' : 'NEI'}`);
 
   const tasks = buildTaskList(manifest, opts);
   if (tasks.length === 0) {

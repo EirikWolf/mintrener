@@ -139,7 +139,7 @@ Alle 25 øvelses-id-er er kryssjekket mot `src/data/exercises/` (bodyweight, car
 | `push-ups` | `exercise-push-ups.mp3` | Armhevinger | | Norsk navn brukes (jf. Beslutning 25) |
 | `utfall-forover` | `exercise-utfall-forover.mp3` | Utfall forover | | |
 | `planke` | `exercise-planke.mp3` | Planke | | |
-| `mountain-climbers` | `exercise-mountain-climbers.mp3` | Mountain Climbers | «Mauntn klaimers» | ⚠️ Usikker — alternativ: norsk «Fjellklatrere» (jf. Beslutning 25). Produkteier velger. |
+| `mountain-climbers` | `exercise-mountain-climbers.mp3` | Mountain Climbers | Mountain Climbers (engelsk uttale, `ttsLang: "en"`) | QA-runde 1: fonetisk omskriving forkastet; uttales på engelsk slik den skrives |
 | `burpees` | `exercise-burpees.mp3` | Burpees | «Børpis» | |
 | `sideplanke` | `exercise-sideplanke.mp3` | Sideplanke | | |
 | `rygghev-superman` | `exercise-rygghev-superman.mp3` | Rygghev | | «(Superman)» strøket i tale |
