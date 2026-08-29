@@ -257,6 +257,24 @@ describe('TimerDisplay – gestflate i fokusmodus (B6.2)', () => {
     tap(pauseButton);
     expect(handlers.onPause).not.toHaveBeenCalled();
   });
+
+  it('to samtidige pekere utløser ikke sveip (multi-touch-vern)', () => {
+    const { handlers } = renderDisplay(makeState({ status: 'running', phase: 'work' }));
+    const surface = getGestureSurface();
+
+    // To fingre ned samtidig; finger 2 (som overskrev startpunktet) beveger seg
+    // horisontalt og løftes FØRST — den sårbare rekkefølgen uten vern
+    fireEvent.pointerDown(surface, { clientX: 200, clientY: 300, pointerId: 1 });
+    fireEvent.pointerDown(surface, { clientX: 250, clientY: 300, pointerId: 2 });
+    fireEvent.pointerUp(surface, { clientX: 150, clientY: 302, pointerId: 2 });
+    fireEvent.pointerUp(surface, { clientX: 200, clientY: 300, pointerId: 1 });
+    expect(handlers.onSkipNext).not.toHaveBeenCalled();
+    expect(handlers.onPrevious).not.toHaveBeenCalled();
+
+    // Vernet slipper når alle pekere er løftet — vanlig én-finger-sveip virker igjen
+    pointerGesture(surface, 250, 300, 180, 302);
+    expect(handlers.onSkipNext).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('TimerDisplay – dimme-modus (B6.3)', () => {
@@ -328,6 +346,22 @@ describe('TimerDisplay – dimme-modus (B6.3)', () => {
       makeState({ status: 'running', phase: 'work', phaseRemainingSeconds: 5 })
     );
     expect(surface.style.filter).toBe('none');
+  });
+
+  it('suspenderer dimmingen mens TV-modus er åpen (fixed-overlay må ikke re-scopes av filter)', () => {
+    // Åpnes fra idle (TV-knappen finnes ikke i fokusmodus), deretter startes økten
+    const utils = renderDisplay(makeState({ status: 'idle' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Storskjerm og TV-visning' }));
+    rerenderDisplay(utils, makeState({ status: 'running', phase: 'work' }));
+
+    const surface = screen.getByTestId('workout-surface') as HTMLElement;
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(surface.style.filter).toBe('none');
+
+    // Når TV-modus lukkes gjenopptas dimmingen på mobilflaten
+    fireEvent.click(screen.getByRole('button', { name: 'Lukk storskjermvisning' }));
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(surface.style.filter).toBe('brightness(0.6)');
   });
 
   it('dimmer ikke i idle eller pause', () => {

@@ -328,7 +328,12 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   // fortsatt synlig (UU-rammen). Berøring/tastatur vekker via hookens egne
   // window-lyttere; faseovergang og fasens siste 5 sekunder vekker via wake()
   // under, slik at skjermen alltid er lys når en ny øvelse nærmer seg/starter.
-  const { isDimmed, wake: wakeDim } = useIdleDim(state.status === 'running');
+  // Suspendert mens TV-modus er åpen: et filter på rot-diven gjør den til
+  // containing block for fixed-etterkommere (CSS Filter Effects § 3), som
+  // ville re-scope TvBigScreenDisplay (fixed inset-0) fra viewport til
+  // mobilkolonnen og klippe den mot overflow-hidden — og TV-flaten har
+  // uansett ikke mobilens batterihensyn.
+  const { isDimmed, wake: wakeDim } = useIdleDim(state.status === 'running' && !isTvModeOpen);
   const inFinalCountdown = state.phaseRemainingSeconds <= 5;
   React.useEffect(() => {
     wakeDim();

@@ -78,9 +78,25 @@ interface GestureStart {
 export function useFocusGestures(options: UseFocusGesturesOptions): FocusGestureHandlers {
   const startRef = useRef<GestureStart | null>(null);
   const lastTapAtRef = useRef<number>(0);
+  // Multi-touch-vern: to samtidige pekere (klype/hvile med to fingre) skal
+  // aldri tolkes som gest. Flagget settes ved andre samtidige pointerdown og
+  // ugyldiggjør ALT til alle pekere er løftet igjen.
+  const activePointersRef = useRef<Set<number>>(new Set());
+  const multiTouchRef = useRef(false);
+
+  const releasePointer = (pointerId: number) => {
+    activePointersRef.current.delete(pointerId);
+    if (activePointersRef.current.size === 0) {
+      multiTouchRef.current = false;
+    }
+  };
 
   const onPointerDown = (e: React.PointerEvent<HTMLElement>) => {
-    if (!options.enabled || isInteractiveTarget(e.target)) {
+    activePointersRef.current.add(e.pointerId);
+    if (activePointersRef.current.size > 1) {
+      multiTouchRef.current = true;
+    }
+    if (!options.enabled || multiTouchRef.current || isInteractiveTarget(e.target)) {
       startRef.current = null;
       return;
     }
@@ -88,9 +104,11 @@ export function useFocusGestures(options: UseFocusGesturesOptions): FocusGesture
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLElement>) => {
+    const wasMultiTouch = multiTouchRef.current;
+    releasePointer(e.pointerId);
     const start = startRef.current;
     startRef.current = null;
-    if (!options.enabled || !start || start.pointerId !== e.pointerId) return;
+    if (!options.enabled || wasMultiTouch || !start || start.pointerId !== e.pointerId) return;
 
     const kind = classifyGesture(e.clientX - start.x, e.clientY - start.y);
     if (kind === 'swipe-left') {
@@ -111,7 +129,8 @@ export function useFocusGestures(options: UseFocusGesturesOptions): FocusGesture
     }
   };
 
-  const onPointerCancel = () => {
+  const onPointerCancel = (e: React.PointerEvent<HTMLElement>) => {
+    releasePointer(e.pointerId);
     startRef.current = null;
   };
 
