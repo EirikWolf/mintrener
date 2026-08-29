@@ -105,8 +105,8 @@ function isCustomExercise(ex: Exercise): boolean {
  *  - cue:    rest-cuen (rest/round_rest) eller introen (prepare)
  *  - bridge: bro-neste / bro-naa
  *  - name:   øvelsesklippet (personaens eget, ellers studioklippet)
- * ttsName markerer at navnet leses av TTS ETTER kjeden (egendefinerte øvelser
- * og ucachede navn) — TTS ligger utenfor buffermotoren og kan derfor verken
+ * name === null betyr at navnet leses av TTS ETTER kjeden (egendefinerte
+ * øvelser og ucachede navn) — TTS ligger utenfor buffermotoren og kan verken
  * preemptes eller måles, så slike kjeder degraderes aldri.
  *
  * Dette er ÉN utledning med TO kallsteder — avspillingen (mirrorPersonaRest/
@@ -118,14 +118,12 @@ export interface AnnounceChain {
   readonly cue: string | null;
   readonly bridge: string | null;
   readonly name: string | null;
-  readonly ttsName: boolean;
 }
 
 const EMPTY_ANNOUNCE_CHAIN: AnnounceChain = {
   cue: null,
   bridge: null,
   name: null,
-  ttsName: false,
 };
 
 /** Nøklene i spillerekkefølge — tom liste når fasen ikke har noen bufferkjede. */
@@ -158,7 +156,7 @@ function derivePrepareChain(event: PhaseStartedEvent): AnnounceChain {
   if (!first || event.durationS < PREPARE_MIN_CHAIN_S) return EMPTY_ANNOUNCE_CHAIN;
   const cue = cachedPersonaKey('intro');
   if (isCustomExercise(first)) {
-    return { cue, bridge: cachedPersonaKey('bro-naa'), name: null, ttsName: true };
+    return { cue, bridge: cachedPersonaKey('bro-naa'), name: null };
   }
   // Speiler playIntroThenExercise: personaens eget klipp foran studioklippet,
   // og kjeden krever at BEGGE ledd er dekodet (ellers degradert HTMLAudio-sti).
@@ -166,7 +164,7 @@ function derivePrepareChain(event: PhaseStartedEvent): AnnounceChain {
   const nameKey =
     personaEx !== null && audioBufferEngine.has(personaEx) ? personaEx : 'exercise-' + first.id;
   if (cue === null || !audioBufferEngine.has(nameKey)) return EMPTY_ANNOUNCE_CHAIN;
-  return { cue, bridge: null, name: nameKey, ttsName: false };
+  return { cue, bridge: null, name: nameKey };
 }
 
 /** rest/round_rest: [rest-cue, bro-neste, øvelsesnavn] etter spec § 4-prioriteten. */
@@ -184,17 +182,17 @@ function deriveRestChain(event: PhaseStartedEvent): AnnounceChain {
     speechEnabled: true, // speech-gaten ligger hos deriveAnnounceChain
   });
   if (plan === 'persona' && personaKey) {
-    return { cue, bridge: cachedPersonaKey('bro-neste'), name: personaKey, ttsName: false };
+    return { cue, bridge: cachedPersonaKey('bro-neste'), name: personaKey };
   }
   // Studioklippet kjedes kun når rest-cuen ligger foran; uten cue er dagens
   // sti playClipOrFallback (utenfor Directorens bufferkjede).
   if (plan === 'studio' && cue !== null) {
-    return { cue, bridge: null, name: studioKey, ttsName: false };
+    return { cue, bridge: null, name: studioKey };
   }
   if (plan === 'bridge-tts') {
-    return { cue, bridge: cachedPersonaKey('bro-neste'), name: null, ttsName: true };
+    return { cue, bridge: cachedPersonaKey('bro-neste'), name: null };
   }
-  return { ...EMPTY_ANNOUNCE_CHAIN, cue, ttsName: true };
+  return { ...EMPTY_ANNOUNCE_CHAIN, cue };
 }
 
 /** Kjedens samlede varighet i ms — null når et ledd mangler kjent varighet. */
