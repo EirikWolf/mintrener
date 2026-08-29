@@ -50,18 +50,130 @@ service cloud.firestore {
         && request.resource.data.hostUid == request.auth.uid
         && request.resource.data.roomId == roomId;
 
-      // Verten kan oppdatere økt/status, eller deltakere kan øke participantCount
-      allow update: if (isAuthenticated() && resource.data.hostUid == request.auth.uid)
-        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participantCount']));
+      // All mutasjon krever auth (revisjon §5.3: join-oppdateringen var åpen for
+      // uautentiserte og ubegrenset — participantCount kunne settes til hva som helst).
+      // Verten kan oppdatere økt/status; en innlogget/anonym deltaker kan KUN øke
+      // participantCount med nøyaktig 1 (join), uten å røre andre felt.
+      allow update: if isAuthenticated() && (
+        resource.data.hostUid == request.auth.uid
+        || (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participantCount'])
+          && request.resource.data.participantCount == resource.data.participantCount + 1
+        )
+      );
 
       // Kun verten kan slette rommet
       allow delete: if isAuthenticated() && resource.data.hostUid == request.auth.uid;
     }
 
-    // Anonym, aggregert telemetri / statistikk (uten personopplysninger)
+    // ---------------------------------------------------------------------
+    // Anonym, aggregert telemetri / statistikk (uten personopplysninger).
+    //
+    // Herdet etter revisjon §5.1: reglene sto som «allow write: if true» —
+    // hvem som helst kunne slette eller erstatte hele statistikken. Telemetri
+    // skrives av uautentiserte klienter (telemetryService), så vi kan ikke
+    // kreve auth; i stedet krever vi at hver skriving har FORMEN til en
+    // gyldig telemetri-oppdatering: kun kjente felt (diff-allowlist), kun
+    // begrensede inkrementer, og lastUpdated == request.time
+    // (serverTimestamp() evalueres til request.time i reglene, så en klient
+    // kan ikke sende egne klokkeslett).
+    // ---------------------------------------------------------------------
+
+    // Delta-sjekk for en teller ved update: ny verdi må være et tall og kan
+    // øke med maks maxDelta (0 tillatt = feltet urørt i denne skrivingen).
+    function counterDeltaOk(field, maxDelta) {
+      return request.resource.data.get(field, 0) is number
+        && request.resource.data.get(field, 0) - resource.data.get(field, 0) >= 0
+        && request.resource.data.get(field, 0) - resource.data.get(field, 0) <= maxDelta;
+    }
+
+    // Samme sjekk ved create (ingen resource å diffe mot — teller fra null).
+    function counterInitOk(field, maxDelta) {
+      return request.resource.data.get(field, 0) is number
+        && request.resource.data.get(field, 0) >= 0
+        && request.resource.data.get(field, 0) <= maxDelta;
+    }
+
+    // types-kartet (økttype → antall): regelspråket kan ikke iterere over
+    // dynamiske nøkler, så vi validerer strukturelt i stedet: maks én endret
+    // nøkkel per skriving (klienten øker kun én økttype per økt), ingen
+    // slettede nøkler, og begrenset størrelse. RESTRISIKO (bevisst, jf.
+    // revisjonens pragmatiske linje): verdien til den ene endrede nøkkelen
+    // kan ikke delta-valideres og kan settes vilkårlig av en ondsinnet
+    // klient — men skaden er begrenset til én enkelt økttype-teller.
+    function typesMapOk(newTypes, oldTypes) {
+      return newTypes is map
+        && newTypes.size() <= 50
+        && newTypes.diff(oldTypes).removedKeys().size() == 0
+        && newTypes.diff(oldTypes).affectedKeys().size() <= 1;
+    }
+
+    // Generell regel for samlingen: alle kan lese (vises i UI), ingen kan
+    // slette, og skriving tillates KUN via de spesifikke dokument-matchene
+    // under (overview/ratings/exercises) — andre dokument-id-er avvises.
     match /global_stats/{statId} {
       allow read: if true;
-      allow write: if true;
+      allow delete: if false;
+    }
+
+    match /global_stats/overview {
+      allow create: if request.resource.data.keys().hasOnly(
+          ['totalWorkouts', 'totalSecondsTrained', 'shareLinkOpens', 'types', 'lastUpdated'])
+        && request.resource.data.lastUpdated == request.time
+        && counterInitOk('totalWorkouts', 1)
+        && counterInitOk('totalSecondsTrained', 14400)
+        && counterInitOk('shareLinkOpens', 1)
+        && typesMapOk(request.resource.data.get('types', {}), {});
+
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+          ['totalWorkouts', 'totalSecondsTrained', 'shareLinkOpens', 'types', 'lastUpdated'])
+        && request.resource.data.lastUpdated == request.time
+        && counterDeltaOk('totalWorkouts', 1)
+        // 14400 s = 4 timer — romslig øvre grense for én registrert økt
+        && counterDeltaOk('totalSecondsTrained', 14400)
+        && counterDeltaOk('shareLinkOpens', 1)
+        && typesMapOk(request.resource.data.get('types', {}), resource.data.get('types', {}));
+    }
+
+    match /global_stats/ratings {
+      allow create: if request.resource.data.keys().hasOnly(
+          ['for_lett', 'passe', 'for_tungt', 'lastUpdated'])
+        && request.resource.data.lastUpdated == request.time
+        && counterInitOk('for_lett', 1)
+        && counterInitOk('passe', 1)
+        && counterInitOk('for_tungt', 1);
+
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+          ['for_lett', 'passe', 'for_tungt', 'lastUpdated'])
+        && request.resource.data.lastUpdated == request.time
+        && counterDeltaOk('for_lett', 1)
+        && counterDeltaOk('passe', 1)
+        && counterDeltaOk('for_tungt', 1);
+    }
+
+    // Øvelsesaggregatene har dynamiske øvelses-id-nøkler ({count, seconds,
+    // name} per øvelse) — regelspråket kan ikke iterere over dem, så streng
+    // delta-validering per nøkkel er upraktisk her. Pragmatisk linje (jf.
+    // revisjon §5.1): krev serverstemplet lastUpdated, forby sletting av
+    // nøkler, og begrens antall berørte nøkler og total dokumentstørrelse.
+    // RESTRISIKO (bevisst): verdiene i de enkelte øvelses-kartene kan settes
+    // vilkårlig — men skaden er avgrenset til pynte-statistikk («topp 5
+    // øvelser» i UI), ikke brukerdata, og dokumentet kan ikke lenger slettes
+    // eller vokse ubegrenset. Grensene er kalibrert for klientens nøstede
+    // form (én toppnivå-nøkkel per øvelse + lastUpdated): ≤41 berørte nøkler
+    // per skriv = maks 40 øvelser i én økt, ≤500 nøkler totalt i dokumentet.
+    // Historiske FLATE punktum-nøkler («ovelse.count» som bokstavelig nøkkel,
+    // fra før klienten gikk over til nøstede maps) kan ligge igjen i prod som
+    // døde nøkler — de ignoreres både av regel-validerte skrivinger og av
+    // fetchGlobalStats, og migreres ikke (kun kosmetisk statistikk).
+    match /global_stats/exercises {
+      allow create: if request.resource.data.lastUpdated == request.time
+        && request.resource.data.size() <= 41;
+
+      allow update: if request.resource.data.lastUpdated == request.time
+        && request.resource.data.diff(resource.data).removedKeys().size() == 0
+        && request.resource.data.diff(resource.data).affectedKeys().size() <= 41
+        && request.resource.data.size() <= 500;
     }
 
     // Klokkesynkronisering (NTP-forenklet): hver klient skriver/leser sitt eget

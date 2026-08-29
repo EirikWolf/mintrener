@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { doc, setDoc, getDoc, increment, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, increment, serverTimestamp, FieldValue } from 'firebase/firestore';
 import { WorkoutTemplate } from '../types/workout';
 
 const TELEMETRY_STORAGE_KEY = 'mintrener_telemetry_enabled';
@@ -88,12 +88,16 @@ export async function recordWorkoutTelemetry(
     const overviewRef = doc(db, 'global_stats', 'overview');
     const safeType = workout.type || 'custom';
     
+    // NB: setDoc med merge splitter IKKE punktum-nøkler i stier (kun updateDoc
+    // gjør det) — `types.${safeType}` ville blitt én bokstavelig toppnivå-nøkkel.
+    // Nøstet map-form kreves både av sikkerhetsreglene (allowlist på `types`)
+    // og av fetchGlobalStats som leser `overviewData.types`.
     await setDoc(
       overviewRef,
       {
         totalWorkouts: increment(1),
         totalSecondsTrained: increment(Math.max(durationSeconds, 0)),
-        [`types.${safeType}`]: increment(1),
+        types: { [safeType]: increment(1) },
         lastUpdated: serverTimestamp(),
       },
       { merge: true }
@@ -102,7 +106,13 @@ export async function recordWorkoutTelemetry(
     // 2. Aggreger øvelsesstatistikk for hver øvelse i økten
     if (workout.items && workout.items.length > 0) {
       const exercisesRef = doc(db, 'global_stats', 'exercises');
-      const exUpdates: Record<string, any> = {
+      // Samme punktum-fallgruve som over: nøstet map per øvelses-id, slik at
+      // hvert skriv berører én toppnivå-nøkkel per øvelse (+ lastUpdated) —
+      // formen sikkerhetsreglene og fetchGlobalStats forventer.
+      const exUpdates: Record<
+        string,
+        FieldValue | { count: FieldValue; seconds: FieldValue; name: string }
+      > = {
         lastUpdated: serverTimestamp(),
       };
 
@@ -112,9 +122,11 @@ export async function recordWorkoutTelemetry(
         const exName = item.exercise.name || exId;
         const itemDuration = (item.workDurationSeconds || 30) * (workout.rounds || 1);
 
-        exUpdates[`${exId}.count`] = increment(1);
-        exUpdates[`${exId}.seconds`] = increment(itemDuration);
-        exUpdates[`${exId}.name`] = exName;
+        exUpdates[exId] = {
+          count: increment(1),
+          seconds: increment(itemDuration),
+          name: exName,
+        };
       }
 
       await setDoc(exercisesRef, exUpdates, { merge: true });
