@@ -388,6 +388,15 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
   // — replan re-utsteder KUN da. Alt lyktes → kjeden kan alt være hørbar, og
   // kanseller+reutsted ville kunnet gi pip over spillende stemme eller
   // omstart av nedtellingen; varmstart-replan er derfor ren no-op.
+  // announceEndsAt (BL-1, andre review): motorklokke-tidspunktet der den
+  // reaktive annonseringen er ferdigspilt. Fristflytt (dvale-reanker, catch-up-
+  // landing) og replan kansellerer KUN skedulerte kjeder (cancelScheduled, ikke
+  // stop) — annonseringen kan altså fortsatt være HØRBAR, og en re-utstedelse
+  // uten hodrom ville preemptet den. Med et tidspunkt i stedet for et flagg blir
+  // hodrommet naturlig 0 når kjeden faktisk er ferdig, og stigen kjører som før.
+  // Null (ingen kjede i spill) settes av pause og reset — begge stopper hørbar
+  // persona-lyd via stopCurrentPersonaAudio.
+  let announceEndsAt: number | null = null;
   let pending: PendingLookahead | null = null;
   let currentDeadline: number | null = null;
   let beepFallback = false;
@@ -395,6 +404,15 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
   let issueGen = 0;
   let lookaheadDegraded = false;
   let currentPhaseEvent: PhaseStartedEvent | null = null;
+
+  /**
+   * Hvor mye av den reaktive annonseringen som fortsatt er i spill (ms) —
+   * grunnlaget for hodromsgaten ved fristflytt/replan. null = ingen kjede
+   * (pause/reset, eller ukjent varighet ved kaldstart).
+   */
+  function remainingAnnounceMs(): number | null {
+    return announceEndsAt === null ? null : Math.max(0, announceEndsAt - engine.getNow());
+  }
 
   // Delt med speil-funksjonene: gir TTS-etter-kjede-veiene tilgang til
   // fase-epoken (guard mot skip-lekkasje — se DirectorCtx).
@@ -582,6 +600,11 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
             shortCueBudgetMs(e.phase)
           );
 
+    // BL-1: fest hodrommet til motorklokken FØR kjeden spilles, slik at et
+    // senere fristflytt kan spørre «hvor mye av annonseringen står igjen NÅ?»
+    // i stedet for å anta at den er ferdig.
+    announceEndsAt = fitted.headroomMs === null ? null : engine.getNow() + fitted.headroomMs;
+
     mirrorLegacyPhaseStarted(ctx, e, fitted);
     planLookahead(e, fitted.headroomMs);
   }
@@ -620,9 +643,11 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
     lookaheadDegraded = false;
     pending = null;
     audioBufferEngine.cancelScheduled();
-    // Hodrom null (B2): replan spiller ALDRI annonseringen på nytt, så det er
-    // ingenting å beskytte — gaten ville bare gitt stillhet inn mot grensen.
-    planLookahead({ ...currentPhaseEvent, endsAt: currentDeadline }, null);
+    // BL-1: replan spiller aldri annonseringen på nytt, men den kan fortsatt
+    // SPILLE fra fasestarten (kaldstart-preloaden lander typisk tidlig i første
+    // fase) — så re-utstedelsen må respektere det som står igjen av den. Er
+    // kjeden ferdig, er restverdien 0 og stigen kjører som før.
+    planLookahead({ ...currentPhaseEvent, endsAt: currentDeadline }, remainingAnnounceMs());
   }
 
   function handleDeadlineChanged(endsAt: number): void {
@@ -646,10 +671,14 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
     // sin landing overtar), så ankeret er alltid gyldig; holder vinduet likevel
     // ikke, svarer scheduleSequence false → pip-fallback, aldri avkuttet tale.
     audioBufferEngine.cancelScheduled();
-    // Hodrom null (B2): pause→resume, dvale-reanker og catch-up re-utsteder KUN
-    // lookaheaden — den reaktive annonseringen spilles aldri på nytt her, så
-    // gaten skal ikke gjelde. Dagens stige (full → short → pip) er uendret.
-    issuePending(endsAt, null);
+    // BL-1 (andre review, empirisk): dette er nettopp veien der annonseringen
+    // KAN være hørbar — dvale-reankeren fyrer typisk 1 s inn i fasen, og
+    // catch-up-landingen emitter deadlineChanged FØR resync-cuen. Uten hodrom
+    // skedulerte vi da en 27,8 s full-kjede som ble hørbar midt i navnet.
+    // Resume-veien er trygg på egen hånd (workout:paused nullstiller
+    // announceEndsAt fordi stopCurrentPersonaAudio har stoppet lyden), og en
+    // ferdigspilt kjede gir 0 → stigen kjører som før.
+    issuePending(endsAt, remainingAnnounceMs());
   }
 
   function handleCountdown(): void {
@@ -696,12 +725,16 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
         // men BEHOLD pending: spec § 3 gjør pause/fortsett trygt for planlagt
         // lyd — workout:resumed bærer ny frist og vi reskedulerer der.
         stopCurrentPersonaAudio();
+        // BL-1: lyden ER stoppet, så det finnes ingen annonsering å beskytte
+        // ved resume — hodromsgaten skal ikke stå igjen og blokkere stigen.
+        announceEndsAt = null;
         break;
       case 'workout:resumed':
         handleDeadlineChanged(event.endsAt);
         break;
       case 'workout:reset':
         stopCurrentPersonaAudio();
+        announceEndsAt = null;
         pending = null;
         currentDeadline = null;
         beepFallback = false;
