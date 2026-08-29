@@ -176,12 +176,12 @@ describe('audioDirector (B3 β2)', () => {
     localStorage.clear();
   });
 
-  function usePersona(): void {
+  function usePersona(id: coachPersonaService.CoachPersonaId = 'hardcore'): void {
     // Spy for Directorens egne persona-sjekker (kryssmodul-bindingen) …
-    vi.spyOn(coachPersonaService, 'getActiveCoachPersona').mockReturnValue('hardcore');
+    vi.spyOn(coachPersonaService, 'getActiveCoachPersona').mockReturnValue(id);
     // … og lagret persona for getPersonaClipKey, som kaller modul-INTERN
     // getActiveCoachPersona (spies ikke via namespace-bindingen).
-    coachPersonaService.setActiveCoachPersona('hardcore');
+    coachPersonaService.setActiveCoachPersona(id);
   }
 
   describe('workout:started — tidsbro', () => {
@@ -548,20 +548,114 @@ describe('audioDirector (B3 β2)', () => {
     const BRO_NESTE = `${HC}/bro-neste.mp3`;
     const INTRO = `${HC}/intro.mp3`;
     const EX_A_CLIP = `${HC}/exercise-kneboy.mp3`;
+    const EX_MED_CLIP = `${HC}/exercise-hofteapner-90-90.mp3`;
 
-    // REELT målte klipplengder (ffprobe på public/audio/personas/hardcore/) —
-    // fasiten for hele fiksen: rest-kjeden er 4,32 + 3,44 + 6,18 = 13,94 s og
-    // får ALDRI plass i en 10 s Tabata-pause.
+    // REELT målte klipplengder (ffprobe på public/audio/personas/hardcore/,
+    // etter at start_321_short ble regenerert som egen TTS-cue i 001f38c) —
+    // fasiten for hele fiksen: rest-kjeden er 4,32 + 3,44 + navnet, og får
+    // ALDRI plass i en 10 s Tabata-pause sammen med nedtellingen.
+    //
+    // kneboy (6,185 s) er det LENGSTE av de 25 hardcore-øvelsesklippene;
+    // hofteapner-90-90 (2,115 s) er MEDIANEN. Begge er dekket under: det er
+    // nettopp mediantilfellet som mistet nedtellingen uten pip da budsjettet
+    // bare tok hensyn til fasen, ikke til short-cuen.
     const HC_REAL: Record<string, number> = {
       [FULL]: 27.815,
-      [SHORT]: 8.489,
+      [SHORT]: 4.44,
       [REST_CUE]: 4.32,
       [BRO_NESTE]: 3.44,
       [INTRO]: 5.68,
       [EX_A_CLIP]: 6.185,
+      [EX_MED_CLIP]: 2.115,
+    };
+    // Median-øvelsen som EKTE bibliotek-id (getPersonaClipKey slår opp i
+    // manifestet — fiktive id-er ville degradert kjeden).
+    const EX_MED = { id: 'hofteapner-90-90', name: 'Hofteåpner 90/90' };
+
+    // Boyband-fasiten (samme ffprobe-runde): median-øvelsen er den samme
+    // hofteåpneren, 1,597 s hos boyband.
+    const BB = '/audio/personas/boyband';
+    const BB_REAL: Record<string, number> = {
+      [`${BB}/start_321.mp3`]: 19.814,
+      [`${BB}/start_321_short.mp3`]: 3.68,
+      [`${BB}/rest.mp3`]: 3.742,
+      [`${BB}/bro-neste.mp3`]: 2.74,
+      [`${BB}/intro.mp3`]: 7.482,
+      [`${BB}/exercise-hofteapner-90-90.mp3`]: 1.597,
     };
 
-    it('FASIT (hardcore, 10 s Tabata-pause, reelle klipplengder): ingen nedtellingskjede, og navnet degraderes fram', async () => {
+    it('FASIT (hardcore, 10 s Tabata-pause, MEDIAN-øvelse): BÅDE navnet og nedtellingen', async () => {
+      usePersona();
+      cacheClips(HC_REAL);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_MED, endsAt: 10_000 }));
+      await flush();
+
+      // Budsjettet er fasen MINUS short-cuen (4,44 s) minus sikkerhetsmarginen
+      // = 5,41 s. Full kjede 9,88 s og [rest, navn] 6,44 s sprenger begge det,
+      // så kjeden degraderes helt ned til navnet (2,115 s) …
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([EX_MED_CLIP]);
+      // … og da får nedtellingen plass: short starter 5,56 s inn i fasen, godt
+      // etter at navnet er ferdig (2,115 s + 0,15 s margin).
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 10_000 });
+      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith([FULL], expect.anything());
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([`${HC}/go-1.mp3`], {
+        startAt: 10_000,
+      });
+      // Nedtellingen kommer som stemme → ingen pip oppå den.
+      emit({ type: 'countdown', secondsLeft: 3 });
+      expect(audioService.playCountdownBeep).not.toHaveBeenCalled();
+    });
+
+    it('FASIT (boyband, 10 s Tabata-pause, MEDIAN-øvelse): rest-cue + navn OG nedtellingen', async () => {
+      usePersona('boyband');
+      cacheClips(BB_REAL);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_MED, endsAt: 10_000 }));
+      await flush();
+
+      // Budsjett 10 − 3,68 − 0,15 = 6,17 s. Full kjede 8,08 s sprenger det, men
+      // [rest, navn] = 5,34 s får plass — boyband beholder altså rest-cuen.
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([
+        `${BB}/rest.mp3`,
+        `${BB}/exercise-hofteapner-90-90.mp3`,
+      ]);
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith(
+        [`${BB}/start_321_short.mp3`],
+        { endAt: 10_000 }
+      );
+      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith(
+        [`${BB}/start_321.mp3`],
+        expect.anything()
+      );
+      emit({ type: 'countdown', secondsLeft: 3 });
+      expect(audioService.playCountdownBeep).not.toHaveBeenCalled();
+    });
+
+    it('FASIT (hardcore, prepare 10 s, MEDIAN-øvelse): navnet spilles OG nedtellingen skeduleres', async () => {
+      usePersona();
+      cacheClips(HC_REAL);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(
+        phaseStarted({ phase: 'prepare', exercise: EX_MED, durationS: 10, endsAt: 10_000 })
+      );
+      await flush();
+
+      // intro 5,68 + navn 2,115 = 7,80 s > budsjettet 5,41 s → introen skrelles
+      // av, navnet spilles alene, og økta starter IKKE med stillhet før GO.
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([EX_MED_CLIP]);
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 10_000 });
+      emit({ type: 'countdown', secondsLeft: 3 });
+      expect(audioService.playCountdownBeep).not.toHaveBeenCalled();
+    });
+
+    it('FASIT (hardcore, 10 s Tabata-pause, MAKS-øvelse): ingen nedtellingskjede, og navnet degraderes fram', async () => {
       usePersona();
       cacheClips(HC_REAL);
       const { engine, emit } = createFakeEngine();
@@ -610,18 +704,19 @@ describe('audioDirector (B3 β2)', () => {
       expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 30_000 });
     });
 
-    it('mellomtrinn (12 s pause): bro-neste droppes, rest-cue + navn beholdes', async () => {
+    it('mellomtrinn (12 s pause, maks-øvelse): kjeden degraderes ett hakk EKSTRA så short-cuen får plass', async () => {
       usePersona();
       cacheClips(HC_REAL);
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
 
-      // 13,94 s sprenger 12 s, men 4,32 + 6,18 = 10,50 s får plass.
+      // Budsjett 12 − 4,44 − 0,15 = 7,41 s: [rest, navn] = 10,50 s sprenger det
+      // (selv om det ville fått plass i FASEN), navnet alene = 6,18 s får plass.
       emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_A, endsAt: 12_000 }));
       await flush();
 
-      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([REST_CUE, EX_A_CLIP]);
-      expect(audioService.playRestStart).not.toHaveBeenCalled();
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([EX_A_CLIP]);
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 12_000 });
     });
 
     it('selv navnet alene får ikke plass (5 s pause): full kjede beholdes — vi kutter aldri navnet bevisst', async () => {
