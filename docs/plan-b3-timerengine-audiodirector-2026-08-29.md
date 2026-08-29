@@ -267,6 +267,13 @@ export function resolveAnnouncementPlan(input: {
 
 - [ ] **Step 2:** Implementer `createAudioDirector(engine): () => void`. Lookahead kun for persona-stien; standard-stien speiler LegacyAudioAdapter (flytt den koden inn, behold betingelsene). Ducking og «én stemme»-invarianten eies her. → PASS. **Commit** `feat(audio): AudioDirector med fristbasert lookahead og prioritetsresolver`
 
+**Planrettelse 4 (fra samle-review β1–β2.5) — fire korrekthetfikser som SKAL inn i β3, før β4-koblingen:**
+1. **Bro-drift:** ctx.currentTime fryser ved mid-økt-suspensjon mens motorklokken løper — drift-reankeren fanger det IKKE (begge dens klokker løper), så alle ankre blir permanent D sekunder sene. Fiks: re-mål broen per fase — `setTimeBridge(engine.getNow())` øverst i `handlePhaseStarted` OG i `handleDeadlineChanged` (gratis i forgrunn, alltid fersk).
+2. **beepFallback-nullstilling:** flagget nullstilles ikke ved vellykket reskedulering (deadlineChanged) → pip oppå korrekt skedulert stemme. Fiks: `beepFallback = false` før `issuePending` i `handleDeadlineChanged`.
+3. **Epoch-krysskontaminering:** global `stopEpoch` bumpes av `stopAudibleChains`/`cancelScheduled`, så en ventende `scheduleSequence` (i resume-await) invalideres av en reaktiv cue den aldri skulle røre — og `true`-svaret undertrykker pip-fallback. Fiks: skill tellerne (full-stop-epoch vs. audible-stop) eller per-kjede-epoch; kun `stop()` skal invalidere ventende scheduleSequence. Test krysskontamineringen eksplisitt.
+4. **To-stemmer-overlapp ved skedulert-blir-hørbar:** en scheduleSequence-kjede som når startAt preempter ingenting — kort prepare gir intro-kjede + start_321 samtidig. Fiks: `markAudible` for skedulert kjede stopper andre hørbare kjeder (varsomt ift. punkt 3s epoch-skille).
+Tillegg: den degraderte intro-stien (`playPersonaCue('intro')` i mirrorPrepare-fallbacken) er nok et kallsted for Planrettelse 3-feilklassen; suksess-stien overlever i dag kun via en skjør rekkefølgeavhengighet (stopp før planLookahead) — kommenter den. Minor-følge: koble/juster `resolveAnnouncementPlan`-docstringen, test `phaseEpoch`-vakten i issuePending, throttling-forbehold i duck-timer-kommentaren.
+
 **Planrettelse 3 (fra β2.5-funn):** `coachPersonaService.stopCurrentPersonaAudio()` kalles før hver reaktive persona-cue og gjør full `audioBufferEngine.stop()` — som under flerkjedemodellen kansellerer Directors skedulerte lookahead (f.eks. last5) hver gang halfway spilles. β3 splitter semantikken: reaktive cues skal kun stoppe HØRBAR tale (HTMLAudio-elementet + hørbare kjeder — playSequence gjør sistnevnte selv nå), mens full stop() forbeholdes pause/reset-stiene. Test: halfway-cue mens last5 er skedulert → last5 overlever.
 
 ### Task β3: Bro + TTS for egendefinerte, persona-resync
