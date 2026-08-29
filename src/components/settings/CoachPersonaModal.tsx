@@ -5,6 +5,7 @@ import {
   CoachPersonaId,
   getActiveCoachPersona,
   setActiveCoachPersona,
+  preloadPersonaAudio,
   playPersonaPreview,
   stopCurrentPersonaAudio
 } from '../../services/coachPersonaService';
@@ -26,6 +27,12 @@ export const CoachPersonaModal: React.FC<CoachPersonaModalProps> = ({ onClose })
   const handleSelect = (id: CoachPersonaId) => {
     setSelectedPersona(id);
     setActiveCoachPersona(id);
+    // β6 (spec § 5, offline-garantien): varm hele personaens lydsett idet
+    // valget tas — nedlastingene lander samtidig i workbox' runtime-cache, så
+    // lydbanken er offline-tilgjengelig før første økt. Fire-and-forget:
+    // preload feiler aldri kalleren (motoren logger og hopper over), UI
+    // blokkeres ikke.
+    preloadPersonaAudio(id);
   };
 
   const handleTogglePreview = async (e: React.MouseEvent, id: CoachPersonaId) => {

@@ -233,6 +233,17 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
 
 **Planrettelse (fra alpha3-review):** Motoren emitter `phase:deadlineChanged` fra og med alpha3-fiksen på to steder: (a) etter catch-up-bakdateringen av landingsfasen (den emitterte `phase:started.endsAt` er da foreldet med restOvershoot — deadlineChanged rett etterpaa baerer korrekt frist), og (b) etter drift-reanker i tick. beta2 konsumerer; ingen beta-task skal legge til emisjonen selv.
 
+**Planrettelse 2 (fra β2-funn — flerkjedemodell, implementeres som Task β2.5 FØR β4):**
+β1 arvet playSequence sin én-kjede-semantikk («ny sekvens kansellerer planlagt»), men Director skedulerer FLERE samtidige kjeder (start_321 endAt=T + go startAt=T + last5 startAt=T−5000, pluss reaktive avspillinger i samme fase). Ny modell i `audioBufferEngine`:
+- Intern kjede-liste (`ActiveChain[]`) i stedet for singular `activeChain`.
+- `playSequence` (reaktiv): stopper kun HØRBARE kjeder (startet, ikke endt) — «én stemme om gangen» håndheves ved avspilling; skedulerte fremtidskjeder bevares.
+- `scheduleSequence`: additiv — stopper ALDRI noe. Director eier ikke-overlappende ankre.
+- `stop(fadeOutS?)`: stopper alt (hørbart fades; skedulert kanselleres stille).
+- Ny `cancelScheduled()`: kansellerer kun ikke-startede kjeder.
+- Ducking: refcount/first-audible→duck, none-audible→unduck (par-balansert på tvers av kjeder).
+- Director-mapping oppdateres: `deadlineChanged`/skip → `cancelScheduled()` + reskeduler; pause/reset → `stop()`.
+Eksisterende β1-tester som pinner «ny sekvens kansellerer skedulert» oppdateres til ny kontrakt (begrunnet i test-kommentar); epoch-mekanismen gjelder per kjede.
+
 ### Task β2: AudioDirector-kjernen
 
 **Files:** Create `src/services/audioDirector.ts`, `src/services/__tests__/audioDirector.test.ts`
@@ -255,6 +266,15 @@ export function resolveAnnouncementPlan(input: {
 ```
 
 - [ ] **Step 2:** Implementer `createAudioDirector(engine): () => void`. Lookahead kun for persona-stien; standard-stien speiler LegacyAudioAdapter (flytt den koden inn, behold betingelsene). Ducking og «én stemme»-invarianten eies her. → PASS. **Commit** `feat(audio): AudioDirector med fristbasert lookahead og prioritetsresolver`
+
+**Planrettelse 4 (fra samle-review β1–β2.5) — fire korrekthetfikser som SKAL inn i β3, før β4-koblingen:**
+1. **Bro-drift:** ctx.currentTime fryser ved mid-økt-suspensjon mens motorklokken løper — drift-reankeren fanger det IKKE (begge dens klokker løper), så alle ankre blir permanent D sekunder sene. Fiks: re-mål broen per fase — `setTimeBridge(engine.getNow())` øverst i `handlePhaseStarted` OG i `handleDeadlineChanged` (gratis i forgrunn, alltid fersk).
+2. **beepFallback-nullstilling:** flagget nullstilles ikke ved vellykket reskedulering (deadlineChanged) → pip oppå korrekt skedulert stemme. Fiks: `beepFallback = false` før `issuePending` i `handleDeadlineChanged`.
+3. **Epoch-krysskontaminering:** global `stopEpoch` bumpes av `stopAudibleChains`/`cancelScheduled`, så en ventende `scheduleSequence` (i resume-await) invalideres av en reaktiv cue den aldri skulle røre — og `true`-svaret undertrykker pip-fallback. Fiks: skill tellerne (full-stop-epoch vs. audible-stop) eller per-kjede-epoch; kun `stop()` skal invalidere ventende scheduleSequence. Test krysskontamineringen eksplisitt.
+4. **To-stemmer-overlapp ved skedulert-blir-hørbar:** en scheduleSequence-kjede som når startAt preempter ingenting — kort prepare gir intro-kjede + start_321 samtidig. Fiks: `markAudible` for skedulert kjede stopper andre hørbare kjeder (varsomt ift. punkt 3s epoch-skille).
+Tillegg: den degraderte intro-stien (`playPersonaCue('intro')` i mirrorPrepare-fallbacken) er nok et kallsted for Planrettelse 3-feilklassen; suksess-stien overlever i dag kun via en skjør rekkefølgeavhengighet (stopp før planLookahead) — kommenter den. Minor-følge: koble/juster `resolveAnnouncementPlan`-docstringen, test `phaseEpoch`-vakten i issuePending, throttling-forbehold i duck-timer-kommentaren.
+
+**Planrettelse 3 (fra β2.5-funn):** `coachPersonaService.stopCurrentPersonaAudio()` kalles før hver reaktive persona-cue og gjør full `audioBufferEngine.stop()` — som under flerkjedemodellen kansellerer Directors skedulerte lookahead (f.eks. last5) hver gang halfway spilles. β3 splitter semantikken: reaktive cues skal kun stoppe HØRBAR tale (HTMLAudio-elementet + hørbare kjeder — playSequence gjør sistnevnte selv nå), mens full stop() forbeholdes pause/reset-stiene. Test: halfway-cue mens last5 er skedulert → last5 overlever.
 
 ### Task β3: Bro + TTS for egendefinerte, persona-resync
 

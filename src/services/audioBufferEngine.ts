@@ -69,20 +69,87 @@ interface ChainNode {
 interface ActiveChain {
   nodes: ChainNode[];
   resolve: (played: boolean) => void;
+  // true når kjeden faktisk er hørbar (spilling startet, ikke avsluttet).
+  // scheduleSequence-kjeder starter false og blir hørbare via duckTimer;
+  // playSequence-kjeder settes hørbare synkront (lead-tiden er neglisjerbar).
+  // Styrer BÅDE hvem stopAudibleChains()/cancelScheduled() rører (Planrettelse
+  // 2: flerkjedemodellen – "ny sekvens kansellerer planlagt" holdt ikke når
+  // Directoren skedulerer flere samtidige kjeder i samme fase) OG duck-refcounten.
+  audible: boolean;
+  // Kun satt for kjeder som ikke er hørbare ennå: fyrer markAudible() ved
+  // beregnet avspillingsstart. AudioContext-klokken har ingen "kjør callback
+  // ved tid X"-primitiv, så vegg-klokke-setTimeout er broen (og gjør duck-
+  // overgangen testbar med vi.useFakeTimers()).
+  duckTimer?: ReturnType<typeof setTimeout>;
 }
 
 export class AudioBufferEngine {
   private buffers = new Map<string, AudioBuffer>();
   // Pågående fetch/dekoding per nøkkel – hindrer dobbel nedlasting ved samtidige preload-kall
   private inFlight = new Map<string, Promise<void>>();
-  private activeChain: ActiveChain | null = null;
-  // Teller opp for hvert stop() slik at en sekvens som venter på ctx.resume()
-  // kan oppdage at et stopp (eksternt, eller fra en nyere sekvens) traff i
-  // await-vinduet – stop/skedulering er ellers ikke atomisk over den awaiten
-  private stopEpoch = 0;
+  // BØR-2 (β6): nøkler eviktet MENS dekodingen deres pågikk – resultatet skal
+  // forkastes når jobben fullfører, ellers re-akkumulerer et persona-bytte
+  // buffere eviksjonen nettopp fjernet. En fersk preload gjenoppliver nøkkelen.
+  private pendingEvictions = new Set<string>();
+  // Flerkjedemodell (Planrettelse 2): flere kjeder kan være skedulert/spillende
+  // samtidig (Directoren ankrer start_321/go/last5 uavhengig i samme fase, pluss
+  // reaktive avspillinger). Erstatter den gamle singulære activeChain.
+  private chains: ActiveChain[] = [];
+  // Antall HØRBARE kjeder akkurat nå – styrer ducking par-balansert på tvers
+  // av kjeder: duck ved første hørbare (0→1), unduck når ingen er hørbare
+  // lenger (→0). Uten refcount ville f.eks. cancelScheduled() av en ALDRI
+  // hørbar kjede kunnet trigge et feilaktig unduck mens en annen kjede spiller.
+  private audibleCount = 0;
+  // Epoch-tellere: en sekvens som venter på ctx.resume() må kunne oppdage at
+  // et stopp traff i await-vinduet – stop/skedulering er ikke atomisk over den
+  // awaiten. Planrettelse 4 (fix 3): SPLITTET i to tellere (valgt fremfor
+  // per-kjede-epoch fordi invalideringen skjer FØR kjeden finnes – i resume-
+  // await-vinduet er det ingen kjede å henge en epoch på):
+  //  - audibleEpoch: bumpes av stop(), stopAudibleChains() OG
+  //    becomeAudibleWithPreemption() (skedulert kjede som når startAt tar over
+  //    som «nyeste hørbare stemme» — også over en playSequence som venter i
+  //    resume-await). Målgruppe: ventende playSequence (dens kjede ville blitt
+  //    hørbar straks).
+  //  - scheduledEpoch: bumpes av stop() og cancelScheduled(). Målgruppe:
+  //    ventende scheduleSequence (dens kjede ville vært en skedulert
+  //    fremtidskjede – nettopp det cancelScheduled retter seg mot).
+  // Uten splitten invaliderte en reaktiv cue (stopAudibleChains via
+  // playSequence) en ventende scheduleSequence den aldri skulle rørt – og
+  // true-svaret undertrykte pip-fallbacken.
+  private audibleEpoch = 0;
+  private scheduledEpoch = 0;
+  // Offset (sekunder) mellom motorens klokke (TimerEngine.now(), ms) og
+  // AudioContext.currentTime, målt én gang ved setTimeBridge(). Null = ikke
+  // brodd ennå – da nekter scheduleSequence heller enn å gjette et anker.
+  private bridgeOffsetS: number | null = null;
 
   public has(key: string): boolean {
     return this.buffers.has(key);
+  }
+
+  /**
+   * Måler og lagrer offset mellom motorklokken (engine.now(), ms) og
+   * AudioContext-klokken (sekunder), slik at absolutte motor-tidsstempler
+   * (fasegrenser fra TimerEngine) kan oversettes til lyd-skedulering med
+   * samme klokke som source.start() bruker. Kalles av Director ved
+   * workout:started – én måling per økt er nok siden begge klokker går
+   * med samme rate (kun forskjellig epoke).
+   */
+  public setTimeBridge(engineNowMs: number): void {
+    const ctx = audioService.getContext();
+    this.bridgeOffsetS = ctx.currentTime - engineNowMs / 1000;
+  }
+
+  /**
+   * Oversetter et absolutt motor-tidsstempel (ms) til AudioContext-tid (sekunder).
+   * Kaster hvis broen ikke er satt – kallere (scheduleSequence) skal sjekke
+   * broen eksplisitt FØR de kaller denne, ikke stole på en fallback-gjetning.
+   */
+  public toAudioTime(engineMs: number): number {
+    if (this.bridgeOffsetS === null) {
+      throw new Error('AudioBufferEngine: toAudioTime kalt før setTimeBridge');
+    }
+    return engineMs / 1000 + this.bridgeOffsetS;
   }
 
   /**
@@ -95,6 +162,9 @@ export class AudioBufferEngine {
 
   private preloadOne(key: string): Promise<void> {
     if (this.buffers.has(key)) return Promise.resolve();
+    // Fersk preload-intensjon opphever en eviksjon som traff mens forrige
+    // dekodejobb pågikk (persona-shopping frem og tilbake) – nyeste intensjon vinner.
+    this.pendingEvictions.delete(key);
     const pending = this.inFlight.get(key);
     if (pending) return pending;
 
@@ -121,9 +191,30 @@ export class AudioBufferEngine {
       }
       const bytes = await response.arrayBuffer();
       const buffer = await audioService.getContext().decodeAudioData(bytes);
+      // Eviktet mens jobben pågikk (BØR-2, β6): forkast i stedet for å lagre
+      if (this.pendingEvictions.delete(key)) return;
       this.buffers.set(key, buffer);
     } catch (err) {
       console.warn(`AudioBufferEngine: kunne ikke dekode "${key}" (${url}):`, err);
+    }
+  }
+
+  /**
+   * Målrettet eviksjon (BØR-2 fra β5-reviewen, levert i β6): fjerner dekodede
+   * buffere for angitte nøkler slik at persona-bytte ikke akkumulerer 17–35 MB
+   * PCM per besøkte persona. Bevisst IKKE en generell LRU (YAGNI) – kalleren
+   * (coachPersonaService ved persona-bytte) vet nøyaktig hvilke nøkler som er
+   * blitt kalde, og delte studioklipp/countdown skal aldri røres. Nøkler med
+   * pågående dekoding markeres slik at resultatet forkastes når jobben
+   * fullfører. Aktive avspillinger er upåvirket – hver skedulert
+   * AudioBufferSourceNode holder sin egen referanse til bufferen.
+   */
+  public evict(keys: string[]): void {
+    for (const key of keys) {
+      this.buffers.delete(key);
+      if (this.inFlight.has(key)) {
+        this.pendingEvictions.add(key);
+      }
     }
   }
 
@@ -143,11 +234,14 @@ export class AudioBufferEngine {
     }
     if (buffers.length === 0) return false;
 
-    this.stop();
+    // Planrettelse 2: kun HØRBARE kjeder stoppes («én stemme om gangen»
+    // håndheves ved faktisk avspilling) – skedulerte fremtidskjeder fra
+    // scheduleSequence (Directorens lookahead-ankre) er URØRT.
+    this.stopAudibleChains();
 
     const ctx = audioService.getContext();
     if (ctx.state !== 'running') {
-      const epochBeforeResume = this.stopEpoch;
+      const epochBeforeResume = this.audibleEpoch;
       try {
         await ctx.resume();
       } catch {
@@ -160,11 +254,12 @@ export class AudioBufferEngine {
       // (Assertion til full union: TS narrower ellers bort 'running' over awaiten
       // og tror sammenligningen er umulig – resume() kan faktisk ha endret state.)
       if ((ctx.state as AudioContextState) !== 'running') return false;
-      // Et stop() traff mens vi ventet på resume (brukeren pauset, eller en
-      // nyere sekvens tok over): den nyeste intensjonen vinner, så vi skedulerer
-      // ingenting. true = «bevisst stoppet» – samme kontrakt som stop() på en
-      // spilt kjede, slik at kallere ikke spiller fallback oppå et stopp.
-      if (this.stopEpoch !== epochBeforeResume) return true;
+      // Et stopp av hørbar tale traff mens vi ventet på resume (brukeren pauset,
+      // eller en nyere sekvens tok over): den nyeste intensjonen vinner, så vi
+      // skedulerer ingenting. true = «bevisst stoppet» – samme kontrakt som
+      // stop() på en spilt kjede, slik at kallere ikke spiller fallback oppå et
+      // stopp. (audibleEpoch: cancelScheduled() rører ikke denne stien.)
+      if (this.audibleEpoch !== epochBeforeResume) return true;
     }
 
     const crossfadeS = opts?.crossfadeS ?? DEFAULT_CROSSFADE_S;
@@ -192,15 +287,148 @@ export class AudioBufferEngine {
       // Overvåking er en ren måling og skal aldri kunne velte avspilling
     }
 
-    audioDuckingService.startDucking();
     return new Promise<boolean>((resolve) => {
-      const chain: ActiveChain = { nodes, resolve };
-      this.activeChain = chain;
+      const chain: ActiveChain = { nodes, resolve, audible: false };
+      this.chains.push(chain);
+      // Hørbar med det samme: lead-tiden er ~30 ms, så "nå" og "avspilling
+      // starter" er samme øyeblikk for øret – ingen duckTimer nødvendig her
+      // (i motsetning til scheduleSequence, se der).
+      this.markAudible(chain);
       nodes[nodes.length - 1].source.onended = () => {
         this.disconnectNodes(nodes);
         this.finishChain(chain, true);
       };
     });
+  }
+
+  /**
+   * Som playSequence, men ankret i ABSOLUTT motor-tid i stedet for "nå + lead":
+   * `{ endAt }` regner ut startAt = toAudioTime(endAt) - kjedevarighet (summen av
+   * klippvarigheter minus crossfade-overlappene, jf. computeSequenceSchedule),
+   * `{ startAt }` går rett gjennom toAudioTime. Samme kontrakt som playSequence
+   * ellers: false uten sideeffekter ved ucachet nøkkel/manglende tidsbro/for
+   * trangt vindu (aldri gjetning – se toAudioTime), aldri reject, epoch- og
+   * context-state-gatet, kansellerbar via stop()/ny sekvens.
+   */
+  public async scheduleSequence(
+    keys: string[],
+    // Diskriminert union (review-punkt 3): den gamle formen { endAt?; startAt? }
+    // tillot {} — og toAudioTime(undefined as number) ga NaN som gled gjennom
+    // vindussjekken (NaN-sammenligninger er false) til source.start(NaN) → throw.
+    anchor: { endAt: number } | { startAt: number },
+    opts?: { crossfadeS?: number }
+  ): Promise<boolean> {
+    const buffers: AudioBuffer[] = [];
+    for (const key of keys) {
+      const buffer = this.buffers.get(key);
+      if (!buffer) return false;
+      buffers.push(buffer);
+    }
+    if (buffers.length === 0) return false;
+
+    // Uten bro kan et motor-anker ikke oversettes til lydklokketid – å gjette
+    // (f.eks. anta offset 0) ville gitt et vilkårlig avvik. Nekt heller.
+    if (this.bridgeOffsetS === null) return false;
+
+    const crossfadeS = opts?.crossfadeS ?? DEFAULT_CROSSFADE_S;
+    const durations = buffers.map((b) => b.duration);
+    // Kjedens totale varighet fra første klipps start til siste klipps slutt:
+    // (n-1) skjøter overlapper hver med crossfadeS, siste klipp bidrar fullt.
+    const chainDurationS = durations.reduce((sum, d) => sum + d, 0) - crossfadeS * (durations.length - 1);
+
+    // Runtime-vakt i tillegg til typen (belt & suspenders — β4 får nye kallere):
+    // NaN/Infinity ville ellers passert vindussjekken og kastet i source.start().
+    const anchorMs = 'startAt' in anchor ? anchor.startAt : anchor.endAt;
+    if (!Number.isFinite(anchorMs)) return false;
+
+    const ctx = audioService.getContext();
+    const startAt =
+      'startAt' in anchor
+        ? this.toAudioTime(anchor.startAt)
+        : this.toAudioTime(anchor.endAt) - chainDurationS;
+
+    // Samme sikkerhetsmargin som playSequence sin faste lead-tid: uten den
+    // rekker ikke skeduleringen (og evt. ducking-planlegging) å skje før
+    // avspilling skal starte. Fanger også anker i fortiden (startAt < nå).
+    if (startAt < ctx.currentTime + SCHEDULE_LEAD_S) return false;
+
+    // Planrettelse 2: additiv – scheduleSequence stopper ALDRI noe selv (verken
+    // hørbart eller skedulert). Directoren ankrer flere uavhengige kjeder i
+    // samme fase (start_321/go/last5); det er Directorens ansvar (cancelScheduled
+    // ved deadlineChanged/skip, stop() ved pause/reset) å avgjøre hva som kanselleres.
+
+    if (ctx.state !== 'running') {
+      const epochBeforeResume = this.scheduledEpoch;
+      try {
+        await ctx.resume();
+      } catch {
+        // Avgjøres av state-sjekken under
+      }
+      // (Assertion til full union: se identisk kommentar i playSequence.)
+      if ((ctx.state as AudioContextState) !== 'running') return false;
+      // scheduledEpoch (fix 3): kun stop() og cancelScheduled() invaliderer en
+      // ventende skedulert kjede – en reaktiv cue (stopAudibleChains) gjør det
+      // IKKE, ellers ville f.eks. halfway drept en lovlig lookahead-kjede og
+      // true-svaret undertrykt pip-fallbacken på grensen.
+      if (this.scheduledEpoch !== epochBeforeResume) return true;
+    }
+
+    const schedule = computeSequenceSchedule(durations, crossfadeS, startAt);
+    const nodes = buffers.map((buffer, i) => this.scheduleClip(ctx, buffer, schedule[i], crossfadeS));
+
+    try {
+      const deviationMs = Math.max(0, ctx.currentTime - schedule[0].start) * 1000;
+      perfMonitorService.recordAudioDeviation(deviationMs);
+    } catch {
+      // Overvåking er en ren måling og skal aldri kunne velte avspilling
+    }
+
+    // Kjeden er IKKE hørbar før den faktisk starter – markAudible() (kalt av
+    // duckTimer under) er det som flytter den inn i duck-refcounten og ut av
+    // stopAudibleChains()/cancelScheduled() sitt "kun skedulert"-utvalg.
+    // Ducking her er derfor skedulert (setTimeout) til faktisk avspillingsstart,
+    // IKKE øyeblikkelig som i playSequence: der er lead-tiden ~30 ms så "nå" og
+    // "avspilling starter" er samme øyeblikk for øret, men et scheduleSequence-
+    // anker kan ligge sekunder frem – øyeblikkelig ducking ville dempet
+    // bakgrunnslyd lenge før klippet faktisk høres.
+    // Forbehold (Planrettelse 4, minor): setTimeout throttles i bakgrunnsfaner
+    // (typisk til >= 1 s oppløsning), så markAudible/preempsjon/ducking kan
+    // fyre sent når skjermen er av – selve AVSPILLINGEN er upåvirket (den er
+    // skedulert på AudioContext-klokken), verste fall er sen demping av
+    // bakgrunnslyd og et kort to-stemmer-overlapp i bakgrunn. Akseptert:
+    // alternativet (polling mot lydklokken) koster mer enn det smaker.
+    const duckDelayMs = Math.max(0, (startAt - ctx.currentTime) * 1000);
+
+    return new Promise<boolean>((resolve) => {
+      const chain: ActiveChain = { nodes, resolve, audible: false };
+      chain.duckTimer = setTimeout(() => this.becomeAudibleWithPreemption(chain), duckDelayMs);
+      this.chains.push(chain);
+      nodes[nodes.length - 1].source.onended = () => {
+        this.disconnectNodes(nodes);
+        this.finishChain(chain, true);
+      };
+    });
+  }
+
+  /**
+   * Kansellerer KUN skedulerte, ikke-hørbare kjeder (scheduleSequence-kjeder
+   * som ennå ikke har nådd sitt startAt) – stille, uten fade, siden ingenting
+   * faktisk spiller ennå. Hørbare kjeder (playSequence, eller en
+   * scheduleSequence-kjede som allerede har startet) er URØRT.
+   *
+   * Directoren bruker denne ved phase:deadlineChanged/skip (Planrettelse 2):
+   * en fasegrense flyttet seg (dvale-reanker/catch-up) eller brukeren hoppet
+   * videre FØR forrige frist – lyd skedulert mot den gamle grensen skal
+   * forsvinne stille, uten å kutte noe som faktisk spiller nå.
+   */
+  public cancelScheduled(): void {
+    // scheduledEpoch (fix 3): også en scheduleSequence som fortsatt venter i
+    // resume-await er en «skedulert kjede» og skal kanselleres av dette kallet.
+    this.scheduledEpoch++;
+    const scheduled = this.chains.filter((c) => !c.audible);
+    if (scheduled.length === 0) return;
+    const now = audioService.getContext().currentTime;
+    scheduled.forEach((chain) => this.silentCancelChain(chain, now));
   }
 
   // Deterministisk nedrigging av grafen (i stedet for GC-styrt opprydding)
@@ -244,27 +472,75 @@ export class AudioBufferEngine {
     return { source, gain };
   }
 
-  private finishChain(chain: ActiveChain, played: boolean): void {
-    if (this.activeChain === chain) {
-      this.activeChain = null;
-      audioDuckingService.stopDucking();
-    }
-    chain.resolve(played);
+  /**
+   * Planrettelse 4 (fix 4): en skedulert kjede som når sitt startAt og blir
+   * hørbar preempter andre HØRBARE kjeder (fade) – «én stemme om gangen»
+   * gjelder også når stemmen som starter er en lookahead-kjede (f.eks.
+   * start_321 som treffer mens en intro-kjede fortsatt spiller i en kort
+   * prepare). Søsken-SKEDULERTE kjeder er urørt: kun audibleEpoch bumpes
+   * (epoch-splitten fra fix 3), aldri scheduledEpoch. Rekkefølgen (markAudible
+   * FØR preempsjonen) holder duck-refcounten > 0 gjennom hele stemmebyttet –
+   * ingen unduck/duck-flapp i overgangen.
+   */
+  private becomeAudibleWithPreemption(chain: ActiveChain): void {
+    this.markAudible(chain);
+    this.audibleEpoch++;
+    const others = this.chains.filter((c) => c.audible && c !== chain);
+    if (others.length === 0) return;
+    const now = audioService.getContext().currentTime;
+    others.forEach((c) => this.fadeStopChain(c, now, DEFAULT_STOP_FADE_S));
   }
 
   /**
-   * Fader ut og stopper pågående kjede (inkludert ennå-ikke-startede, skedulerte
-   * kilder). Løser kjedens promise med true – klippet HAR spilt, så kallere skal
-   * ikke trigge fallback-stiene sine oppå en bevisst avbrutt avspilling.
+   * Flytter en kjede inn i "hørbar"-tilstanden (idempotent). Rydder en evt.
+   * ventende duckTimer, og duck-refcounten går opp – ducking starter kun på
+   * 0→1-overgangen slik at flere overlappende hørbare kjeder ikke dobbelt-duckes.
    */
-  public stop(fadeOutS = DEFAULT_STOP_FADE_S): void {
-    // Teller alltid – også uten aktiv kjede – slik at en sekvens midt i
-    // resume-vinduet ser stoppet (se stopEpoch-kommentaren over)
-    this.stopEpoch++;
-    const chain = this.activeChain;
-    if (!chain) return;
+  private markAudible(chain: ActiveChain): void {
+    if (chain.audible) return;
+    chain.audible = true;
+    if (chain.duckTimer !== undefined) {
+      clearTimeout(chain.duckTimer);
+      chain.duckTimer = undefined;
+    }
+    this.audibleCount++;
+    if (this.audibleCount === 1) {
+      audioDuckingService.startDucking();
+    }
+  }
 
-    const now = audioService.getContext().currentTime;
+  /**
+   * Motstykket til markAudible – refcounten går ned, og unduck skjer KUN når
+   * ingen kjeder lenger er hørbare (par-balansert, se audibleCount-kommentaren).
+   * No-op for en kjede som aldri ble hørbar (kansellert før den startet).
+   */
+  private unmarkAudible(chain: ActiveChain): void {
+    if (!chain.audible) return;
+    chain.audible = false;
+    this.audibleCount = Math.max(0, this.audibleCount - 1);
+    if (this.audibleCount === 0) {
+      audioDuckingService.stopDucking();
+    }
+  }
+
+  private finishChain(chain: ActiveChain, played: boolean): void {
+    // Rydd en evt. skedulert duck-start (scheduleSequence) – uten dette ville
+    // en kjede kansellert FØR duckDelayMs likevel dempet bakgrunnslyd senere,
+    // lenge etter at avspillingen selv ble avbrutt.
+    if (chain.duckTimer !== undefined) {
+      clearTimeout(chain.duckTimer);
+      chain.duckTimer = undefined;
+    }
+    const idx = this.chains.indexOf(chain);
+    if (idx !== -1) {
+      this.chains.splice(idx, 1);
+    }
+    this.unmarkAudible(chain);
+    chain.resolve(played);
+  }
+
+  /** Fader ut og stopper én HØRBAR kjede – delt av stop() og stopAudibleChains(). */
+  private fadeStopChain(chain: ActiveChain, now: number, fadeOutS: number): void {
     chain.nodes.forEach(({ source, gain }) => {
       try {
         // Riv ned grafen først når fade-perioden er over (ended-hendelsen etter
@@ -285,6 +561,82 @@ export class AudioBufferEngine {
       }
     });
     this.finishChain(chain, true);
+  }
+
+  /**
+   * Kansellerer én IKKE-hørbar (skedulert, ennå ikke startet) kjede – stille,
+   * uten fade, siden ingenting spiller ennå. Delt av stop() og cancelScheduled().
+   */
+  private silentCancelChain(chain: ActiveChain, now: number): void {
+    chain.nodes.forEach(({ source, gain }) => {
+      try {
+        source.onended = () => {
+          try {
+            gain.disconnect();
+          } catch {
+            // Allerede frakoblet
+          }
+        };
+        source.stop(now);
+      } catch {
+        // Kilden kan allerede være stoppet – ufarlig
+      }
+    });
+    this.finishChain(chain, true);
+  }
+
+  /**
+   * Stopper KUN hørbare kjeder (spilling er startet, ikke avsluttet) – "én
+   * stemme om gangen" håndheves ved faktisk avspilling. Skedulerte fremtidskjeder
+   * (scheduleSequence, ikke startet ennå) er URØRT (Planrettelse 2). Brukt av
+   * playSequence før en ny reaktiv kjede skedulerer.
+   */
+  private stopAudibleChains(fadeOutS = DEFAULT_STOP_FADE_S): void {
+    // Teller alltid – også uten hørbare kjeder – slik at en playSequence midt i
+    // resume-vinduet ser stoppet. KUN audibleEpoch (fix 3): en ventende
+    // scheduleSequence er ikke i denne stiens målgruppe.
+    this.audibleEpoch++;
+    const audible = this.chains.filter((c) => c.audible);
+    if (audible.length === 0) return;
+    const now = audioService.getContext().currentTime;
+    audible.forEach((chain) => this.fadeStopChain(chain, now, fadeOutS));
+  }
+
+  /**
+   * Offentlig audible-only-stopp (Planrettelse 3): hørbare kjeder fades ut,
+   * skedulerte fremtidskjeder (Directorens lookahead-ankre start_321/go/last5)
+   * er URØRT. Brukes av coachPersonaService sine REAKTIVE cue-stier
+   * (playPersonaCue/playIntroThenExercise) – full stop() er forbeholdt
+   * pause/reset, der også det skedulerte skal bort.
+   */
+  public stopAudible(fadeOutS = DEFAULT_STOP_FADE_S): void {
+    this.stopAudibleChains(fadeOutS);
+  }
+
+  /**
+   * Stopper ALT – hørbare kjeder fades ut, skedulerte (ikke startet ennå)
+   * kanselleres stille (Planrettelse 2). Løser hver kjedes promise med true –
+   * klippet HAR (eller SKULLE) spilt, så kallere skal ikke trigge fallback-
+   * stiene sine oppå et bevisst stopp. Brukes av Directoren ved pause/reset.
+   */
+  public stop(fadeOutS = DEFAULT_STOP_FADE_S): void {
+    // Teller alltid – også uten aktive kjeder – slik at en sekvens midt i
+    // resume-vinduet ser stoppet. Fullt stopp bumper BEGGE epochene (fix 3):
+    // både ventende playSequence og ventende scheduleSequence skal dø her.
+    this.audibleEpoch++;
+    this.scheduledEpoch++;
+    if (this.chains.length === 0) return;
+
+    const now = audioService.getContext().currentTime;
+    // Kopi: finishChain (kalt for hver kjede under) muterer this.chains
+    const chains = [...this.chains];
+    chains.forEach((chain) => {
+      if (chain.audible) {
+        this.fadeStopChain(chain, now, fadeOutS);
+      } else {
+        this.silentCancelChain(chain, now);
+      }
+    });
   }
 }
 

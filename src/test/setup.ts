@@ -30,31 +30,36 @@ class MockAudioContext {
   });
 }
 
-(window as unknown as { AudioContext: typeof MockAudioContext }).AudioContext = MockAudioContext;
-(window as unknown as { webkitAudioContext: typeof MockAudioContext }).webkitAudioContext = MockAudioContext;
+// Nettleser-mockene gjelder kun jsdom-testene; node-miljø-tester (f.eks.
+// byggskript-suitene med @vitest-environment node) har verken window/navigator
+// og trenger heller ingen av disse.
+if (typeof window !== 'undefined') {
+  (window as unknown as { AudioContext: typeof MockAudioContext }).AudioContext = MockAudioContext;
+  (window as unknown as { webkitAudioContext: typeof MockAudioContext }).webkitAudioContext = MockAudioContext;
 
-// Mock Wake Lock API
-const mockWakeLockSentinel = {
-  released: false,
-  release: vi.fn().mockResolvedValue(undefined),
-  addEventListener: vi.fn(),
-  removeEventListener: vi.fn(),
-};
+  // Mock Wake Lock API
+  const mockWakeLockSentinel = {
+    released: false,
+    release: vi.fn().mockResolvedValue(undefined),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  };
 
-Object.defineProperty(navigator, 'wakeLock', {
-  value: {
-    request: vi.fn().mockResolvedValue(mockWakeLockSentinel),
-  },
-  configurable: true,
-  writable: true,
-});
+  Object.defineProperty(navigator, 'wakeLock', {
+    value: {
+      request: vi.fn().mockResolvedValue(mockWakeLockSentinel),
+    },
+    configurable: true,
+    writable: true,
+  });
 
-// Mock Vibration API
-Object.defineProperty(navigator, 'vibrate', {
-  value: vi.fn().mockReturnValue(true),
-  configurable: true,
-  writable: true,
-});
+  // Mock Vibration API
+  Object.defineProperty(navigator, 'vibrate', {
+    value: vi.fn().mockReturnValue(true),
+    configurable: true,
+    writable: true,
+  });
+}
 
 // Mock requestAnimationFrame / cancelAnimationFrame
 global.requestAnimationFrame = (callback: FrameRequestCallback) => {
