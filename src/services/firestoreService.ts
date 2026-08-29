@@ -12,6 +12,7 @@ import {
 import { User } from 'firebase/auth';
 import { db } from './firebase';
 import { UserProfile, CompletedWorkoutLog, UserSettings } from '../types/models';
+import { WORKOUT_HISTORY_KEY, LEGACY_WORKOUT_HISTORY_KEYS } from './workoutHistoryStorage';
 import { CompletedWorkoutLogSchema, filterValidListItems } from '../schemas/workoutSchema';
 import { showErrorToast } from './errorToastService';
 
@@ -51,7 +52,7 @@ export async function syncUserProfile(user: User): Promise<UserProfile> {
   return newProfile;
 }
 
-const LOCAL_HISTORY_KEY = 'mintrener_local_workout_history';
+const LOCAL_HISTORY_KEY = WORKOUT_HISTORY_KEY;
 
 /**
  * Leser lokal historikk med skjemavalidering (revisjon § 2.4): korrupt lagring
@@ -240,7 +241,8 @@ export async function deleteUserData(userId: string): Promise<void> {
 
   // 6. Tøm lokale lagringsnøkler
   try {
-    localStorage.removeItem('mintrener_local_history');
+    localStorage.removeItem(WORKOUT_HISTORY_KEY);
+    LEGACY_WORKOUT_HISTORY_KEYS.forEach((key) => localStorage.removeItem(key));
     localStorage.removeItem('mintrener_custom_workouts');
     localStorage.removeItem('mintrener_custom_exercises');
     localStorage.removeItem('mintrener_local_strength_logs');

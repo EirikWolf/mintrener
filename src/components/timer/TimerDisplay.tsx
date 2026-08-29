@@ -28,6 +28,7 @@ import { getInterruptedSession, clearInterruptedSession, InterruptedSession } fr
 import { useFocusGestures } from '../../hooks/useFocusGestures';
 import { useIdleDim } from '../../hooks/useIdleDim';
 import { checkAdaptiveProgression, ProgressionSuggestion } from '../../services/adaptiveProgressionService';
+import { WORKOUT_HISTORY_KEY } from '../../services/workoutHistoryStorage';
 import {
   Play,
   Pause,
@@ -213,7 +214,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
 
   React.useEffect(() => {
     try {
-      const raw = localStorage.getItem('mintrener_local_workout_history');
+      const raw = localStorage.getItem(WORKOUT_HISTORY_KEY);
       const hist = raw ? JSON.parse(raw) : [];
       const sug = checkAdaptiveProgression(workout, hist);
       setAdaptiveSuggestion(sug);

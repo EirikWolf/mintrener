@@ -9,9 +9,8 @@ import { calculateWeeklyProgress, WeeklyGoalProgress } from '../../services/week
 import { computeStreakDays } from '../../services/streakService';
 import { buildEffectiveHistory } from '../../services/summaryContextService';
 import { localAiCoach } from '../../services/localAiCoachService';
+import { WORKOUT_HISTORY_KEY as LOCAL_HISTORY_KEY } from '../../services/workoutHistoryStorage';
 import { Trophy, RotateCcw, Flame, CheckCircle2, ThumbsUp, Smile, Medal, Sparkles } from 'lucide-react';
-
-const LOCAL_HISTORY_KEY = 'mintrener_local_workout_history';
 
 interface WorkoutSummaryProps {
   workout: WorkoutTemplate;

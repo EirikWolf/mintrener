@@ -1,6 +1,7 @@
 import { STARTER_CHALLENGES } from '../data/challenges';
 import { getChallengeProgress } from './challengeService';
 import { CompletedWorkoutLog } from '../types/models';
+import { WORKOUT_HISTORY_KEY } from './workoutHistoryStorage';
 
 export type BadgeCategory = 'challenge' | 'streak' | 'milestone' | 'special';
 
@@ -203,7 +204,7 @@ export function calculateMaxStreak(history: CompletedWorkoutLog[]): number {
  */
 export function getAllUserBadges(history?: CompletedWorkoutLog[]): BadgeItem[] {
   const workoutHistory: CompletedWorkoutLog[] =
-    history || JSON.parse(localStorage.getItem('mintrener_workout_history') || '[]');
+    history || JSON.parse(localStorage.getItem(WORKOUT_HISTORY_KEY) || '[]');
 
   const badges: BadgeItem[] = [];
 
