@@ -878,68 +878,112 @@ describe('audioDirector (B3 β2)', () => {
       expect(audioService.playCountdownBeep).not.toHaveBeenCalled();
     });
 
-    describe('hodromsgaten gjelder KUN fasestart-veien (B2)', () => {
-      // handleDeadlineChanged (resume/dvale-reanker/catch-up) og
-      // replanCurrentPhase re-utsteder lookaheaden, men spiller ALDRI noen
-      // reaktiv annonsering på nytt — der er det ingenting å beskytte, og en
-      // aktiv hodromsgate ville gitt total stillhet inn mot grensen (verken
-      // 3-2-1 eller pip, siden grenen bevisst ikke setter beepFallback).
-      it('workout:resumed: nedtellingen reskeduleres selv om fasestartens kjede sprengte fasen', async () => {
+    describe('BL-1: hodrommet overlever fristflytt så lenge kjeden fortsatt SPILLER', () => {
+      // Andre reviews probe mot den ekte Directoren (hardcore, 30 s pause,
+      // kjede 9,88 s med median-øvelsen):
+      //   [fasestart @0s]     short @{endAt:30000}, go-1 @{startAt:30000} ← gaten virker
+      //   [dvale-reanker @1s] start_321 (27,8 s) @{endAt:29000} → starter på 1,2 s ← preempterte navnet
+      // Utløserne er reelle for Android-felttest: timerEngine sin drift-reanker
+      // (> 2000 ms ved skjerm av) og catch-up-landingens deadlineChanged.
+      // Nettopp derfor kansellerer handleDeadlineChanged med cancelScheduled()
+      // og ikke stop(): annonseringen kan spille HØRBART mens fristen flyttes.
+      it('dvale-reanker midt i kjeden: ingen endAt-kjede som preempter navnet', async () => {
         usePersona();
         cacheClips(HC_REAL);
-        const { engine, emit } = createFakeEngine();
+        const { engine, emit, setNow } = createFakeEngine();
         createAudioDirector(engine);
 
-        emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_A, endsAt: 10_000 }));
+        emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_MED, endsAt: 30_000 }));
         await flush();
+        expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([
+          REST_CUE,
+          BRO_NESTE,
+          EX_MED_CLIP,
+        ]);
+        vi.mocked(audioBufferEngine.scheduleSequence).mockClear();
+
+        // 1 s inn i fasen: 8,88 s av kjeden gjenstår, og full start_321 ville
+        // startet 1,2 s inn — midt i rest-cuen.
+        setNow(1_000);
+        emit({ type: 'phase:deadlineChanged', endsAt: 29_000 });
+        await flush();
+
         expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith(
-          [SHORT],
+          [FULL],
           expect.anything()
         );
-        vi.mocked(audioBufferEngine.scheduleSequence).mockClear();
-
-        emit({ type: 'workout:resumed', endsAt: 12_000 });
-        await flush();
-
-        expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([FULL], { endAt: 12_000 });
+        expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 29_000 });
+        // Bevisst prioritering, ikke degradering → fortsatt ingen pip.
+        emit({ type: 'countdown', secondsLeft: 3 });
+        expect(audioService.playCountdownBeep).not.toHaveBeenCalled();
       });
 
-      it('phase:deadlineChanged (dvale-reanker): samme — gaten gjelder ikke', async () => {
+      it('fristflytt ETTER at kjeden er ferdigspilt: stigen fungerer normalt igjen', async () => {
         usePersona();
         cacheClips(HC_REAL);
-        const { engine, emit } = createFakeEngine();
+        const { engine, emit, setNow } = createFakeEngine();
         createAudioDirector(engine);
 
-        emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_A, endsAt: 10_000 }));
+        emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_MED, endsAt: 30_000 }));
         await flush();
         vi.mocked(audioBufferEngine.scheduleSequence).mockClear();
 
-        emit({ type: 'phase:deadlineChanged', endsAt: 11_000 });
+        // 12 s inn: kjeden (9,88 s) er for lengst ferdig → hodrommet er
+        // naturlig 0, og det er ingenting igjen å beskytte.
+        setNow(12_000);
+        emit({ type: 'phase:deadlineChanged', endsAt: 45_000 });
         await flush();
 
-        expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([FULL], { endAt: 11_000 });
+        expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([FULL], { endAt: 45_000 });
       });
 
-      it('replanCurrentPhase: samme — nedtellingen re-utstedes når preloaden lander', async () => {
+      it('workout:paused → resumed: pausen stoppet lyden, så hodrommet nullstilles', async () => {
+        usePersona();
+        cacheClips(HC_REAL);
+        const { engine, emit, setNow } = createFakeEngine();
+        createAudioDirector(engine);
+
+        emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_MED, endsAt: 30_000 }));
+        await flush();
+        vi.mocked(audioBufferEngine.scheduleSequence).mockClear();
+
+        // Pause stopper all hørbar persona-lyd (stopCurrentPersonaAudio), så
+        // annonseringen finnes ikke lenger — resume-veien er trygg.
+        setNow(1_000);
+        emit({ type: 'workout:paused' });
+        emit({ type: 'workout:resumed', endsAt: 45_000 });
+        await flush();
+
+        expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([FULL], { endAt: 45_000 });
+      });
+
+      it('replanCurrentPhase midt i kjeden: re-utstedelsen preempter heller ikke', async () => {
         usePersona();
         // Ved fasestart er annonseringskjeden dekodet, men nedtellingsklippene
         // ikke → dagens stige kjører og degraderingsflagget settes.
-        cacheClips({ [REST_CUE]: 4.32, [BRO_NESTE]: 3.44, [EX_A_CLIP]: 6.185 });
+        cacheClips({ [REST_CUE]: 4.32, [BRO_NESTE]: 3.44, [EX_MED_CLIP]: 2.115 });
         vi.mocked(audioBufferEngine.scheduleSequence).mockResolvedValue(false);
-        const { engine, emit } = createFakeEngine();
+        const { engine, emit, setNow } = createFakeEngine();
         const director = createAudioDirector(engine);
 
-        emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_A, endsAt: 10_000 }));
+        emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_MED, endsAt: 30_000 }));
         await flush();
 
-        // Preloaden lander: nå er også nedtellingsklippene dekodet.
-        cacheClips({ [FULL]: 27.815, [SHORT]: 8.489 });
+        // Preloaden lander 2 s inn i fasen: nå er nedtellingsklippene dekodet,
+        // men 7,88 s av annonseringen gjenstår.
+        cacheClips({ [FULL]: 27.815, [SHORT]: 4.44 });
         vi.mocked(audioBufferEngine.scheduleSequence).mockClear();
         vi.mocked(audioBufferEngine.scheduleSequence).mockResolvedValue(true);
+        setNow(2_000);
 
         director.replanCurrentPhase();
+        await flush();
 
-        expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([FULL], { endAt: 10_000 });
+        expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith(
+          [FULL],
+          expect.anything()
+        );
+        expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 30_000 });
       });
     });
   });
