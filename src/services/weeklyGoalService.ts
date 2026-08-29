@@ -1,4 +1,5 @@
 import { CompletedWorkoutLog } from '../types/models';
+import { getWeekStart } from './weekUtils';
 
 const WEEKLY_GOAL_STORAGE_KEY = 'mintrener_weekly_goal';
 const DEFAULT_WEEKLY_GOAL = 3;
@@ -39,16 +40,11 @@ export function setWeeklyGoal(goal: number): void {
 /**
  * Beregner fremdrift mot ukesmålet basert på inneværende uke (mandag-søndag)
  */
-export function calculateWeeklyProgress(history: CompletedWorkoutLog[], goal?: number): WeeklyGoalProgress {
+export function calculateWeeklyProgress(history: CompletedWorkoutLog[], goal?: number, now: Date = new Date()): WeeklyGoalProgress {
   const targetGoal = goal ?? getWeeklyGoal();
-  
-  // Finn starttidspunkt for inneværende mandag kl 00:00:00 lokal tid
-  const now = new Date();
-  const currentDayOfWeek = now.getDay(); // 0 = søndag, 1 = mandag, ...
-  const daysSinceMonday = (currentDayOfWeek + 6) % 7;
-  
-  const mondayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday, 0, 0, 0, 0);
-  const mondayStartTime = mondayStart.getTime();
+
+  // Starttidspunkt for inneværende mandag kl 00:00:00 lokal tid (felles ukedefinisjon)
+  const mondayStartTime = getWeekStart(now).getTime();
 
   // Tell unike dager eller totalt antall økter gjennomført siden mandag
   const thisWeekLogs = history.filter((log) => {
