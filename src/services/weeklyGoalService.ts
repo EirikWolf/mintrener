@@ -74,16 +74,30 @@ export function getWeeklyGoal(): number {
 export function setWeeklyGoal(goal: number): void {
   try {
     const clamped = Math.max(1, Math.min(14, Math.round(goal)));
+    // Rått fravær av lagret mål = FØRSTEGANGSVALG (onboardingen): getWeeklyGoal
+    // kan ikke skille «valgte 3» fra «aldri valgt» (default er 3).
+    const isFirstEver = localStorage.getItem(WEEKLY_GOAL_STORAGE_KEY) === null;
     const previousGoal = getWeeklyGoal();
     localStorage.setItem(WEEKLY_GOAL_STORAGE_KEY, clamped.toString());
+
+    const currentWk = weekKey(new Date());
+    const log = readGoalLog();
+
+    if (isFirstEver) {
+      // Førstegangsvalg gjelder NÅ (fix-løkke B1, bølge 3): en fersk bruker som
+      // velger 2 i onboardingen skal få FØRSTE uke dømt etter 2 — ikke etter
+      // default 3. «Fra neste uke»-regelen gjelder kun ENDRING av eksisterende mål.
+      const updated = log.filter((e) => e.weekKey !== currentWk);
+      updated.push({ weekKey: currentWk, goal: clamped });
+      localStorage.setItem(GOAL_LOG_KEY, JSON.stringify(updated));
+      return;
+    }
 
     // Mållogg (spec § 2.1): endringen gjelder fra NESTE uke — inneværende uke
     // dømmes etter målet ved ukestart. Første logglinje ankrer derfor det gamle
     // målet på inneværende ukenøkkel, ellers ville getGoalForWeek falt tilbake
     // til det nye gjeldende målet for uker før loggens start.
-    const currentWk = weekKey(new Date());
     const nextWk = addWeeksToKey(currentWk, 1);
-    const log = readGoalLog();
     if (log.length === 0) {
       log.push({ weekKey: currentWk, goal: previousGoal });
     }
