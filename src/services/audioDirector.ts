@@ -178,10 +178,24 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
   // currentPhaseEvent: siste phase:started — grunnlaget for replanCurrentPhase
   // (Oppgave B); nullstilles ved reset så en sen preload aldri replanlegger
   // en forlatt økt.
+  // issueGen (BØR-1, review-oppfølging): utstedelses-generasjon — bumpes ved
+  // HVER ny utstedelsesrunde (fasestart, fristflytt, replan) og fanges av
+  // stige-fallbackens .then-vakt. Epoch+frist-sjekken alene har et hull:
+  // replan i SAMME fase mot SAMME frist endrer ingen av dem, så et SENT
+  // false-svar fra det opprinnelige full-forsøket (suspendert ctx) ville
+  // skedulert en short-kjede nummer to oppå replanens egen stige. phaseEpoch
+  // bumpes BEVISST ikke av replan — den gater TTS-oppfølgerne (playChainThen
+  // m.fl.), som skal overleve et replan i samme fase.
+  // lookaheadDegraded (BØR-2): fase-skopet «minst én utstedelse svarte false»
+  // — replan re-utsteder KUN da. Alt lyktes → kjeden kan alt være hørbar, og
+  // kanseller+reutsted ville kunnet gi pip over spillende stemme eller
+  // omstart av nedtellingen; varmstart-replan er derfor ren no-op.
   let pending: PendingLookahead | null = null;
   let currentDeadline: number | null = null;
   let beepFallback = false;
   let phaseEpoch = 0;
+  let issueGen = 0;
+  let lookaheadDegraded = false;
   let currentPhaseEvent: PhaseStartedEvent | null = null;
 
   // Delt med speil-funksjonene: gir TTS-etter-kjede-veiene tilgang til
@@ -191,12 +205,19 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
   function issuePending(endsAt: number): void {
     if (!pending) return;
     const epoch = phaseEpoch;
+    const gen = issueGen;
     // scheduleSequence resolver false STRAKS ved ucachet nøkkel/manglende bro/
     // for trangt vindu — men true først når kjeden har SPILT ferdig (og true
     // ved bevisst stopp). Derfor fire-and-forget med .then, aldri await: å
     // vente på suksess ville blokkert til fasegrensen.
+    // gen-sjekken (BØR-1): et false-svar fra en ELDRE utstedelsesrunde (før et
+    // replan i samme fase) skal verken sette flagg eller utløse stigen —
+    // den nye rundens egne svar styrer.
     const flagIfTooTight = (ok: boolean): void => {
-      if (!ok && epoch === phaseEpoch) beepFallback = true;
+      if (!ok && epoch === phaseEpoch && gen === issueGen) {
+        beepFallback = true;
+        lookaheadDegraded = true;
+      }
     };
     if (pending.kind === 'boundary') {
       // start_321-stigen (live timing-funn A): fullvarianten (~20 s) får aldri
@@ -211,7 +232,7 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
       const shortKey = pending.start321ShortKey;
       void audioBufferEngine.scheduleSequence([pending.start321Key], { endAt: endsAt }).then((ok) => {
         if (ok) return;
-        if (epoch !== phaseEpoch || endsAt !== currentDeadline) return;
+        if (epoch !== phaseEpoch || endsAt !== currentDeadline || gen !== issueGen) return;
         if (shortKey) {
           void audioBufferEngine.scheduleSequence([shortKey], { endAt: endsAt }).then(flagIfTooTight);
         } else {
@@ -222,7 +243,11 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
     } else {
       // last5-svikt gir INGEN pip-fallback: cuen er motivasjon midt i fasen,
       // ikke et grensesignal — stille degradering er dagens (utriggede) adferd.
-      void audioBufferEngine.scheduleSequence([pending.key], { startAt: endsAt - LAST5_LEAD_MS });
+      // Men degraderingsflagget settes (BØR-2), slik at et kaldstart-replan
+      // får re-utstede cuen når bufferne omsider er dekodet.
+      void audioBufferEngine.scheduleSequence([pending.key], { startAt: endsAt - LAST5_LEAD_MS }).then((ok) => {
+        if (!ok && epoch === phaseEpoch && gen === issueGen) lookaheadDegraded = true;
+      });
     }
   }
 
@@ -275,8 +300,10 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
       audioBufferEngine.cancelScheduled();
     }
     phaseEpoch++;
+    issueGen++;
     pending = null;
     beepFallback = false;
+    lookaheadDegraded = false;
     currentDeadline = e.endsAt;
     currentPhaseEvent = e;
 
@@ -297,12 +324,25 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
    * Epoch-vakten er implisitt: issuePending fanger gjeldende phaseEpoch, og
    * kalles replan etter et fasebytte er currentPhaseEvent alt den NYE fasens
    * hendelse — gamle ankre re-utstedes aldri.
+   *
+   * BØR-2 (review-oppfølging): betinget på lookaheadDegraded — kun når minst
+   * én utstedelse faktisk svarte false er det noe å reparere. Lyktes alt ved
+   * fasestart (delvis varm cache) kan kjeden alt være hørbar, og kanseller+
+   * reutsted ville kunnet kutte spillende stemme eller omstarte nedtellingen:
+   * varmstart-replan er ren no-op. (En utstedelse som fortsatt HENGER i
+   * resume-await har ikke svart false → også no-op; svarer den false senere,
+   * kjører stigen dens med matchende generasjon som normalt.)
+   * BØR-1: issueGen bumpes så SENE false-svar fra runden FØR replanet aldri
+   * utløser en ekstra short-kjede oppå replanens egen stige.
    */
   function replanCurrentPhase(): void {
     if (currentPhaseEvent === null || currentDeadline === null) return;
     if (engine.getSnapshot().status !== 'running') return;
+    if (!lookaheadDegraded) return;
+    issueGen++;
     audioBufferEngine.setTimeBridge(engine.getNow());
     beepFallback = false;
+    lookaheadDegraded = false;
     pending = null;
     audioBufferEngine.cancelScheduled();
     planLookahead({ ...currentPhaseEvent, endsAt: currentDeadline });
@@ -317,7 +357,10 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
     // Planrettelse 4 (fix 2): en tidligere mislykket skedulering skal ikke la
     // pip-fallbacken leve videre oppå en VELLYKKET reskedulering — nullstill
     // FØR issuePending; et nytt false-svar setter flagget igjen om vinduet ryker.
+    // Ny utstedelsesrunde (BØR-1): sene svar fra den gamle er ugyldige.
+    issueGen++;
     beepFallback = false;
+    lookaheadDegraded = false;
     // Kanseller planlagte (ikke-hørbare) kjeder og reskeduler mot ny frist.
     // Planrettelse 2: cancelScheduled(), IKKE full stop() — en pause/dvale-
     // reanker skjer mens f.eks. rest-annonseringen fortsatt kan spille hørbart,
@@ -382,6 +425,7 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
         pending = null;
         currentDeadline = null;
         beepFallback = false;
+        lookaheadDegraded = false;
         currentPhaseEvent = null;
         break;
       default:
