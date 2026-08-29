@@ -11,6 +11,8 @@ import { WorkoutBuilderView } from './components/builder/WorkoutBuilderView';
 import { ExerciseImageCuratorView } from './components/curator/ExerciseImageCuratorView';
 import { SettingsMoreView } from './components/settings/SettingsMoreView';
 import { BottomNav, AppTab } from './components/navigation/BottomNav';
+import { ErrorToast } from './components/feedback/ErrorToast';
+import { showErrorToast } from './services/errorToastService';
 import { getSharedWorkoutFromUrl } from './services/shareWorkoutService';
 import { useAuth } from './contexts/AuthContext';
 import { saveCompletedWorkout } from './services/firestoreService';
@@ -78,7 +80,11 @@ export function App() {
         totalRounds: selectedWorkout.rounds,
       })
         .then((logId) => setLatestLogId(logId))
-        .catch((err) => console.warn('Kunne ikke lagre fullført økt:', err));
+        .catch((err) => {
+          // Sikkerhetsnett: saveCompletedWorkout toaster selv på kjente feilstier
+          console.warn('Kunne ikke lagre fullført økt:', err);
+          showErrorToast('Kunne ikke lagre den fullførte økten.');
+        });
     }
     if (state.status === 'idle') {
       hasSavedRef.current = false;
@@ -107,6 +113,7 @@ export function App() {
   if (state.status === 'completed') {
     return (
       <div className="h-[100dvh] w-full bg-zinc-950 flex flex-col justify-center overflow-hidden">
+        <ErrorToast />
         <WorkoutSummary
           workout={selectedWorkout}
           totalElapsedSeconds={state.totalElapsedSeconds}
@@ -119,6 +126,10 @@ export function App() {
 
   return (
     <div className="h-[100dvh] w-full bg-zinc-950 text-white flex flex-col overflow-hidden">
+      {/* Global feil-toast (revisjon § 2.4) — alltid montert slik at
+          tjenestefeil når brukeren, ikke bare konsollen */}
+      <ErrorToast />
+
       {/* Hovedvisning basert på aktiv fane */}
       <div className="flex-1 overflow-hidden">
         {activeTab === 'timer' ? (

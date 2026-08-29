@@ -1,4 +1,6 @@
 import { WorkoutTemplate, IntervalItem } from '../types/workout';
+import { WorkoutTemplateSchema, filterValidListItems } from '../schemas/workoutSchema';
+import { showErrorToast } from './errorToastService';
 import { db } from './firebase';
 import {
   collection,
@@ -55,7 +57,18 @@ export function getLocalCustomWorkouts(): WorkoutTemplate[] {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as WorkoutTemplate[];
+
+    // Skjemavalidering (revisjon § 2.4): behold gyldige økter, forkast resten
+    // — korrupt lagring skal aldri kræsje appen eller lekke inn i timeren.
+    const listed = filterValidListItems(WorkoutTemplateSchema, JSON.parse(raw));
+    if (listed === null) {
+      console.warn('Lokale økter i localStorage hadde feil form — bruker tom liste.');
+      return [];
+    }
+    if (listed.dropped > 0) {
+      console.warn(`Forkastet ${listed.dropped} ugyldig(e) lokale økt(er) under skjemavalidering.`);
+    }
+    return listed.valid;
   } catch (err) {
     console.warn('Kunne ikke hente lokale økter:', err);
     return [];
@@ -70,14 +83,21 @@ export async function saveCustomWorkout(
   userId?: string | null
 ): Promise<void> {
   // 1. Lagre lokalt i localStorage
-  const localList = getLocalCustomWorkouts();
-  const existingIdx = localList.findIndex((w) => w.id === workout.id);
-  if (existingIdx >= 0) {
-    localList[existingIdx] = workout;
-  } else {
-    localList.unshift(workout);
+  try {
+    const localList = getLocalCustomWorkouts();
+    const existingIdx = localList.findIndex((w) => w.id === workout.id);
+    if (existingIdx >= 0) {
+      localList[existingIdx] = workout;
+    } else {
+      localList.unshift(workout);
+    }
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(localList));
+  } catch (err) {
+    // Feil-toast (revisjon § 2.4): brukeren skal få vite at malen IKKE ble lagret
+    console.warn('Kunne ikke lagre mal lokalt:', err);
+    showErrorToast('Kunne ikke lagre malen på enheten. Prøv igjen.');
+    throw err;
   }
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(localList));
 
   // 2. Synk til Firestore hvis bruker er innlogget
   if (userId) {
@@ -90,6 +110,7 @@ export async function saveCustomWorkout(
       });
     } catch (err) {
       console.warn('Kunne ikke synke økt til Firestore:', err);
+      showErrorToast('Malen ble lagret på enheten, men kunne ikke synkes til skyen.');
     }
   }
 }

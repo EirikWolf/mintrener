@@ -1,4 +1,5 @@
 import { WorkoutTemplate, IntervalPhase } from '../types/workout';
+import { InterruptedSessionSchema } from '../schemas/workoutSchema';
 
 export interface InterruptedSession {
   workout: WorkoutTemplate;
@@ -28,7 +29,17 @@ export function getInterruptedSession(): InterruptedSession | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const session: InterruptedSession = JSON.parse(raw);
+
+    // Skjemavalidering (revisjon § 2.4): dataene mater timer-state direkte,
+    // så korrupt lagring må forkastes — aldri kræsje eller lekke inn i motoren.
+    const result = InterruptedSessionSchema.safeParse(JSON.parse(raw));
+    if (!result.success) {
+      console.warn('Avbrutt økt besto ikke skjemavalidering — forkaster:', result.error.issues);
+      clearInterruptedSession();
+      return null;
+    }
+
+    const session: InterruptedSession = result.data;
     const age = Date.now() - session.savedAt;
     if (age > MAX_AGE_MS) {
       clearInterruptedSession();
@@ -37,6 +48,8 @@ export function getInterruptedSession(): InterruptedSession | null {
     return session;
   } catch (err) {
     console.warn('Kunne ikke lese avbrutt økt:', err);
+    // Korrupt JSON: rydd opp slik at feilen ikke gjentas ved hver oppstart
+    clearInterruptedSession();
     return null;
   }
 }

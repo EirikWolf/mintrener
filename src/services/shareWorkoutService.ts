@@ -1,5 +1,7 @@
 import { WorkoutTemplate } from '../types/workout';
+import { WorkoutTemplateSchema } from '../schemas/workoutSchema';
 import { recordShareLinkOpen } from './telemetryService';
+import { showErrorToast } from './errorToastService';
 
 /**
  * Genererer en kompakt, delbar URL med øktens data innebygd i lenken
@@ -79,13 +81,16 @@ export async function shareWorkout(workout: WorkoutTemplate): Promise<{ shared: 
  * Leser og dekoder en delt økt fra URL-parametere ved app-oppstart
  */
 export function getSharedWorkoutFromUrl(): WorkoutTemplate | null {
+  if (typeof window === 'undefined') return null;
+
+  const params = new URLSearchParams(window.location.search);
+  const encoded = params.get('w');
+  if (!encoded) return null;
+
+  // Dekod og skjemavalider: en fiendtlig/korrupt lenke skal aldri kunne legge
+  // vilkårlige objekter i state (revisjon § 2.4) — og aldri kræsje stille.
+  let workout: WorkoutTemplate | null = null;
   try {
-    if (typeof window === 'undefined') return null;
-
-    const params = new URLSearchParams(window.location.search);
-    const encoded = params.get('w');
-    if (!encoded) return null;
-
     // Dekod base64 UTF-8
     const json = decodeURIComponent(
       Array.prototype.map
@@ -93,25 +98,33 @@ export function getSharedWorkoutFromUrl(): WorkoutTemplate | null {
         .join('')
     );
 
-    const workout: WorkoutTemplate = JSON.parse(json);
-    if (!workout.name || !Array.isArray(workout.items)) {
-      return null;
+    const result = WorkoutTemplateSchema.safeParse(JSON.parse(json));
+    if (result.success) {
+      workout = result.data;
+    } else {
+      console.warn('Delt økt avvist av skjemavalidering:', result.error.issues);
     }
+  } catch (err) {
+    console.warn('Kunne ikke dekode delt økt fra URL:', err);
+  }
 
+  if (workout === null) {
+    showErrorToast('Delingslenken er ugyldig eller skadet — økten kunne ikke lastes.');
+  } else if (params.get('ref') === 'share') {
     // Tell anonymt at en delt lenke faktisk ble åpnet (fire-and-forget)
-    if (params.get('ref') === 'share') {
-      recordShareLinkOpen().catch(() => {});
-    }
+    recordShareLinkOpen().catch(() => {});
+  }
 
-    // Rens URL uten å reloade siden
+  // Rens URL uten å reloade siden — også ved avvist payload, slik at den
+  // korrupte lenken ikke blir liggende og trigge feilen på nytt
+  try {
     const cleanUrl = new URL(window.location.href);
     cleanUrl.searchParams.delete('w');
     cleanUrl.searchParams.delete('ref');
     window.history.replaceState({}, document.title, cleanUrl.toString());
-
-    return workout;
   } catch (err) {
-    console.warn('Kunne ikke dekode delt økt fra URL:', err);
-    return null;
+    console.warn('Kunne ikke rense delings-URL:', err);
   }
+
+  return workout;
 }

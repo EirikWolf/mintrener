@@ -12,6 +12,8 @@ import {
 import { User } from 'firebase/auth';
 import { db } from './firebase';
 import { UserProfile, CompletedWorkoutLog, UserSettings } from '../types/models';
+import { CompletedWorkoutLogSchema, filterValidListItems } from '../schemas/workoutSchema';
+import { showErrorToast } from './errorToastService';
 
 const DEFAULT_SETTINGS: UserSettings = {
   soundEnabled: true,
@@ -52,6 +54,29 @@ export async function syncUserProfile(user: User): Promise<UserProfile> {
 const LOCAL_HISTORY_KEY = 'mintrener_local_workout_history';
 
 /**
+ * Leser lokal historikk med skjemavalidering (revisjon § 2.4): korrupt lagring
+ * gir trygg tom liste i stedet for kræsj, og ugyldige innslag filtreres bort.
+ */
+function readLocalHistory(): CompletedWorkoutLog[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_HISTORY_KEY);
+    if (!raw) return [];
+    const listed = filterValidListItems(CompletedWorkoutLogSchema, JSON.parse(raw));
+    if (listed === null) {
+      console.warn('Lokal historikk hadde feil form — bruker tom liste.');
+      return [];
+    }
+    if (listed.dropped > 0) {
+      console.warn(`Forkastet ${listed.dropped} ugyldig(e) historikk-innslag under skjemavalidering.`);
+    }
+    return listed.valid;
+  } catch (err) {
+    console.warn('Kunne ikke lese lokal historikk:', err);
+    return [];
+  }
+}
+
+/**
  * Lagrer logg over en fullført treningsøkt (både lokalt og i Firestore)
  */
 export async function saveCompletedWorkout(
@@ -65,14 +90,15 @@ export async function saveCompletedWorkout(
     completedAt: new Date().toISOString(),
   };
 
-  // 1. Lagre lokalt
+  // 1. Lagre lokalt (skjemavalidert lesing: korrupt eksisterende historikk
+  // skal ikke hindre at DENNE økten blir lagret)
   try {
-    const raw = localStorage.getItem(LOCAL_HISTORY_KEY);
-    const list: CompletedWorkoutLog[] = raw ? JSON.parse(raw) : [];
+    const list = readLocalHistory();
     list.unshift(newLog);
     localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(list));
   } catch (err) {
     console.warn('Kunne ikke lagre lokal historikk:', err);
+    showErrorToast('Kunne ikke lagre økten lokalt på enheten.');
   }
 
   // 2. Lagre i Firestore hvis innlogget (bruk samme ID som lokalt)
@@ -85,7 +111,9 @@ export async function saveCompletedWorkout(
       });
       return newLog.id;
     } catch (err) {
+      // Feil-toast (revisjon § 2.4): tidligere ble dette svelget i console
       console.warn('Kunne ikke synke historikk til Firestore:', err);
+      showErrorToast('Økten ble lagret på enheten, men kunne ikke synkes til skyen.');
     }
   }
 
@@ -102,14 +130,11 @@ export async function updateWorkoutRating(
 ): Promise<void> {
   // 1. Oppdater lokalt
   try {
-    const raw = localStorage.getItem(LOCAL_HISTORY_KEY);
-    if (raw) {
-      const list: CompletedWorkoutLog[] = JSON.parse(raw);
-      const idx = list.findIndex((it) => it.id === logId);
-      if (idx >= 0) {
-        list[idx].difficultyRating = rating;
-        localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(list));
-      }
+    const list = readLocalHistory();
+    const idx = list.findIndex((it) => it.id === logId);
+    if (idx >= 0) {
+      list[idx].difficultyRating = rating;
+      localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(list));
     }
   } catch (err) {
     console.warn('Feil ved oppdatering av lokal rating:', err);
@@ -130,13 +155,7 @@ export async function updateWorkoutRating(
  * Henter treningshistorikk for en bruker (fra Firestore og lokal cache)
  */
 export async function getUserWorkoutHistory(userId?: string | null): Promise<CompletedWorkoutLog[]> {
-  let localList: CompletedWorkoutLog[] = [];
-  try {
-    const raw = localStorage.getItem(LOCAL_HISTORY_KEY);
-    if (raw) {
-      localList = JSON.parse(raw);
-    }
-  } catch {}
+  const localList: CompletedWorkoutLog[] = readLocalHistory();
 
   if (!userId) {
     return localList;

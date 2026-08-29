@@ -162,7 +162,12 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
       ...currentWorkout,
       id: `custom-${Date.now()}`,
     };
-    await saveCustomWorkout(workoutToSave, user?.uid);
+    try {
+      await saveCustomWorkout(workoutToSave, user?.uid);
+    } catch {
+      // saveCustomWorkout viser selv feil-toast — ikke vis «Lagret!» i tillegg
+      return;
+    }
     const updated = await fetchCustomWorkouts(user?.uid);
     setSavedWorkouts(updated);
     setIsSavedToast(true);
