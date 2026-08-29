@@ -72,6 +72,15 @@ export class TimerEngine {
   // Injisert persistens-callback (persistenceSubscriber kobler i α4). Default
   // no-op slik at motoren aldri rører localStorage selv.
   private onPersist: (session: PersistPayload) => void = () => {};
+  // Nøkkel/workout-referanse ved forrige lytter-varsel — BEVISST atskilt fra
+  // snapshotCache (α5-funn): hendelses-abonnenter (adapterne) kaller
+  // getSnapshot() midt i emit-kjedene (phase:started m.fl.), og det refresher
+  // cachen med den NYE nøkkelen FØR notifySnapshotIfChanged rekker å
+  // sammenligne. En cache-basert endringssjekk svelget dermed varselet og lot
+  // React stå igjen på et foreldet snapshot. Varselgatingen trenger derfor
+  // egen hukommelse om hva lytterne sist fikk beskjed om.
+  private lastNotifiedKey: string;
+  private lastNotifiedWorkout: WorkoutTemplate;
 
   constructor(workout: WorkoutTemplate, now: () => number = () => performance.now()) {
     this.now = now;
@@ -99,6 +108,8 @@ export class TimerEngine {
       lastTickWallMs: 0,
       lastTickPerfMs: 0,
     };
+    this.lastNotifiedKey = this.computeSnapshotKey();
+    this.lastNotifiedWorkout = workout;
     // α5 sender getSnapshot/subscribe UBUNDET til useSyncExternalStore — bind her
     // slik at metodereferansene er trygge uten .bind på kallstedet.
     this.getSnapshot = this.getSnapshot.bind(this);
@@ -347,15 +358,17 @@ export class TimerEngine {
     };
   }
 
-  // Varsle snapshot-lyttere kun når identiteten faktisk vil endres. Cachen
-  // oppdateres lazy i getSnapshot, så en stale cache kan i teorien gi ett
-  // overflødig varsel — ufarlig: React leser snapshot på hvert varsel og
-  // re-rendrer bare ved ny identitet.
+  // Varsle snapshot-lyttere kun når identiteten faktisk vil endres. Sammenligner
+  // mot lastNotified* (hva lytterne sist fikk beskjed om) — ALDRI mot
+  // snapshotCache, som refreshes av abonnenters getSnapshot()-kall midt i
+  // emit-kjedene og dermed ville skjult endringen (se felt-kommentaren).
   private notifySnapshotIfChanged(): void {
-    const cache = this.snapshotCache;
-    if (cache && cache.key === this.computeSnapshotKey() && cache.workout === this.state.activeWorkout) {
+    const key = this.computeSnapshotKey();
+    if (key === this.lastNotifiedKey && this.state.activeWorkout === this.lastNotifiedWorkout) {
       return;
     }
+    this.lastNotifiedKey = key;
+    this.lastNotifiedWorkout = this.state.activeWorkout;
     for (const listener of [...this.snapshotListeners]) {
       listener();
     }
