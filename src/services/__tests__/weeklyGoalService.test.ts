@@ -1,9 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   getWeeklyGoal,
   setWeeklyGoal,
   calculateWeeklyProgress,
+  getGoalForWeek,
 } from '../weeklyGoalService';
+import { weekKey, addWeeksToKey } from '../weekUtils';
 import { CompletedWorkoutLog } from '../../types/models';
 
 describe('Weekly Goal Service', () => {
@@ -51,5 +53,33 @@ describe('Weekly Goal Service', () => {
     expect(progress.completedThisWeek).toBe(2);
     expect(progress.percentage).toBe(50);
     expect(progress.isGoalMet).toBe(false);
+  });
+});
+
+describe('getGoalForWeek', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useRealTimers();
+  });
+
+  it('uten logg: alle uker dømmes etter gjeldende mål', () => {
+    expect(getGoalForWeek('2026-01-05')).toBe(getWeeklyGoal());
+  });
+  it('endring gjelder fra NESTE uke (spec § 2.1)', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 0, 7)); // onsdag, uke 2026-01-05
+    setWeeklyGoal(5);
+    expect(getGoalForWeek(weekKey(new Date(2026, 0, 7)))).toBe(3);         // inneværende: gammelt mål
+    expect(getGoalForWeek(addWeeksToKey(weekKey(new Date(2026, 0, 7)), 1))).toBe(5); // neste: nytt
+  });
+  it('flere endringer: siste logglinje med weekKey <= spurt uke vinner', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 0, 7)); setWeeklyGoal(5);
+    vi.setSystemTime(new Date(2026, 0, 20)); setWeeklyGoal(2);
+    expect(getGoalForWeek('2026-01-12')).toBe(5);
+    expect(getGoalForWeek('2026-02-02')).toBe(2);
+  });
+  it('korrupt logg → fallback til gjeldende mål, ingen kræsj', () => {
+    localStorage.setItem('mintrener_weekly_goal_log_v1', '{{{');
+    expect(getGoalForWeek('2026-01-05')).toBe(getWeeklyGoal());
   });
 });

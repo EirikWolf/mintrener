@@ -1,8 +1,30 @@
 import { CompletedWorkoutLog } from '../types/models';
-import { getWeekStart } from './weekUtils';
+import { getWeekStart, weekKey, addWeeksToKey } from './weekUtils';
 
 const WEEKLY_GOAL_STORAGE_KEY = 'mintrener_weekly_goal';
+const GOAL_LOG_KEY = 'mintrener_weekly_goal_log_v1';
 const DEFAULT_WEEKLY_GOAL = 3;
+
+type GoalLogEntry = { weekKey: string; goal: number };
+
+function readGoalLog(): GoalLogEntry[] {
+  try {
+    const raw = localStorage.getItem(GOAL_LOG_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((e): e is GoalLogEntry =>
+      typeof e?.weekKey === 'string' && typeof e?.goal === 'number');
+  } catch { return []; }
+}
+
+/** Målet som gjaldt ved gitt ukestart. Uker før loggens start: gjeldende mål. */
+export function getGoalForWeek(targetWeekKey: string): number {
+  const applicable = readGoalLog()
+    .filter((e) => e.weekKey <= targetWeekKey) // 'YYYY-MM-DD' sorterer leksikalsk = kronologisk
+    .sort((a, b) => (a.weekKey < b.weekKey ? -1 : a.weekKey > b.weekKey ? 1 : 0));
+  return applicable.length > 0 ? applicable[applicable.length - 1].goal : getWeeklyGoal();
+}
 
 export interface WeeklyGoalProgress {
   goal: number;
@@ -31,7 +53,22 @@ export function getWeeklyGoal(): number {
 export function setWeeklyGoal(goal: number): void {
   try {
     const clamped = Math.max(1, Math.min(14, Math.round(goal)));
+    const previousGoal = getWeeklyGoal();
     localStorage.setItem(WEEKLY_GOAL_STORAGE_KEY, clamped.toString());
+
+    // Mållogg (spec § 2.1): endringen gjelder fra NESTE uke — inneværende uke
+    // dømmes etter målet ved ukestart. Første logglinje ankrer derfor det gamle
+    // målet på inneværende ukenøkkel, ellers ville getGoalForWeek falt tilbake
+    // til det nye gjeldende målet for uker før loggens start.
+    const currentWk = weekKey(new Date());
+    const nextWk = addWeeksToKey(currentWk, 1);
+    const log = readGoalLog();
+    if (log.length === 0) {
+      log.push({ weekKey: currentWk, goal: previousGoal });
+    }
+    const updated = log.filter((e) => e.weekKey !== nextWk);
+    updated.push({ weekKey: nextWk, goal: clamped });
+    localStorage.setItem(GOAL_LOG_KEY, JSON.stringify(updated));
   } catch (err) {
     console.warn('Kunne ikke lagre ukesmål:', err);
   }
