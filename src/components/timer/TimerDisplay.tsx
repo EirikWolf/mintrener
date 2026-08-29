@@ -80,7 +80,10 @@ const FocusModeQuickControls: React.FC<FocusModeQuickControlsProps> = ({
   isVoiceControlActive,
   onToggleVoiceControl,
 }) => (
-  <div className="absolute top-2 right-2 z-20 flex items-center gap-2">
+  // data-testid: stripen er en ren container uten landemerkerolle/tilgjengelig navn,
+  // og knappene i den deler aria-label med toppradens — testene trenger et stabilt
+  // anker for å skille «stripe synlig» fra «topprad synlig».
+  <div data-testid="focus-quick-controls" className="absolute top-2 right-2 z-20 flex items-center gap-2">
     {isVoiceControlActive && (
       <button
         onClick={onToggleVoiceControl}
@@ -415,7 +418,10 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             <div className="space-y-2 pt-0.5 relative">
               {/* 1. Fortsett der du slapp Banner */}
               {interruptedSession && (
-                <div className="bg-amber-950/90 border border-amber-500/70 rounded-2xl p-2.5 flex items-center justify-between gap-2 shadow-lg animate-in fade-in">
+                // data-testid: banneret mangler semantisk rolle, og «Fortsett»-knappen
+                // deler tekst med «Fortsett: <øktnavn>» — testene scoper queriene sine
+                // til banneret for å unngå skjøre tekst-regexer.
+                <div data-testid="restore-session-banner" className="bg-amber-950/90 border border-amber-500/70 rounded-2xl p-2.5 flex items-center justify-between gap-2 shadow-lg animate-in fade-in">
                   <div className="flex items-center gap-2 overflow-hidden">
                     <RotateCcw className="w-4 h-4 text-amber-400 shrink-0" />
                     <div className="min-w-0">
