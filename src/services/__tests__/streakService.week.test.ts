@@ -94,3 +94,55 @@ describe('computeWeekStreak', () => {
     expect([...WEEK_STREAK_MILESTONES]).toEqual([2, 4, 8, 12, 26, 52]);
   });
 });
+
+describe('brudd-sporing (lastBrokenWeeks/breakWeekKey — B1)', () => {
+  it('tom historikk og aldri brutt → 0 / null', () => {
+    const empty = computeWeekStreak([], goal3, NOW);
+    expect(empty.lastBrokenWeeks).toBe(0);
+    expect(empty.breakWeekKey).toBeNull();
+
+    const unbroken = computeWeekStreak([...week(2026, 3, 2, 3), ...week(2026, 3, 9, 3)], goal3, NOW);
+    expect(unbroken.lastBrokenWeeks).toBe(0);
+    expect(unbroken.breakWeekKey).toBeNull();
+  });
+
+  it('forsikret uke er IKKE et brudd', () => {
+    const h = [
+      ...week(2026, 1, 5, 3), ...week(2026, 1, 12, 3), ...week(2026, 1, 19, 3), ...week(2026, 1, 26, 3),
+      /* uke 2026-02-02: 0 økter — forsikres */ ...week(2026, 2, 9, 3),
+    ];
+    const r = computeWeekStreak(h, goal3, new Date(2026, 1, 18));
+    expect(r.lastBrokenWeeks).toBe(0);
+    expect(r.breakWeekKey).toBeNull();
+  });
+
+  it('brudd fanger serielengden som røk og ukenøkkelen der bruddet skjedde', () => {
+    const h = [
+      ...week(2026, 1, 5, 3), ...week(2026, 1, 12, 3), ...week(2026, 1, 19, 3), ...week(2026, 1, 26, 3),
+      /* 02-02: røket (forsikret), 02-09: røket (bank tom → brudd) */
+      ...week(2026, 2, 16, 3),
+    ];
+    const r = computeWeekStreak(h, goal3, new Date(2026, 1, 25));
+    expect(r.lastBrokenWeeks).toBe(4);
+    expect(r.breakWeekKey).toBe('2026-02-09');
+  });
+
+  it('nytt brudd overskriver forrige', () => {
+    // 01-05, 01-12 fullført; 01-19 røket (brudd: 2); 01-26 fullført; 02-02 røket (brudd: 1)
+    const h = [
+      ...week(2026, 1, 5, 3), ...week(2026, 1, 12, 3),
+      ...week(2026, 1, 26, 3),
+    ];
+    const r = computeWeekStreak(h, goal3, new Date(2026, 1, 11)); // ons i uka 2026-02-09
+    expect(r.lastBrokenWeeks).toBe(1);
+    expect(r.breakWeekKey).toBe('2026-02-02');
+  });
+
+  it('røket uke uten aktiv serie oppdaterer ikke brudd-sporet', () => {
+    // 01-05, 01-12 fullført; 01-19 røket (brudd: 2); 01-26 røket (serien alt 0 — intet nytt brudd)
+    const h = [...week(2026, 1, 5, 3), ...week(2026, 1, 12, 3)];
+    const r = computeWeekStreak(h, goal3, new Date(2026, 1, 4)); // ons i uka 2026-02-02
+    expect(r.lastBrokenWeeks).toBe(2);
+    expect(r.breakWeekKey).toBe('2026-01-19');
+  });
+});

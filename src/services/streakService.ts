@@ -52,6 +52,14 @@ export interface WeekStreakResult {
   currentWeekCompleted: boolean;
   /** Milepæler (fra WEEK_STREAK_MILESTONES) som currentWeeks har nådd. */
   reachedMilestones: number[];
+  /**
+   * Serien som røk ved SISTE brudd (0 hvis aldri brutt). Grunnlag for
+   * «Ny start»-refraiming i detaljarket (spec § 2.2) — tallet genereres
+   * herfra, aldri antatt.
+   */
+  lastBrokenWeeks: number;
+  /** Ukenøkkelen der siste brudd skjedde (null hvis aldri brutt) — dedupe-anker for streak_broken-telemetri. */
+  breakWeekKey: string | null;
 }
 
 /**
@@ -76,11 +84,14 @@ export function computeWeekStreak(
   const currentWk = weekKey(now);
   if (perWeek.size === 0) {
     return { currentWeeks: 0, bestWeeks: 0, insuranceInBank: 0,
-      insuranceUsedWeekKeys: [], currentWeekCompleted: false, reachedMilestones: [] };
+      insuranceUsedWeekKeys: [], currentWeekCompleted: false, reachedMilestones: [],
+      lastBrokenWeeks: 0, breakWeekKey: null };
   }
   const firstWk = [...perWeek.keys()].sort()[0];
 
   let streak = 0, best = 0, bank: 0 | 1 = 0, consecutiveSinceEarn = 0;
+  let lastBrokenWeeks = 0;
+  let breakWeekKey: string | null = null;
   const used: string[] = [];
   for (let wk = firstWk; wk < currentWk; wk = addWeeksToKey(wk, 1)) {
     const completed = (perWeek.get(wk) ?? 0) >= goalForWeek(wk);
@@ -94,6 +105,9 @@ export function computeWeekStreak(
       // nullstilles likevel: ny slinguke krever 4 påfølgende FULLFØRTE uker.
       bank = 0; used.push(wk); consecutiveSinceEarn = 0;
     } else {
+      // Kun en AKTIV serie kan ryke: nok en røket uke etter et brudd
+      // overskriver ikke sporet av serien som faktisk gikk tapt.
+      if (streak > 0) { lastBrokenWeeks = streak; breakWeekKey = wk; }
       streak = 0; consecutiveSinceEarn = 0;
     }
     best = Math.max(best, streak);
@@ -105,5 +119,6 @@ export function computeWeekStreak(
     currentWeeks, bestWeeks: best, insuranceInBank: bank,
     insuranceUsedWeekKeys: used, currentWeekCompleted,
     reachedMilestones: WEEK_STREAK_MILESTONES.filter((m) => currentWeeks >= m),
+    lastBrokenWeeks, breakWeekKey,
   };
 }

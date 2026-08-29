@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import React from 'react';
 import { WorkoutSummary } from '../WorkoutSummary';
 import { WorkoutTemplate } from '../../../types/workout';
 import type { CompletedWorkoutLog } from '../../../types/models';
@@ -140,6 +141,72 @@ describe('WorkoutSummary — milepælsfeiring og konto-prompt (C1/C2 Task 9)', (
 
       expect(recordEngagementEvent).not.toHaveBeenCalledWith('streak_weekCompleted');
     });
+
+    it('bootstrap: ALLE ufeirede milepæler telles i telemetrien, kun høyeste får banner (B2)', () => {
+      // Ukesmål 1: tre fullførte uker bak oss; DENNE økta fullfører uke 4 →
+      // milepæl 2 og 4 nås samtidig (eksisterende bruker uten feiringshistorikk)
+      localStorage.setItem('mintrener_weekly_goal', '1');
+      seedHistory([log(2026, 2, 23), log(2026, 3, 2), log(2026, 3, 9)]);
+
+      renderSummary();
+
+      expect(recordEngagementEvent).toHaveBeenCalledWith('streak_milestone_w2');
+      expect(recordEngagementEvent).toHaveBeenCalledWith('streak_milestone_w4');
+      expect(screen.getByText('🔥 4 uker på rad — milepæl nådd!')).toBeInTheDocument();
+      expect(screen.queryByText(MILESTONE_BANNER)).not.toBeInTheDocument();
+      // begge persistert som feiret
+      expect(
+        JSON.parse(localStorage.getItem('mintrener_streak_celebrated_v1') ?? '[]')
+      ).toEqual(expect.arrayContaining([2, 4]));
+    });
+  });
+
+  describe('slinguke- og brudd-produsenter (plan-gap)', () => {
+    it('slinguke-forbruk feires med tall fra resultatet og telles ÉN gang (dedupe over re-render)', () => {
+      localStorage.setItem('mintrener_weekly_goal', '1');
+      // Milepælene alt feiret — testen isolerer slinguke-linjen
+      localStorage.setItem('mintrener_streak_celebrated_v1', JSON.stringify([2, 4]));
+      // 4 fullførte uker (bank opptjent), 03-02 røket (forsikret), 03-09 fullført
+      seedHistory([
+        log(2026, 2, 2), log(2026, 2, 9), log(2026, 2, 16), log(2026, 2, 23),
+        log(2026, 3, 9),
+      ]);
+
+      const { unmount } = renderSummary();
+
+      // Serien står på 5 t.o.m. forrige uke; denne økta fullfører inneværende → 6
+      expect(
+        screen.getByText('Slinguka reddet serien din — fortsatt 6 uker!')
+      ).toBeInTheDocument();
+      expect(recordEngagementEvent).toHaveBeenCalledWith('streak_insuranceUsed');
+
+      unmount();
+      renderSummary();
+      const insuranceCalls = vi
+        .mocked(recordEngagementEvent)
+        .mock.calls.filter(([c]) => c === 'streak_insuranceUsed');
+      expect(insuranceCalls).toHaveLength(1);
+    });
+
+    it('streak_broken telles ÉN gang ved nytt brudd — ingen sørgetekst i fullført-skjermen', () => {
+      localStorage.setItem('mintrener_weekly_goal', '1');
+      // Uke 03-02 fullført, 03-09 røket uten bank → brudd konstateres
+      seedHistory([log(2026, 3, 2)]);
+
+      const { unmount } = renderSummary();
+
+      expect(recordEngagementEvent).toHaveBeenCalledWith('streak_broken');
+      // Brudd re-frames KUN i detaljarket (B1) — fullført-skjermen sørger ikke
+      expect(screen.queryByText(/Ny start/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/serien røk/i)).not.toBeInTheDocument();
+
+      unmount();
+      renderSummary();
+      const brokenCalls = vi
+        .mocked(recordEngagementEvent)
+        .mock.calls.filter(([c]) => c === 'streak_broken');
+      expect(brokenCalls).toHaveLength(1);
+    });
   });
 
   describe('konto-prompt', () => {
@@ -180,6 +247,19 @@ describe('WorkoutSummary — milepælsfeiring og konto-prompt (C1/C2 Task 9)', (
       expect(screen.queryByText(FIRST_WORKOUT_TEXT)).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Lagre med konto' })).not.toBeInTheDocument();
       expect(recordEngagementEvent).not.toHaveBeenCalledWith('accountPrompt_first_workout_shown');
+    });
+
+    it('shown-telemetri fyres én gang også under StrictMode (dobbel effekt-kjøring)', () => {
+      render(
+        <React.StrictMode>
+          <WorkoutSummary workout={workout} totalElapsedSeconds={300} onRestart={() => {}} />
+        </React.StrictMode>
+      );
+
+      const shownCalls = vi
+        .mocked(recordEngagementEvent)
+        .mock.calls.filter(([c]) => c === 'accountPrompt_first_workout_shown');
+      expect(shownCalls).toHaveLength(1);
     });
 
     it('ved uke-2-feiring vinner week2-prompten — med tall fra streakberegningen, ikke antatt aritmetikk', () => {

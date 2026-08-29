@@ -12,6 +12,8 @@ function makeStreak(overrides: Partial<WeekStreakResult> = {}): WeekStreakResult
     insuranceUsedWeekKeys: [],
     currentWeekCompleted: false,
     reachedMilestones: [2, 4],
+    lastBrokenWeeks: 0,
+    breakWeekKey: null,
     ...overrides,
   };
 }
@@ -37,6 +39,27 @@ describe('StreakDetailSheet', () => {
     renderSheet(makeStreak({ currentWeeks: 1, bestWeeks: 1, reachedMilestones: [] }));
     expect(screen.getByText('Nåværende serie: 1 uke')).toBeInTheDocument();
     expect(screen.getByText('Beste serie: 1 uke')).toBeInTheDocument();
+  });
+
+  it('brudd re-frames som ny start (spec § 2.2, B1): 0 i serie + tidligere brudd → «Ny start»-tekst', () => {
+    renderSheet(makeStreak({
+      currentWeeks: 0,
+      bestWeeks: 9,
+      lastBrokenWeeks: 6,
+      breakWeekKey: '2026-03-09',
+      reachedMilestones: [],
+    }));
+    expect(
+      screen.getByText('Ny start denne uka — forrige serie: 6 uker. Beste: 9.')
+    ).toBeInTheDocument();
+    // Aldri «Nåværende serie: 0 uker»-skam når det finnes en historie å bygge på
+    expect(screen.queryByText(/Nåværende serie/)).not.toBeInTheDocument();
+  });
+
+  it('helt fersk bruker (aldri brutt) beholder ordinær serie-linje ved 0', () => {
+    renderSheet(makeStreak({ currentWeeks: 0, bestWeeks: 0, lastBrokenWeeks: 0, reachedMilestones: [] }));
+    expect(screen.getByText('Nåværende serie: 0 uker')).toBeInTheDocument();
+    expect(screen.queryByText(/Ny start denne uka/)).not.toBeInTheDocument();
   });
 
   it('slinguke-status: bank 1 → «1 slinguke på lager»', () => {

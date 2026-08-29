@@ -5,9 +5,16 @@ import { useAuth } from '../../contexts/AuthContext';
 import { updateWorkoutRating } from '../../services/firestoreService';
 import { savePersonalRecord } from '../../services/personalRecordService';
 import { recordWorkoutTelemetry, recordEngagementEvent } from '../../services/telemetryService';
-import { calculateWeeklyProgress, getGoalForWeek, WeeklyGoalProgress } from '../../services/weeklyGoalService';
+import { calculateWeeklyProgress, makeGoalForWeek, WeeklyGoalProgress } from '../../services/weeklyGoalService';
 import { computeStreakDays, computeWeekStreak, WEEK_STREAK_MILESTONES, WeekStreakResult } from '../../services/streakService';
-import { getUncelebratedMilestones, markMilestoneCelebrated } from '../../services/streakCelebrationService';
+import {
+  getUncelebratedMilestones,
+  markMilestoneCelebrated,
+  getLastReportedInsuranceWeek,
+  markInsuranceReported,
+  getLastReportedBreakWeek,
+  markBreakReported,
+} from '../../services/streakCelebrationService';
 import { shouldShowAccountPrompt, dismissAccountPrompt, AccountPromptMoment } from '../../services/accountPromptService';
 import { buildEffectiveHistory } from '../../services/summaryContextService';
 import { localAiCoach } from '../../services/localAiCoachService';
@@ -27,8 +34,13 @@ const AccountPromptCard: React.FC<{ moment: AccountPromptMoment; text: string }>
 }) => {
   const { signInWithGoogle } = useAuth();
   const [dismissed, setDismissed] = useState(false);
+  // StrictMode-guard: dobbel effekt-kjøring i dev skal ikke doble shown-telleren.
+  // Refs overlever StrictModes simulerte remount, så markøren holder.
+  const shownReportedRef = useRef<AccountPromptMoment | null>(null);
 
   useEffect(() => {
+    if (shownReportedRef.current === moment) return;
+    shownReportedRef.current = moment;
     recordEngagementEvent(`accountPrompt_${moment}_shown`);
   }, [moment]);
 
@@ -83,6 +95,8 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
   const [weekStreak, setWeekStreak] = useState<WeekStreakResult | null>(null);
   const [historyCount, setHistoryCount] = useState(0);
   const [celebratedMilestone, setCelebratedMilestone] = useState<WeekMilestone | null>(null);
+  // Slinguke-feiring (spec § 2.1: «feires i etterkant») — serietallet fra resultatet
+  const [insuranceSavedWeeks, setInsuranceSavedWeeks] = useState<number | null>(null);
   // Effekten under re-kjører når workoutLogId ankommer — uka skal likevel bare
   // telles/feires ÉN gang per fullført økt.
   const weekCompletedHandledRef = useRef(false);
@@ -129,7 +143,10 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
       // Uke-streak (C1): avledet fra samme effektive historikk. Feiringstekster
       // og konto-prompt genererer tallene sine fra dette resultatet — aldri
       // antatt aritmetikk (forsikret uke bevarer serien uten å telle +1).
-      const streak = computeWeekStreak(effectiveHistory, getGoalForWeek);
+      // ÉN makeGoalForWeek-instans deles av begge beregningene (B3): den leser
+      // målloggen fra localStorage én gang, ikke per uke i simuleringen.
+      const goalForWeek = makeGoalForWeek();
+      const streak = computeWeekStreak(effectiveHistory, goalForWeek);
       setWeekStreak(streak);
       setHistoryCount(effectiveHistory.length);
 
@@ -138,7 +155,7 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
       const sessionId = workoutLogId ?? 'pending-session';
       const before = computeWeekStreak(
         effectiveHistory.filter((log) => log.id !== sessionId),
-        getGoalForWeek
+        goalForWeek
       );
       const weekJustCompleted = streak.currentWeekCompleted && !before.currentWeekCompleted;
 
@@ -148,13 +165,37 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
 
         const uncelebrated = getUncelebratedMilestones(streak.reachedMilestones);
         if (uncelebrated.length > 0) {
-          // Feir høyeste ufeirede; markér alle som feiret slik at retroaktiv
-          // bootstrap (eksisterende bruker med lang serie) ikke gir banner-kaskade.
+          // Feir høyeste ufeirede i banneret; markér OG tell ALLE som feires
+          // (B2) — retroaktiv bootstrap (eksisterende bruker med lang serie)
+          // skal telle hver milepæl i telemetrien uten banner-kaskade.
           const milestone = Math.max(...uncelebrated) as WeekMilestone;
-          uncelebrated.forEach(markMilestoneCelebrated);
-          recordEngagementEvent(`streak_milestone_w${milestone}`);
+          uncelebrated.forEach((m) => {
+            markMilestoneCelebrated(m);
+            recordEngagementEvent(`streak_milestone_w${m as WeekMilestone}`);
+          });
           setCelebratedMilestone(milestone);
         }
+      }
+
+      // Telemetri-produsenter for slinguke-forbruk og brudd (spec § 2.1/5):
+      // begge avledes retroaktivt av hver beregning, så persisterte markører
+      // deduper over re-render/StrictMode og på tvers av økter.
+      const lastInsuredWeek =
+        streak.insuranceUsedWeekKeys[streak.insuranceUsedWeekKeys.length - 1] ?? null;
+      if (lastInsuredWeek !== null && lastInsuredWeek !== getLastReportedInsuranceWeek()) {
+        markInsuranceReported(lastInsuredWeek);
+        recordEngagementEvent('streak_insuranceUsed');
+        // Feires i etterkant (spec § 2.1) — forsikring truer aldri før
+        setInsuranceSavedWeeks(streak.currentWeeks);
+      }
+      if (
+        streak.breakWeekKey !== null &&
+        streak.lastBrokenWeeks > 0 &&
+        streak.breakWeekKey !== getLastReportedBreakWeek()
+      ) {
+        markBreakReported(streak.breakWeekKey);
+        // Ingen sørgetekst her — brudd re-frames kun i detaljarket (B1)
+        recordEngagementEvent('streak_broken');
       }
     } catch {
       // Lokal historikk utilgjengelig - Astrid faller tilbake på generisk feedback
@@ -234,6 +275,15 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
         <div className="w-full py-2.5 px-4 rounded-2xl bg-amber-500/20 border border-amber-500/60 text-amber-300 flex items-center justify-center gap-2 font-black text-sm animate-bounce shadow-md">
           <Flame className="w-5 h-5 text-amber-400 fill-current" />
           <span>🔥 {celebratedMilestone} uker på rad — milepæl nådd!</span>
+        </div>
+      )}
+
+      {/* Slinguke-feiring (spec § 2.1: forsikring feires etterpå, truer aldri før).
+          Sekundær til milepælsbanneret når begge er aktuelle. */}
+      {insuranceSavedWeeks !== null && (
+        <div className="w-full py-2 px-4 rounded-2xl bg-blue-950/60 border border-blue-500/50 text-blue-300 flex items-center justify-center gap-2 font-bold text-xs shadow-md">
+          <span aria-hidden="true">🛡️</span>
+          <span>Slinguka reddet serien din — fortsatt {insuranceSavedWeeks} uker!</span>
         </div>
       )}
 

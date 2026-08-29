@@ -72,10 +72,21 @@ export const StreakDetailSheet: React.FC<StreakDetailSheetProps> = ({ streak, on
 
         {/* Serie-status */}
         <div className="space-y-2.5">
-          <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-zinc-950/60 border border-zinc-800/80">
-            <Flame className="w-4 h-4 text-amber-400 shrink-0" />
-            <p className="text-sm font-bold text-white">{`Nåværende serie: ${formatWeeks(streak.currentWeeks)}`}</p>
-          </div>
+          {/* Brudd re-frames som ny start (spec § 2.2, støttende tone): aldri
+              «Nåværende serie: 0 uker»-skam når det finnes en serie å se tilbake på */}
+          {streak.currentWeeks === 0 && streak.lastBrokenWeeks > 0 ? (
+            <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-zinc-950/60 border border-zinc-800/80">
+              <Flame className="w-4 h-4 text-amber-400 shrink-0" />
+              <p className="text-sm font-bold text-white">
+                {`Ny start denne uka — forrige serie: ${formatWeeks(streak.lastBrokenWeeks)}. Beste: ${streak.bestWeeks}.`}
+              </p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-zinc-950/60 border border-zinc-800/80">
+              <Flame className="w-4 h-4 text-amber-400 shrink-0" />
+              <p className="text-sm font-bold text-white">{`Nåværende serie: ${formatWeeks(streak.currentWeeks)}`}</p>
+            </div>
+          )}
           <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-zinc-950/60 border border-zinc-800/80">
             <Trophy className="w-4 h-4 text-amber-300 shrink-0" />
             <p className="text-sm font-bold text-white">{`Beste serie: ${formatWeeks(streak.bestWeeks)}`}</p>
