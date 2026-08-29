@@ -742,6 +742,10 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             className={`flex items-center gap-2 font-bold tracking-wider text-zinc-400 uppercase ${
               isFocusMode ? 'text-sm sm:text-base' : 'text-[10px] sm:text-xs'
             }`}
+            // B6.1 (revisjon § 3.3 nivå 1): rundelinjen tar personaens aksentfarge
+            // i fokusmodus. Variabelen settes av coachPersonaService; fallbacken
+            // matcher text-zinc-400 slik at visningen er identisk uten persona.
+            style={isFocusMode ? { color: 'var(--persona-accent, #a1a1aa)' } : undefined}
           >
             {state.totalRounds > 1 ? (
               <>
@@ -762,6 +766,9 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             className={`rounded-full tracking-widest uppercase shadow-md transition-all ${phaseStyle.badgeBg} ${
               isFocusMode ? 'px-4 py-1 text-sm' : 'px-3 py-0.5 text-[10px] sm:text-xs'
             }`}
+            // B6.1: fasebadgens KANT tar persona-aksenten i fokusmodus — tekst- og
+            // bakgrunnsfargene beholder fasesemantikken (WCAG 1.4.1, aldri kun farge).
+            style={isFocusMode ? { borderColor: 'var(--persona-accent, #a1a1aa)' } : undefined}
           >
             {phaseStyle.badgeText}
           </span>
