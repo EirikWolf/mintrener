@@ -8,6 +8,8 @@
 
     /* Bundler mode */
     "moduleResolution": "bundler",
+    /* Byggtids-generert personaAudioManifest.json importeres typesikkert (B3 β5) */
+    "resolveJsonModule": true,
     "allowImportingTsExtensions": false,
     "isolatedModules": true,
     "moduleDetection": "force",

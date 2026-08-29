@@ -1,4 +1,14 @@
 import { audioBufferEngine } from './audioBufferEngine';
+import personaAudioManifestJson from '../data/personaAudioManifest.json';
+
+/**
+ * Byggtids-generert persona-manifest (scripts/generate-audio-manifest.mjs,
+ * B3 β5, spec § 5): { persona: { klippnøkkel: url } } der nøkkelen er filnavn
+ * uten .mp3 ('halfway', 'go-2', 'exercise-kneboy', …). Manifestet speiler
+ * filene som faktisk fantes ved bygg — mangler ble flagget som byggtidsadvarsel.
+ */
+const AUDIO_MANIFEST: Readonly<Record<string, Readonly<Record<string, string>>>> =
+  personaAudioManifestJson;
 
 export type CoachPersonaId = 'standard' | 'haugesund' | 'romsdal' | 'hardcore' | 'boyband';
 
@@ -107,53 +117,72 @@ export function setActiveCoachPersona(id: CoachPersonaId): void {
 const cueAudioCache: Record<string, HTMLAudioElement> = {};
 
 /**
+ * ETT manifestoppslag for alle persona-klipp-URL-er i modulen (β5): personaen
+ * finnes i manifestet → manifestet er AUTORITATIVT (mangler klippet der, fantes
+ * ikke fila ved bygg — byggtidsadvarselen er alt gitt, og null ruter kallerne
+ * til fallback-kjeden i stedet for et dødt 404-oppslag). Persona UTENFOR
+ * manifestet (f.eks. dev før generatoren har kjørt) → dagens cuesPath-konvensjon.
+ * Null for personaer uten cuesPath (standard = ren talesyntese).
+ */
+function lookupPersonaClipUrl(id: CoachPersonaId, clipName: string): string | null {
+  const entries = AUDIO_MANIFEST[id];
+  if (entries) {
+    return entries[clipName] ?? null;
+  }
+  const persona = COACH_PERSONAS.find((p) => p.id === id);
+  return persona?.cuesPath ? `${persona.cuesPath}/${clipName}.mp3` : null;
+}
+
+/**
  * Full URL til en persona-cue. Persona-cuer ligger utenfor audioManifest.json;
  * URL-en brukes derfor direkte som nøkkel i audioBufferEngine sitt cache.
- * Returnerer null for personaer uten cuesPath (standard = ren talesyntese).
+ * Returnerer null for standard (ren talesyntese) og for klipp som manglet ved bygg.
  */
 export function getPersonaCueUrl(cue: PersonaCueName, personaId?: CoachPersonaId): string | null {
-  const id = personaId || getActiveCoachPersona();
-  const persona = COACH_PERSONAS.find((p) => p.id === id);
-  return persona?.cuesPath ? `${persona.cuesPath}/${cue}.mp3` : null;
+  return lookupPersonaClipUrl(personaId || getActiveCoachPersona(), cue);
 }
 
 /**
  * Nøkkel (= URL) for et vilkårlig persona-klipp — cue-navn ('halfway',
- * 'bro-neste', 'go-2', …) ELLER øvelsesnøkkel ('exercise-<id>'). Følger dagens
- * cuesPath-konvensjon: /audio/personas/<persona>/<navn>.mp3 — samme oppslag
- * som getPersonaCueUrl, men uten PersonaCueName-begrensningen (go- og bro-
- * cuene er nye i β). Dette er manifest-SØMMEN: β5 bytter oppslagskilden til det
- * genererte personaAudioManifest.json uten at kallerne (AudioDirector) endres —
- * kallere skal aldri bygge persona-stier selv. Null for personaer uten
- * cuesPath (standard = ren talesyntese).
- *
- * NB til β5: sømmen er hele MODULEN, ikke bare denne funksjonen —
- * getPersonaCueUrl, playPersonaCue og preloadPersonaAudio bygger også
- * cuesPath-URLer internt og må bytte til manifestoppslaget samtidig.
+ * 'bro-neste', 'go-2', …) ELLER øvelsesnøkkel ('exercise-<id>'). Samme oppslag
+ * som getPersonaCueUrl, men uten PersonaCueName-begrensningen. Dette er
+ * manifest-sømmen mot AudioDirector: oppslagskilden er det byggtids-genererte
+ * personaAudioManifest.json (β5) — kallere skal aldri bygge persona-stier selv.
  */
 export function getPersonaClipKey(
   cueOrExerciseId: string,
   personaId?: CoachPersonaId
 ): string | null {
-  const id = personaId || getActiveCoachPersona();
-  const persona = COACH_PERSONAS.find((p) => p.id === id);
-  return persona?.cuesPath ? `${persona.cuesPath}/${cueOrExerciseId}.mp3` : null;
+  return lookupPersonaClipUrl(personaId || getActiveCoachPersona(), cueOrExerciseId);
 }
 
 export function preloadPersonaAudio(personaId?: CoachPersonaId): void {
-  if (typeof Audio === 'undefined') return;
   const id = personaId || getActiveCoachPersona();
+  const entries = AUDIO_MANIFEST[id];
   const persona = COACH_PERSONAS.find((p) => p.id === id);
-  if (!persona || !persona.cuesPath) return;
 
-  const cueUrls = PERSONA_CUES.map((cue) => `${persona.cuesPath}/${cue}.mp3`);
+  // HELE manifest-settet varmes i buffer-motoren (β5): det er dette som
+  // aktiverer Directorens persona-klipp-kjeder — has()-sjekkene for go-/bro-/
+  // exercise-klippene krever dekodede buffere, ellers degraderer alt til
+  // studio/TTS. Utenfor manifestet: kjerne-cuene etter cuesPath-konvensjonen
+  // (samme sett som før β5).
+  const bufferUrls = entries
+    ? Object.values(entries)
+    : persona?.cuesPath
+      ? PERSONA_CUES.map((cue) => `${persona.cuesPath}/${cue}.mp3`)
+      : [];
+  if (bufferUrls.length === 0) return;
 
-  // Varm buffer-motoren (primærstien) – dekodede AudioBuffere gir latensfri,
-  // sample-nøyaktig avspilling og mulighet for kjeding (intro + øvelsesnavn)
-  void audioBufferEngine.preload(cueUrls);
+  // Dekodede AudioBuffere gir latensfri, sample-nøyaktig avspilling og kjeding
+  void audioBufferEngine.preload(bufferUrls);
 
-  cueUrls.forEach((url) => {
-    if (!cueAudioCache[url]) {
+  // HTMLAudio-varming KUN for de reaktive kjerne-cuene: de er eneste klipp med
+  // degradert HTMLAudio-fallback (playPersonaCue) — 37 Audio-elementer per
+  // persona ville vært unødig ressursbruk uten noen avspillingssti.
+  if (typeof Audio === 'undefined') return;
+  PERSONA_CUES.forEach((cue) => {
+    const url = lookupPersonaClipUrl(id, cue);
+    if (url && !cueAudioCache[url]) {
       try {
         const audio = new Audio(url);
         audio.preload = 'auto';
@@ -245,12 +274,12 @@ export async function playPersonaCue(
     return false; // Fallback til Web Speech TTS
   }
 
-  const persona = COACH_PERSONAS.find(p => p.id === activeId);
-  if (!persona || !persona.cuesPath) {
+  // Manifestoppslag (β5): null = standard-persona ELLER klipp som manglet ved
+  // bygg — begge ruter til kallerens TTS-fallback i stedet for et 404-oppslag.
+  const cueUrl = getPersonaCueUrl(cue, activeId);
+  if (!cueUrl) {
     return false;
   }
-
-  const cueUrl = `${persona.cuesPath}/${cue}.mp3`;
 
   // Buffer-motoren først: dekodet cue starter uten HTMLAudio-latens.
   // Fyr-og-glem – kalleren trenger bare å vite at cuen faktisk startet.
@@ -297,7 +326,14 @@ export async function playIntroThenExercise(exerciseId: string): Promise<boolean
   if (getActiveCoachPersona() === 'standard') return false;
 
   const introUrl = getPersonaCueUrl('intro');
-  const exerciseKey = 'exercise-' + exerciseId;
+  // Spec § 4-kjeden (persona-klipp → studioklipp) også i intro-kjeden: med
+  // manifest-preloaden (β5) er personaens egne øvelsesklipp normalt cachet —
+  // da skal personaens stemme lese navnet, ikke det generiske studioklippet.
+  const personaExerciseKey = getPersonaClipKey('exercise-' + exerciseId);
+  const exerciseKey =
+    personaExerciseKey && audioBufferEngine.has(personaExerciseKey)
+      ? personaExerciseKey
+      : 'exercise-' + exerciseId;
   if (!introUrl || !audioBufferEngine.has(introUrl) || !audioBufferEngine.has(exerciseKey)) {
     return false;
   }

@@ -419,8 +419,8 @@ function mirrorWork(ctx: DirectorCtx, event: PhaseStartedEvent): void {
       }
     }
   }
-  // Bevegelsessporing er persona-uavhengig og portert utenfor if(!silent) —
-  // se identisk plassering i legacyAudioAdapter/useIntervalTimer sin work-gren.
+  // Bevegelsessporing er persona-uavhengig og står bevisst UTENFOR if(!silent):
+  // også en stille arbeidsfase (f.eks. gjenopptatt økt) skal telle reps.
   motionTrackerService.start((m: MotionMetrics) => {
     ctx.engine.setMotionReps(m.count);
   }, 'hopp');

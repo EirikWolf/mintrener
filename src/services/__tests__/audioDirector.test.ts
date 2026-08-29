@@ -71,8 +71,12 @@ function createFakeEngine(overrides: Partial<TimerState> = {}) {
   };
 }
 
-const EX_A = { id: 'squat', name: 'Knebøy' };
-const EX_B = { id: 'lunge', name: 'Utfall' };
+// β5: getPersonaClipKey slår nå opp i det byggtids-genererte manifestet
+// (autoritativt per persona) — testøvelsene må derfor være EKTE bibliotek-id-er
+// med tilhørende klippfiler, ellers returnerer nøkkeloppslaget null og
+// persona-kjedene degraderer. (Var tidligere fiktive 'squat'/'lunge'.)
+const EX_A = { id: 'kneboy', name: 'Knebøy' };
+const EX_B = { id: 'utfall-forover', name: 'Utfall' };
 
 // Hjelper: phase:started-hendelse med fornuftige defaults.
 function phaseStarted(
@@ -211,7 +215,7 @@ describe('audioDirector (B3 β2)', () => {
 
       // Reaktiv sti — speiler LegacyAudioAdapter ordrett
       expect(audioService.playRestStart).toHaveBeenCalledWith(true);
-      expect(audioClipService.playClipOrFallback).toHaveBeenCalledWith('exercise-lunge', 'Neste: Utfall');
+      expect(audioClipService.playClipOrFallback).toHaveBeenCalledWith('exercise-utfall-forover', 'Neste: Utfall');
       expect(motionTrackerService.stop).toHaveBeenCalledTimes(1);
       // Lookahead i tillegg
       expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith(
@@ -542,7 +546,7 @@ describe('audioDirector (B3 β2)', () => {
       emit(phaseStarted({ phase: 'prepare', durationS: 10, endsAt: 10_000 }));
       await flush();
 
-      expect(coachPersonaService.playIntroThenExercise).toHaveBeenCalledWith('squat');
+      expect(coachPersonaService.playIntroThenExercise).toHaveBeenCalledWith('kneboy');
     });
 
     it('phase:halfway persona + speech: playPersonaCue("halfway")', () => {
@@ -740,7 +744,7 @@ describe('audioDirector (B3 β2)', () => {
     it('persona-øvelsesklipp cachet (β5-sømmen): [bro-neste, persona-klipp] som ÉN kjede, ingen TTS', async () => {
       usePersona();
       vi.mocked(audioBufferEngine.has).mockImplementation(
-        (k: string) => k === `${HC}/bro-neste.mp3` || k === `${HC}/exercise-lunge.mp3`
+        (k: string) => k === `${HC}/bro-neste.mp3` || k === `${HC}/exercise-utfall-forover.mp3`
       );
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
@@ -750,7 +754,7 @@ describe('audioDirector (B3 β2)', () => {
 
       expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([
         `${HC}/bro-neste.mp3`,
-        `${HC}/exercise-lunge.mp3`,
+        `${HC}/exercise-utfall-forover.mp3`,
       ]);
       expect(speechService.speak).not.toHaveBeenCalled();
       expect(audioClipService.playClipOrFallback).not.toHaveBeenCalled();
@@ -804,7 +808,7 @@ describe('audioDirector (B3 β2)', () => {
     it('landing work med bro + studioklipp cachet: ÉN kjede [bro-resync, exercise-<id>]', async () => {
       usePersona();
       vi.mocked(audioBufferEngine.has).mockImplementation(
-        (k: string) => k === `${HC}/bro-resync.mp3` || k === 'exercise-squat'
+        (k: string) => k === `${HC}/bro-resync.mp3` || k === 'exercise-kneboy'
       );
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
@@ -814,7 +818,7 @@ describe('audioDirector (B3 β2)', () => {
 
       expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([
         `${HC}/bro-resync.mp3`,
-        'exercise-squat',
+        'exercise-kneboy',
       ]);
       expect(speechService.speak).not.toHaveBeenCalled();
       expect(audioClipService.playClipOrFallback).not.toHaveBeenCalled();
@@ -849,7 +853,7 @@ describe('audioDirector (B3 β2)', () => {
     it('persona-øvelsesklipp cachet (β5-sømmen): kjeden bruker personaens klipp', async () => {
       usePersona();
       vi.mocked(audioBufferEngine.has).mockImplementation(
-        (k: string) => k === `${HC}/bro-resync.mp3` || k === `${HC}/exercise-squat.mp3`
+        (k: string) => k === `${HC}/bro-resync.mp3` || k === `${HC}/exercise-kneboy.mp3`
       );
       const { engine, emit } = createFakeEngine();
       createAudioDirector(engine);
@@ -859,7 +863,7 @@ describe('audioDirector (B3 β2)', () => {
 
       expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([
         `${HC}/bro-resync.mp3`,
-        `${HC}/exercise-squat.mp3`,
+        `${HC}/exercise-kneboy.mp3`,
       ]);
     });
 
@@ -870,7 +874,7 @@ describe('audioDirector (B3 β2)', () => {
 
       emit(resyncEvent('work'));
 
-      expect(audioClipService.playClipOrFallback).toHaveBeenCalledWith('exercise-squat', 'Knebøy');
+      expect(audioClipService.playClipOrFallback).toHaveBeenCalledWith('exercise-kneboy', 'Knebøy');
       expect(audioBufferEngine.playSequence).not.toHaveBeenCalled();
     });
 
@@ -881,7 +885,7 @@ describe('audioDirector (B3 β2)', () => {
 
       emit(resyncEvent('round_rest'));
 
-      expect(audioClipService.playClipOrFallback).toHaveBeenCalledWith('exercise-lunge', 'Neste: Utfall');
+      expect(audioClipService.playClipOrFallback).toHaveBeenCalledWith('exercise-utfall-forover', 'Neste: Utfall');
     });
   });
 
@@ -960,7 +964,7 @@ describe('audioDirector (B3 β2)', () => {
       emit(phaseStarted({ phase: 'prepare', exercise: EX_B, itemIndex: 1, durationS: 10, endsAt: 14_000 }));
       await vi.advanceTimersByTimeAsync(2300);
 
-      expect(audioClipService.playClipOrFallback).not.toHaveBeenCalledWith('exercise-squat', 'Knebøy');
+      expect(audioClipService.playClipOrFallback).not.toHaveBeenCalledWith('exercise-kneboy', 'Knebøy');
       vi.useRealTimers();
     });
 
