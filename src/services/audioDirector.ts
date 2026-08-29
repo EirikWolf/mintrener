@@ -82,6 +82,19 @@ const PREPARE_MIN_CHAIN_S = 6;
 // Grensefaser der nedtellingen kulminerer i en fasegrense med arbeids-tilrop.
 const BOUNDARY_PHASES: ReadonlyArray<IntervalPhase> = ['prepare', 'rest', 'round_rest'];
 
+/**
+ * Sikkerhetsmargin (BØR-6) mellom hodroms-regnestykket og lyden som faktisk
+ * kommer ut. Hodrommet måles fra engine.getNow() idet lookaheaden utstedes, men
+ * den reaktive kjeden starter først når playSequence har fått en kjørende
+ * AudioContext — ctx.resume() ventes ut FØR første node startes (målte marginer
+ * i felt: 14 ms og 70 ms). Uten margin kan en kandidat som «akkurat» passerte
+ * gaten likevel bli hørbar over kjedens siste stavelse. Marginen er bevisst
+ * fast og romslig i forhold til de målte verdiene — den koster kun at en
+ * grensetilfelle-kandidat velges bort, aldri stillhet (short-cuen er budsjettert
+ * inn i fitAnnounceChain med samme margin).
+ */
+const ANNOUNCE_SAFETY_MS = 150;
+
 type PhaseStartedEvent = Extract<EngineEvent, { type: 'phase:started' }>;
 type ResyncEvent = Extract<EngineEvent, { type: 'resync' }>;
 
@@ -371,7 +384,7 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
       if (headroomMs === null) return null;
       const durationS = audioBufferEngine.getDuration(key);
       if (durationS === null) return null;
-      return endsAt - durationS * 1000 >= nowMs + headroomMs;
+      return endsAt - durationS * 1000 >= nowMs + headroomMs + ANNOUNCE_SAFETY_MS;
     };
     if (fitsHeadroom(p.start321Key) === false) {
       // Full er cachet men ville preemptet annonseringen — forsøk aldri full;

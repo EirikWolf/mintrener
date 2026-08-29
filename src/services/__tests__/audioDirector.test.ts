@@ -679,6 +679,24 @@ describe('audioDirector (B3 β2)', () => {
       expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith([FULL], expect.anything());
     });
 
+    it('BØR-6: fast sikkerhetsmargin — en kandidat som «akkurat» passerer avvises', async () => {
+      usePersona();
+      cacheClips(HC_REAL);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      // Kjeden er 13,945 s. Full start_321 (27,815 s) ville startet 14,085 s
+      // inn i fasen — bare 140 ms etter at kjeden er ferdig. Hodrommet måles fra
+      // engine.getNow(), men playSequence kan vente på ctx.resume() før første
+      // node starter (målte marginer i felt: 14 ms og 70 ms), så kjeden kan
+      // reelt ligge lenger ut og bli preemptet på siste stavelse.
+      emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_A, endsAt: 41_900 }));
+      await flush();
+
+      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith([FULL], expect.anything());
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 41_900 });
+    });
+
     it('ingen annonseringskjede å beskytte (tomt buffercache): dagens stige uendret — full → short → pip', async () => {
       usePersona();
       // Ingenting dekodet: hodrommet er 0, men kandidatenes varigheter er også
