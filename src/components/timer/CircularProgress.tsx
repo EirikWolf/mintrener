@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 interface CircularProgressProps {
   progress: number; // 0 to 1
@@ -14,8 +14,34 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
   const radius = 42;
   const strokeWidth = 7;
   const circumference = 2 * Math.PI * radius;
+  const clampedProgress = Math.max(0, Math.min(1, progress));
+
+  // A3-oppfølging: nedtellingens progress hopper brått tilbake mot 0 ved hvert
+  // faseskifte (ny fase starter på 0% fremdrift). Med en generell 1s-transisjon på
+  // stroke-dashoffset ville dette animert som en synlig BAKOVER-sveip av ringen –
+  // ca. 16 slike "spol tilbake til null"-sveip gjennom en Tabata-økt. Vi detekterer
+  // reset-framen ved å sammenligne med forrige renders progress (dokumentert
+  // React-mønster for "lagre info fra forrige render": oppdater state under selve
+  // rendringen, ikke i en effect – unngår en synlig ekstra frame) og slår av
+  // transisjonen for reset-framen. isResetFrame må ligge i EGEN state (ikke som en
+  // plain const utledet av prevProgress før den oppdateres) – ellers forkaster React
+  // det pågående rendersteget når setPrevProgress kalles under render og re-kjører
+  // med prevProgress allerede lik clampedProgress, slik at en plain
+  // `clampedProgress < prevProgress`-const alltid ville lest false i committed
+  // resultat (funksjonell no-op, oppdaget ved DOM-probe i code review). Merk: IKKE
+  // bytt til en useRef-mutasjon her – det bryter under StrictMode sin doble
+  // dev-rendring. At flagget blir stående sant gjennom nyfasens gatede første
+  // sekund er ufarlig (offset er uendret helt til neste gatede commit uansett, som
+  // slår flagget tilbake til false i samme committed pass).
+  const [prevProgress, setPrevProgress] = useState(clampedProgress);
+  const [isResetFrame, setIsResetFrame] = useState(false);
+  if (clampedProgress !== prevProgress) {
+    setIsResetFrame(clampedProgress < prevProgress);
+    setPrevProgress(clampedProgress);
+  }
+
   // Inverter progress slik at ringen tømmes / fylles ned mot 0
-  const strokeDashoffset = circumference * (1 - Math.max(0, Math.min(1, progress)));
+  const strokeDashoffset = circumference * (1 - clampedProgress);
 
   // Farger basert på fase
   const getPhaseColors = () => {
@@ -85,7 +111,16 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
           strokeLinecap="round"
           fill="transparent"
           style={{
-            transition: 'stroke-dashoffset 0.1s linear, stroke 0.3s ease',
+            // Oppgave A3: React-state for phaseRemaining oppdateres nå kun ~1x/sekund
+            // (rendring gates på Math.ceil-endring, se useIntervalTimer sin tick()),
+            // så ringen ville "hakket" ett hakk i sekundet uten denne. 1s lineær
+            // transisjon bygger bro mellom de sjeldnere render-hoppene slik at ringen
+            // fortsatt oppleves som en jevnt tømmende/fyllende sirkel, ikke en klokke
+            // som hopper – unntatt på reset-framen ved faseskifte, se isResetFrame
+            // over. index.css RESPEKTERER prefers-reduced-motion globalt (nuller
+            // transition-duration), som gjør ringen til en steppende (ikke-animert)
+            // indikator for brukere som har skrudd av bevegelseseffekter.
+            transition: isResetFrame ? 'stroke 0.3s ease' : 'stroke-dashoffset 1s linear, stroke 0.3s ease',
             filter: `drop-shadow(0 0 8px ${colors.glow})`,
           }}
         />
