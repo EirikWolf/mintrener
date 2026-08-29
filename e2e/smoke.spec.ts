@@ -47,8 +47,11 @@ test('start → fullfør → historikk', async ({ page }) => {
     );
   });
 
-  // 1. Åpne appen med røyk-økten valgt via delingslenken
-  await page.goto(`/?w=${encodeURIComponent(encodedWorkout)}`);
+  // 1. Åpne appen med røyk-økten valgt via delingslenken. `ref=share` gjør at
+  // recordShareLinkOpen fyrer én EKTE Firestore-skrivning (share_import-telleren
+  // i global_stats/overview) gjennom emulatoren — verifisert mot emulatorens
+  // REST-API i steg 6, slik at «mot emulator» er substansielt utøvd.
+  await page.goto(`/?w=${encodeURIComponent(encodedWorkout)}&ref=share`);
   await expect(page.getByRole('button', { name: 'START' })).toBeVisible();
   await expect(page.getByText('B4 Røyktest').first()).toBeVisible();
 
@@ -63,7 +66,8 @@ test('start → fullfør → historikk', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Bravo! Økt fullført!' })).toBeVisible({
     timeout: 20_000,
   });
-  await expect(page.getByText('B4 Røyktest')).toBeVisible();
+  // .first(): øktnavnet kan stå flere steder i oppsummeringen (strict-mode-vern)
+  await expect(page.getByText('B4 Røyktest').first()).toBeVisible();
 
   // 4. Tilbake til forsiden og inn i historikken
   await page.getByRole('button', { name: 'Ferdig / Ny økt' }).click();
@@ -75,4 +79,25 @@ test('start → fullfør → historikk', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'B4 Røyktest' })).toBeVisible();
   // Én fullført økt i statistikk-kortet og «1 runde» på loggraden
   await expect(page.getByText('1 runde', { exact: true })).toBeVisible();
+
+  // 6. Verifiser at ref=share-skrivingen fra steg 1 faktisk landet i emulatoren:
+  // les global_stats/overview tilbake via emulatorens REST-API (regelen
+  // `allow read: if true` gjelder). Skrivingen er fire-and-forget ved sidelast,
+  // så vi poller — emulators:exec starter tomt, dermed er >= 1 et bevis på
+  // akkurat denne kjøringens skrivning.
+  await expect
+    .poll(
+      async () => {
+        const res = await fetch(
+          'http://127.0.0.1:8080/v1/projects/demo-mintrener/databases/(default)/documents/global_stats/overview'
+        );
+        if (!res.ok) return 0;
+        const body = (await res.json()) as {
+          fields?: { shareLinkOpens?: { integerValue?: string } };
+        };
+        return Number(body.fields?.shareLinkOpens?.integerValue ?? 0);
+      },
+      { timeout: 10_000, message: 'share_import-telleren nådde aldri emulatoren' }
+    )
+    .toBeGreaterThanOrEqual(1);
 });
