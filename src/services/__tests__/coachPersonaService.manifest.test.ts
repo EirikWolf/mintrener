@@ -105,6 +105,38 @@ describe('coachPersonaService – manifestoppslag (β5)', () => {
     expect(preloadSpy).not.toHaveBeenCalled();
   });
 
+  it('setActiveCoachPersona evikterer de ANDRE personaenes buffere, aldri den valgtes (BØR-2, β6)', () => {
+    const evictSpy = vi.spyOn(audioBufferEngine, 'evict').mockImplementation(() => {});
+
+    setActiveCoachPersona('hardcore');
+
+    expect(evictSpy).toHaveBeenCalledTimes(1);
+    const keys = evictSpy.mock.calls[0][0];
+    // Personaene utenfor mock-manifestet evikteres etter cuesPath-konvensjonen —
+    // samme URL-sett som preloadPersonaAudio varmer (settene MÅ speile hverandre)
+    expect(keys).toContain('/audio/personas/romsdal/intro.mp3');
+    expect(keys).toContain('/audio/personas/haugesund/start_321.mp3');
+    expect(keys).toContain('/audio/personas/boyband/finish.mp3');
+    // Den valgte personaens buffere beholdes (re-valg = varm cache)
+    expect(keys.some((k) => k.startsWith('/cdn/hc/'))).toBe(false);
+    // Kun persona-URL-er — delte studioklipp/countdown har manifest-nøkler uten
+    // ledende skråstrek og skal aldri evikteres ved persona-bytte
+    expect(keys.every((k) => k.startsWith('/'))).toBe(true);
+  });
+
+  it('setActiveCoachPersona("standard") evikterer alle persona-buffere (ren talesyntese)', () => {
+    const evictSpy = vi.spyOn(audioBufferEngine, 'evict').mockImplementation(() => {});
+
+    setActiveCoachPersona('standard');
+
+    const keys = evictSpy.mock.calls[0][0];
+    // Manifest-personaen evikteres via manifest-URL-ene sine …
+    expect(keys).toContain('/cdn/hc/intro.v2.mp3');
+    expect(keys).toContain('/cdn/hc/exercise-kneboy.v2.mp3');
+    // … og konvensjons-personaene via cuesPath-settet
+    expect(keys).toContain('/audio/personas/romsdal/intro.mp3');
+  });
+
   it('playPersonaCue spiller manifest-URL-en (bufret sti)', async () => {
     const hasSpy = vi.spyOn(audioBufferEngine, 'has').mockReturnValue(true);
     const playSpy = vi.spyOn(audioBufferEngine, 'playSequence').mockResolvedValue(true);

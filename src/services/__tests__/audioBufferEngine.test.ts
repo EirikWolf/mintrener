@@ -86,6 +86,25 @@ function stubFetchOk(): Mock {
   return fetchMock;
 }
 
+// Som stubFetchOk, men holder alle fetch-kall tilbake til release() – lar
+// testene fryse en preload i "in flight"-tilstanden (eviksjon under dekoding).
+function stubFetchDeferred(): { fetchMock: Mock; release: () => void } {
+  let releaseGate!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    releaseGate = resolve;
+  });
+  const fetchMock = vi.fn(async (url: string) => {
+    await gate;
+    return {
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => ({ __url: url }),
+    };
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return { fetchMock, release: releaseGate };
+}
+
 describe('computeSequenceSchedule (ren funksjon)', () => {
   it('gir tom plan for tom input', () => {
     expect(computeSequenceSchedule([], 0.01, 5)).toEqual([]);
@@ -217,6 +236,84 @@ describe('AudioBufferEngine.preload', () => {
     await engine.preload(['exercise-burpees']);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AudioBufferEngine.evict (BØR-2, β6)', () => {
+  let engine: AudioBufferEngine;
+
+  beforeEach(() => {
+    engine = new AudioBufferEngine();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  const hcIntro = '/audio/personas/hardcore/intro.mp3';
+  const bbIntro = '/audio/personas/boyband/intro.mp3';
+
+  it('fjerner dekodede buffere for angitte nøkler og lar alle andre stå', async () => {
+    const { ctx } = createMockContext({
+      [hcIntro]: 2.0,
+      [bbIntro]: 2.0,
+      '/audio/exercises/burpees.mp3': 1.5,
+    });
+    vi.spyOn(audioService, 'getContext').mockReturnValue(ctx as unknown as AudioContext);
+    stubFetchOk();
+    await engine.preload([hcIntro, bbIntro, 'exercise-burpees']);
+
+    engine.evict([hcIntro]);
+
+    expect(engine.has(hcIntro)).toBe(false);
+    // Andre personas buffere og delte studioklipp er urørt
+    expect(engine.has(bbIntro)).toBe(true);
+    expect(engine.has('exercise-burpees')).toBe(true);
+  });
+
+  it('re-preload etter eviksjon dekoder klippet på nytt (ny fetch)', async () => {
+    const { ctx } = createMockContext({ [hcIntro]: 2.0 });
+    vi.spyOn(audioService, 'getContext').mockReturnValue(ctx as unknown as AudioContext);
+    const fetchMock = stubFetchOk();
+
+    await engine.preload([hcIntro]);
+    engine.evict([hcIntro]);
+    await engine.preload([hcIntro]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(engine.has(hcIntro)).toBe(true);
+  });
+
+  it('nøkkel eviktet MENS dekodingen pågår lagres ikke når jobben fullfører', async () => {
+    const { ctx } = createMockContext({ [hcIntro]: 2.0 });
+    vi.spyOn(audioService, 'getContext').mockReturnValue(ctx as unknown as AudioContext);
+    const { release } = stubFetchDeferred();
+
+    const job = engine.preload([hcIntro]);
+    engine.evict([hcIntro]); // persona-bytte før dekodingen rakk å fullføre
+    release();
+    await job;
+
+    // Uten in-flight-håndtering ville den sene dekodingen re-akkumulert bufferen
+    expect(engine.has(hcIntro)).toBe(false);
+  });
+
+  it('ny preload ETTER evict-under-dekoding gjenoppliver nøkkelen', async () => {
+    const { ctx } = createMockContext({ [hcIntro]: 2.0 });
+    vi.spyOn(audioService, 'getContext').mockReturnValue(ctx as unknown as AudioContext);
+    const { fetchMock, release } = stubFetchDeferred();
+
+    const first = engine.preload([hcIntro]);
+    engine.evict([hcIntro]);
+    // Brukeren byttet TILBAKE før dekodingen fullførte: fersk preload-intensjon
+    // skal vinne over den ventende eviksjonen (og dedupe mot samme jobb).
+    const second = engine.preload([hcIntro]);
+    release();
+    await Promise.all([first, second]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(engine.has(hcIntro)).toBe(true);
   });
 });
 

@@ -6,6 +6,11 @@
 // Forventet-listen hardkodes IKKE duplisert: øvelses-id-ene leses fra
 // kategorifilene i src/data/exercises/ (id-feltene er kilden), og cue-listen
 // speiler scripts/voicebank-manuskript.json (11 manus-cues + start_321).
+//
+// NB (β6/NOTAT-1): skriptet kjøres kun av `npm run build` (prebuild-hooken) —
+// `npm run dev` regenererer IKKE manifestet. Har du lagt til/fjernet klipp i
+// public/audio/personas/ i dev, kjør `node scripts/generate-audio-manifest.mjs`
+// manuelt (bevisst valg: dev-oppstart skal ikke betale skanne-kostnaden).
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';

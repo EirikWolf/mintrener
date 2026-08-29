@@ -60,6 +60,27 @@ export default defineConfig({
               },
             },
           },
+          // B3 β6 (spec § 5): lydbanken runtime-caches CacheFirst — klippene er
+          // immutable, så første nedlasting (preload ved persona-valg eller
+          // avspilling) gjør dem varig offline-tilgjengelige. BEVISST utenfor
+          // precache (globPatterns har ingen mp3): ~150 persona-klipp + studio-
+          // banken ville gjort SW-installasjonen til en ~5 MB obligatorisk
+          // nedlasting for alle — runtime + preload gir offline-garantien uten
+          // den kostnaden.
+          {
+            urlPattern: /\/audio\/.*\.mp3$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'persona-audio',
+              expiration: {
+                maxEntries: 300,
+                maxAgeSeconds: 365 * 24 * 60 * 60, // 1 år — filene er immutable
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
         ],
       },
     }),

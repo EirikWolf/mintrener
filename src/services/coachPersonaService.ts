@@ -112,6 +112,18 @@ export function setActiveCoachPersona(id: CoachPersonaId): void {
   } catch (err) {
     console.warn('Kunne ikke lagre trenerstemme:', err);
   }
+  // BØR-2 (β6): et persona-bytte evikterer de ANDRE personaenes dekodede
+  // buffere – 17–35 MB PCM per persona, så persona-shopping må ikke akkumulere.
+  // Den valgte personaens buffere beholdes (re-valg = varm cache), og delte
+  // studioklipp/countdown har manifest-nøkler utenfor persona-URL-settene og
+  // røres derfor aldri. Kjøres uavhengig av localStorage-utfallet – å rydde
+  // kalde buffere er riktig uansett om lagringen lyktes.
+  const staleUrls = COACH_PERSONAS.filter((p) => p.id !== id).flatMap((p) =>
+    getPersonaBufferUrls(p.id)
+  );
+  if (staleUrls.length > 0) {
+    audioBufferEngine.evict(staleUrls);
+  }
 }
 
 const cueAudioCache: Record<string, HTMLAudioElement> = {};
@@ -156,21 +168,28 @@ export function getPersonaClipKey(
   return lookupPersonaClipUrl(personaId || getActiveCoachPersona(), cueOrExerciseId);
 }
 
+/**
+ * Alle buffer-nøkler (URL-er) et persona-valg varmer: hele manifest-settet,
+ * ellers kjerne-cuene etter cuesPath-konvensjonen. Delt av preloadPersonaAudio
+ * (varming) og setActiveCoachPersona (eviksjon ved bytte, BØR-2/β6) — settene
+ * MÅ speile hverandre, ellers lekker bytte-eviksjonen buffere.
+ */
+function getPersonaBufferUrls(id: CoachPersonaId): string[] {
+  const entries = AUDIO_MANIFEST[id];
+  if (entries) return Object.values(entries);
+  const persona = COACH_PERSONAS.find((p) => p.id === id);
+  return persona?.cuesPath ? PERSONA_CUES.map((cue) => `${persona.cuesPath}/${cue}.mp3`) : [];
+}
+
 export function preloadPersonaAudio(personaId?: CoachPersonaId): void {
   const id = personaId || getActiveCoachPersona();
-  const entries = AUDIO_MANIFEST[id];
-  const persona = COACH_PERSONAS.find((p) => p.id === id);
 
   // HELE manifest-settet varmes i buffer-motoren (β5): det er dette som
   // aktiverer Directorens persona-klipp-kjeder — has()-sjekkene for go-/bro-/
   // exercise-klippene krever dekodede buffere, ellers degraderer alt til
   // studio/TTS. Utenfor manifestet: kjerne-cuene etter cuesPath-konvensjonen
   // (samme sett som før β5).
-  const bufferUrls = entries
-    ? Object.values(entries)
-    : persona?.cuesPath
-      ? PERSONA_CUES.map((cue) => `${persona.cuesPath}/${cue}.mp3`)
-      : [];
+  const bufferUrls = getPersonaBufferUrls(id);
   if (bufferUrls.length === 0) return;
 
   // Dekodede AudioBuffere gir latensfri, sample-nøyaktig avspilling og kjeding

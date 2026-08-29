@@ -87,6 +87,10 @@ export class AudioBufferEngine {
   private buffers = new Map<string, AudioBuffer>();
   // Pågående fetch/dekoding per nøkkel – hindrer dobbel nedlasting ved samtidige preload-kall
   private inFlight = new Map<string, Promise<void>>();
+  // BØR-2 (β6): nøkler eviktet MENS dekodingen deres pågikk – resultatet skal
+  // forkastes når jobben fullfører, ellers re-akkumulerer et persona-bytte
+  // buffere eviksjonen nettopp fjernet. En fersk preload gjenoppliver nøkkelen.
+  private pendingEvictions = new Set<string>();
   // Flerkjedemodell (Planrettelse 2): flere kjeder kan være skedulert/spillende
   // samtidig (Directoren ankrer start_321/go/last5 uavhengig i samme fase, pluss
   // reaktive avspillinger). Erstatter den gamle singulære activeChain.
@@ -158,6 +162,9 @@ export class AudioBufferEngine {
 
   private preloadOne(key: string): Promise<void> {
     if (this.buffers.has(key)) return Promise.resolve();
+    // Fersk preload-intensjon opphever en eviksjon som traff mens forrige
+    // dekodejobb pågikk (persona-shopping frem og tilbake) – nyeste intensjon vinner.
+    this.pendingEvictions.delete(key);
     const pending = this.inFlight.get(key);
     if (pending) return pending;
 
@@ -184,9 +191,30 @@ export class AudioBufferEngine {
       }
       const bytes = await response.arrayBuffer();
       const buffer = await audioService.getContext().decodeAudioData(bytes);
+      // Eviktet mens jobben pågikk (BØR-2, β6): forkast i stedet for å lagre
+      if (this.pendingEvictions.delete(key)) return;
       this.buffers.set(key, buffer);
     } catch (err) {
       console.warn(`AudioBufferEngine: kunne ikke dekode "${key}" (${url}):`, err);
+    }
+  }
+
+  /**
+   * Målrettet eviksjon (BØR-2 fra β5-reviewen, levert i β6): fjerner dekodede
+   * buffere for angitte nøkler slik at persona-bytte ikke akkumulerer 17–35 MB
+   * PCM per besøkte persona. Bevisst IKKE en generell LRU (YAGNI) – kalleren
+   * (coachPersonaService ved persona-bytte) vet nøyaktig hvilke nøkler som er
+   * blitt kalde, og delte studioklipp/countdown skal aldri røres. Nøkler med
+   * pågående dekoding markeres slik at resultatet forkastes når jobben
+   * fullfører. Aktive avspillinger er upåvirket – hver skedulert
+   * AudioBufferSourceNode holder sin egen referanse til bufferen.
+   */
+  public evict(keys: string[]): void {
+    for (const key of keys) {
+      this.buffers.delete(key);
+      if (this.inFlight.has(key)) {
+        this.pendingEvictions.add(key);
+      }
     }
   }
 
