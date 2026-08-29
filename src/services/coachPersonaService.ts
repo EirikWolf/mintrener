@@ -32,8 +32,8 @@ export interface CoachPersona {
 export const COACH_PERSONAS: CoachPersona[] = [
   {
     id: 'haugesund',
-    name: 'Jostein',
-    dialectOrStyle: 'Haugesund / Haugalandsk',
+    name: 'Jossa',
+    dialectOrStyle: 'Haugalandet (haugalandsk)',
     tagline: '«Gje gass nå! Trø te!»',
     description: 'Rått tempo, jovial vestlandsenergi og ingen vits å spare på kreftene.',
     icon: '⚓',
@@ -45,7 +45,7 @@ export const COACH_PERSONAS: CoachPersona[] = [
   {
     id: 'romsdal',
     name: 'Ola',
-    dialectOrStyle: 'Romsdalen / Molde',
+    dialectOrStyle: 'Romsdalen (romsdalsk)',
     tagline: '«No e det bære å gønne på!»',
     description: 'Fjellstø romsdalsk treningsglede som holder trykket og humøret oppe.',
     icon: '🏔️',
