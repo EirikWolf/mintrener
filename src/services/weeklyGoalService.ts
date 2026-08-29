@@ -19,19 +19,32 @@ function readGoalLog(): GoalLogEntry[] {
 }
 
 /**
- * Målet som gjaldt ved gitt ukestart.
- * Uker ELDRE enn loggens første linje dømmes etter første linjes mål (det
- * historiske ankeret er beste estimat for hele fortiden) — aldri etter
- * gjeldende mål, ellers ville en målheving re-dømt historikken og kollapset
- * streaken retroaktivt. Gjeldende mål brukes kun ved tom logg.
+ * Lager et oppslag «ukestart → gjeldende mål» som leser og sorterer målloggen
+ * ÉN gang og returnerer en ren closure. Bruk denne (ikke getGoalForWeek som
+ * naken callback) når mange uker skal slås opp i samme beregning — f.eks.
+ * computeWeekStreak fra en UI-effekt — så localStorage ikke leses per uke.
+ *
+ * Semantikk (identisk med getGoalForWeek): uker ELDRE enn loggens første linje
+ * dømmes etter første linjes mål (det historiske ankeret er beste estimat for
+ * hele fortiden) — aldri etter gjeldende mål, ellers ville en målheving
+ * re-dømt historikken og kollapset streaken retroaktivt. Gjeldende mål brukes
+ * kun ved tom logg.
  */
-export function getGoalForWeek(targetWeekKey: string): number {
+export function makeGoalForWeek(): (targetWeekKey: string) => number {
   const log = readGoalLog()
     // 'YYYY-MM-DD' sorterer leksikalsk = kronologisk
     .sort((a, b) => (a.weekKey < b.weekKey ? -1 : a.weekKey > b.weekKey ? 1 : 0));
-  if (log.length === 0) return getWeeklyGoal();
-  const applicable = log.filter((e) => e.weekKey <= targetWeekKey);
-  return applicable.length > 0 ? applicable[applicable.length - 1].goal : log[0].goal;
+  const currentGoal = getWeeklyGoal();
+  return (targetWeekKey: string): number => {
+    if (log.length === 0) return currentGoal;
+    const applicable = log.filter((e) => e.weekKey <= targetWeekKey);
+    return applicable.length > 0 ? applicable[applicable.length - 1].goal : log[0].goal;
+  };
+}
+
+/** Målet som gjaldt ved gitt ukestart (engangsoppslag; se makeGoalForWeek). */
+export function getGoalForWeek(targetWeekKey: string): number {
+  return makeGoalForWeek()(targetWeekKey);
 }
 
 export interface WeeklyGoalProgress {

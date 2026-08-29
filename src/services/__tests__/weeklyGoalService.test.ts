@@ -4,6 +4,7 @@ import {
   setWeeklyGoal,
   calculateWeeklyProgress,
   getGoalForWeek,
+  makeGoalForWeek,
 } from '../weeklyGoalService';
 import { weekKey, addWeeksToKey } from '../weekUtils';
 import { CompletedWorkoutLog } from '../../types/models';
@@ -90,5 +91,43 @@ describe('getGoalForWeek', () => {
   it('korrupt logg → fallback til gjeldende mål, ingen kræsj', () => {
     localStorage.setItem('mintrener_weekly_goal_log_v1', '{{{');
     expect(getGoalForWeek('2026-01-05')).toBe(getWeeklyGoal());
+  });
+});
+
+describe('makeGoalForWeek', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('gir samme svar som getGoalForWeek for alle uker', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 0, 7)); setWeeklyGoal(5);
+    vi.setSystemTime(new Date(2026, 0, 20)); setWeeklyGoal(2);
+    const goalFor = makeGoalForWeek();
+    for (const wk of ['2024-06-03', '2026-01-05', '2026-01-12', '2026-01-19', '2026-02-02']) {
+      expect(goalFor(wk)).toBe(getGoalForWeek(wk));
+    }
+  });
+
+  it('leser localStorage ved opprettelse, ikke per kall (ytelse i UI-effekten)', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 0, 7));
+    setWeeklyGoal(5);
+    const goalFor = makeGoalForWeek();
+    const getItemSpy = vi.spyOn(Storage.prototype, 'getItem');
+    goalFor('2026-01-05');
+    goalFor('2026-01-12');
+    goalFor('2026-02-02');
+    expect(getItemSpy).not.toHaveBeenCalled();
+  });
+
+  it('er et snapshot: senere lagringsendringer påvirker ikke closuren', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 0, 7));
+    setWeeklyGoal(5);
+    const goalFor = makeGoalForWeek();
+    localStorage.clear();
+    expect(goalFor('2026-01-12')).toBe(5); // neste uke: nytt mål, fra snapshotet
+    expect(goalFor('2026-01-05')).toBe(3); // inneværende: gammelt mål
   });
 });

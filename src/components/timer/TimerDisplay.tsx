@@ -57,7 +57,9 @@ import {
   Tv,
 } from 'lucide-react';
 import { shareWorkout } from '../../services/shareWorkoutService';
-import { calculateWeeklyProgress, WeeklyGoalProgress } from '../../services/weeklyGoalService';
+import { calculateWeeklyProgress, makeGoalForWeek, WeeklyGoalProgress } from '../../services/weeklyGoalService';
+import { computeWeekStreak, WeekStreakResult } from '../../services/streakService';
+import { StreakDetailSheet } from '../streak/StreakDetailSheet';
 
 interface FocusModeQuickControlsProps {
   soundEnabled: boolean;
@@ -211,6 +213,8 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   const handleToggleVoiceControl = () => voiceCommandService.toggleListening();
 
   const [weeklyProgress, setWeeklyProgress] = useState<WeeklyGoalProgress | null>(null);
+  const [weekStreak, setWeekStreak] = useState<WeekStreakResult | null>(null);
+  const [showStreakSheet, setShowStreakSheet] = useState(false);
 
   React.useEffect(() => {
     try {
@@ -219,9 +223,16 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
       const sug = checkAdaptiveProgression(workout, hist);
       setAdaptiveSuggestion(sug);
       setWeeklyProgress(calculateWeeklyProgress(hist));
+      // Kjent spenning (N4): pillen viser calculateWeeklyProgress mot GJELDENDE
+      // mål, mens streaken dømmer inneværende uke etter målet ved UKESTART
+      // (makeGoalForWeek). Rett etter en målendring kan de to derfor vise ulikt
+      // «X av Y» — bevisst valg: pillen skal speile det brukeren nettopp satte,
+      // streaken skal aldri re-dømme en påbegynt uke.
+      setWeekStreak(computeWeekStreak(hist, makeGoalForWeek()));
     } catch {
       setAdaptiveSuggestion(null);
       setWeeklyProgress(null);
+      setWeekStreak(null);
     }
   }, [workout, state.status]);
 
@@ -526,13 +537,32 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                 </div>
               )}
 
-              {/* 3. Ukesmål Fremdrift (Spec kap. 4) */}
+              {/* 3. Ukesmål Fremdrift (Spec kap. 4) + uke-streak (C1, spec § 2.2 valg A):
+                  hele pillen er en knapp som åpner streak-detaljarket. Flamme/uketall
+                  i varm gulltone, atskilt fra progresjonsgrønn; ingen streak → ingen
+                  flamme (ingen «0 uker»-skam). */}
               {weeklyProgress && (
-                <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900/70 border border-zinc-800/80 rounded-2xl text-xs shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setShowStreakSheet(true)}
+                  aria-label="Streak og ukesmål — åpne detaljer"
+                  className="w-full flex items-center justify-between px-3 py-1.5 bg-zinc-900/70 border border-zinc-800/80 hover:border-zinc-700 rounded-2xl text-xs shadow-sm transition-all active:scale-[0.99] text-left"
+                >
                   <div className="flex items-center gap-2">
                     <div className={`p-1 rounded-lg ${weeklyProgress.isGoalMet ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
                       <Target className="w-3.5 h-3.5" />
                     </div>
+                    {weekStreak && weekStreak.currentWeeks >= 1 && (
+                      <>
+                        <span
+                          aria-label={`${weekStreak.currentWeeks} ${weekStreak.currentWeeks === 1 ? 'ukes' : 'ukers'} streak`}
+                          className="text-[11px] text-amber-400 font-semibold"
+                        >
+                          🔥 {weekStreak.currentWeeks} {weekStreak.currentWeeks === 1 ? 'uke' : 'uker'}
+                        </span>
+                        <span className="text-zinc-600">·</span>
+                      </>
+                    )}
                     <span className="text-[11px] font-bold text-zinc-300">
                       Ukesmål: <strong className="text-white">{weeklyProgress.completedThisWeek}</strong> av <strong>{weeklyProgress.goal}</strong> økter
                     </span>
@@ -550,7 +580,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                       {weeklyProgress.percentage}%
                     </span>
                   </div>
-                </div>
+                </button>
               )}
 
               {/* 3b. Aktiv Utfordring Fremdriftskort (C.15, C.15b) */}
@@ -1127,6 +1157,11 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             onSelectWorkout(adapted);
           }}
         />
+      )}
+
+      {/* Streak-detaljark (C1, spec § 2.2) — åpnes fra ukesmål-pillen */}
+      {showStreakSheet && weekStreak && (
+        <StreakDetailSheet streak={weekStreak} onClose={() => setShowStreakSheet(false)} />
       )}
     </div>
   );
