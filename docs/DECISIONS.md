@@ -223,11 +223,49 @@ Dette dokumentet fører en kronologisk oversikt over tekniske og arkitektoniske 
   3. `src/services/audioClipService.ts`:
      - Ny tjeneste som sømløst spiller av ekte MP3-filer fra `src/data/audioManifest.json` når tilgjengelig, og automatisk faller tilbake til forbedret Web Speech API hvis et klipp ikke finnes.
 
+---
 
+## [2026-08-28] Beslutning 26: Subagent-drevet TDD med to-trinns review som utviklingsregime
+* **Kontekst:** Systemrevisjonen v2.0 ga en stor arbeidsordre (Bolk A/B/C). Behov for fart uten kvalitetstap.
+* **Valg:** Én fersk implementer-subagent per oppgave med full spesifikasjon i prompten; obligatorisk to-trinns review (spec-samsvar → kodekvalitet) med fix-løkker før merge; parallellisering kun i isolerte git-worktrees med disjunkte filflater; CI (inkl. Firestore-emulator) som empirisk port.
+* **Konsekvens:** PR #2–#12 levert under regimet. Reviewene fanget ni reelle feil bare i B3 PR α — inkludert fire spesifikasjonsfeil i planverket, ikke bare implementasjonsavvik.
 
+## [2026-08-28] Beslutning 27: Firestore-herding og nestet telemetri-skriveform
+* **Kontekst:** Revisjonen v2.0 fant `global_stats` verdensskrivbar [KRITISK] og `rooms` uautentisert muterbar. Rules-arbeidet avdekket i tillegg en eksisterende prod-feil: `setDoc` med merge splitter IKKE punktum-nøkler — fellesskapsstatistikken hadde alltid lagret flate `types.hiit`-nøkler som lesekoden aldri fant.
+* **Valg:** Increment-validering via `diff()` med felt-allowlists og bundne deltaer; auth + inkrement-på-én for rom-join; `crypto.getRandomValues` for romkoder; telemetrien skrives om til nestede kart (retter både rules-kompatibilitet og UI-feilen); 21+ regeltester mot emulator i egen CI-jobb. Deploy-rekkefølge dokumentert: app-bygg før innstrammende regler; additive regler før app.
+* **Konsekvens:** PR #7/#10/#11; regler deployet 29.08. Restrisiko (enkeltverdier i kart) dokumentert i regelfilen.
 
+## [2026-08-28] Beslutning 28: Bakgrunnsrobust timerkjerne og klokkesynkronisert gruppestart
+* **Kontekst:** Hovedtrådens `setInterval` throttles/suspenderes i bakgrunn; oppvåkning ga lydkaskade; gruppestart brukte vertens veggklokke (sekund-skjevhet).
+* **Valg:** Worker-metronom med `setInterval`-fallback og `onerror`-degradering; catch-up med stille fast-forward + én resync-cue; NTP-forenklet klokkeoffset mot Firestore `serverTimestamp` (median av 3) med `startAtServerMs` og felles lytterdrevet start for vert og deltakere; BLE auto-reconnect med backoff + RR-intervaller bevart; semantisk haptikk-tabell.
+* **Konsekvens:** PR #2. Kjente oppfølgingspunkter logget i `docs/plan-q1-teknisk-2026-08-28.md`.
 
+## [2026-08-28] Beslutning 29: AudioBuffer-motor for stemmeklipp
+* **Kontekst:** HTML5 Audio ga 20–200 ms udeterministisk startlatens; sekvensering var gjettet med `setTimeout(2300)`; avbrudd kuttet midt i ord.
+* **Valg:** `audioBufferEngine`: dekod øktens klipp ved start, `AudioBufferSourceNode.start(t)` sample-nøyaktig, skjøter beregnet fra `buffer.duration` med equal-power crossfade, `stop()` med fade, kontekst-tilstandsport (dekker WebKit `interrupted`), `stopEpoch`-teller der eksternt stopp alltid vinner. Fallback-kjede til HTMLAudio/TTS bevart. Worklet/Wasm eksplisitt IKKE (reservert beat-matching-moonshot).
+* **Konsekvens:** PR #5. Persona-bevisst resync og `setTimeout`-fjerning fullført samme PR.
 
+## [2026-08-28] Beslutning 30: Fokusmodus under aktiv økt
+* **Kontekst:** Revisjonen § 3.1: tunnelsyn i pulssone 4/5 gjør 10 px-tekster uleselige; skjermen viste fortsatt idle-kromen under økt.
+* **Valg:** Destillert visning ved running/paused: toppkrom skjult, flytende stripe med kun lyd + lås (44 px), forstørret rundelinje/fasebadge/øvelsesnavn/neste-linje. Idle byte-for-byte uendret. `HeartRateWidget` fikk `reattach()` + tilstandsinit fra tjenesten (unmount/remount-regresjonen reviewen fant).
+* **Konsekvens:** PR #4, visuelt godkjent live av produkteier før merge.
 
+## [2026-08-29] Beslutning 31: Render-gating, dvale-reanker og ytelsesinstrumentering
+* **Kontekst:** 10 React-oppdateringer/s under økt; `performance.now` fryser under OS-dvale på flere plattformer; målekortet manglet måleinstrumenter.
+* **Valg:** `Math.ceil/floor`-gating av state-oppdateringer (motorlogikk beholder presise verdier); drift-måling (`Date.now`-delta minus `performance.now`-delta) øverst i hver tick med bakdatering ved > 2 s — plassert i tick, ikke visibility-handler, pga. makrotask-rekkefølge-race; `perfMonitorService` med longtask-observer (feature-detektert) og lydavvik som bucketede tellere (under20/20–50/over50 ms) siden p95 ikke kan aggregeres som increments; `longTaskSessions`/`activeMinutes` teller kun støttede enheter så iOS ikke biaser metrikken.
+* **Konsekvens:** PR #8/#10. Astrid fikk samtidig kontekstbevisst oppsummering (PR #9/#11 — ren regelmotor med prioritet PR > ukesmål > vurdering > streak).
 
+## [2026-08-29] Beslutning 32: TimerEngine-uttrekk med bit-identisk fasit (B3 PR α)
+* **Kontekst:** Fasemaskinen bodde i en 795-linjers hook med tre tilstandsrepresentasjoner; moonshots og testskjold krever motor uten UI. Spec/plan: `docs/spec-b3-timerengine-audiodirector-2026-08-29.md` + plan-dokumentet.
+* **Valg:** Rammeverksfri `TimerEngine` med to kanaler: identitets-cachede snapshots (React via `useSyncExternalStore` — gating via snapshot-identitet) og typede domenehendelser med frister (`endsAt`, `deadlineChanged` med kun-fremtid-garanti, `endingSoon` som bevarer hookens persona-vindu). Sideeffekter som abonnenter; `LegacyAudioAdapter` bærer lydlogikken ordrett til Director overtar. Fasit: de 23 eksisterende hook-testene urørt og grønne. Én tilsiktet endring: `restoreSession` bakdaterer `workoutStartTime`.
+* **Konsekvens:** PR #12 merget 29.08. Notify-gating-racet (abonnent-`getSnapshot` midt i emit svelget React-varsel) fikset med separat varsel-nøkkel. Felttest anbefalt før neste prod-deploy.
 
+## [2026-08-29] Beslutning 33: AudioDirector med fristbasert lookahead og flerkjedemodell (B3 PR β, pågår)
+* **Kontekst:** Produkteiers presisjonskrav: nedtellingen skal kulminere nøyaktig på fasegrensen. Reaktiv utløsning (tick oppdager vinduet) kan ikke levere det.
+* **Valg:** Director skedulerer mot frister: `start_321` ankret i fasegrense-slutt (`endAt`), `go`-tilrop på grensen, `last5` ved T−5 s (bevisst aktivering av tidligere utriggret innhold); `scheduleSequence({endAt|startAt})` med tidsbro motortid↔lydtid; aldri avkuttet tale (for trangt vindu → kun pip); prioritetsresolver persona → studioklipp → bro+TTS → pip. Planrettelse 2 underveis: lydmotoren utvides fra én-kjede til flerkjedemodell (additive skedulerte kjeder, stemme-eksklusivitet håndhevet ved avspilling, `cancelScheduled()`, par-balansert ducking) — funnet av implementer på tvers av β1/β2-sømmen.
+* **Konsekvens:** β1–β2 levert, β2.5 pågår; merges samlet som PR β etter sluttreview.
+
+## [2026-08-29] Beslutning 34: Persona-lydbank — full dekning, bro+TTS og Kitor-produksjonslinje
+* **Kontekst:** Fire Tre-To-En-innspillinger + stemme-seeds klare; mål om hele økter uten syntetisk stemme per persona.
+* **Valg:** (A) Full persona-dekning inkl. alle øvelsesnavn (≈ 37 klipp/persona, ≈ 148 totalt) — aksepterte kostnader: ×N per ny øvelse, fullt sett per ny persona, QA-lytt; (B) egendefinerte øvelser løses med persona-bro («Neste øvelse:») + TTS kun for navnet; manifest genereres ved bygg (mangler = byggtidsadvarsel); workbox runtime-caching av `/audio/**` + preload ved persona-valg for offline. Kitor-infra verifisert klar 29.08: `@token_mintrener` i `/chatterbox/*` (kitor-eier), token synket, seeds lastet opp som `mintrener-seed-*.wav`. Manuskript (144 genererte fraser + fonetisk ordbok + dialekt-i-tekst-policy) levert til produkteiers godkjenning — batchen gates av den.
+* **Konsekvens:** Se `docs/manuskript-persona-lydbank-2026-08-29.md` (i egen gren til godkjenning) og ADR 0009 i homelab-vaulten for infrastruktursiden.
