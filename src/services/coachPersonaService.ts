@@ -93,6 +93,41 @@ export const COACH_PERSONAS: CoachPersona[] = [
 const STORAGE_KEY = 'mintrener_coach_persona';
 let activeAudioElement: HTMLAudioElement | null = null;
 
+/**
+ * B6.1 (revisjon § 3.3 nivå 1): persona-aksentfarge som CSS-variabel.
+ * Avledet av personaens eksisterende `color`-felt (Tailwind-fargenavn) slik at
+ * lydmanifest og visuell identitet deler én kilde. 400-nyansene er valgt fordi
+ * de holder WCAG AA (>= 4.5:1, verifisert i personaAccent.test.ts) mot alle
+ * tre fokusmodus-bakgrunnene (zinc-950 og fase-950-fargene med 80 % dekning).
+ */
+const ACCENT_BY_TAILWIND_COLOR: Record<string, string> = {
+  emerald: '#34d399', // emerald-400
+  blue: '#60a5fa', // blue-400
+  rose: '#fb7185', // rose-400
+  purple: '#c084fc', // purple-400
+  zinc: '#a1a1aa', // zinc-400
+};
+
+/** Nøytral fallback (zinc-400) — speiler --persona-accent-defaulten i index.css. */
+const ACCENT_FALLBACK = '#a1a1aa';
+
+/** Aksentfargen (hex) for en persona; aktiv persona når id utelates. */
+export function getPersonaAccentColor(id?: CoachPersonaId): string {
+  const personaId = id || getActiveCoachPersona();
+  const persona = COACH_PERSONAS.find((p) => p.id === personaId);
+  return ACCENT_BY_TAILWIND_COLOR[persona?.color ?? ''] ?? ACCENT_FALLBACK;
+}
+
+/**
+ * Setter --persona-accent på rot-elementet slik at fokusmodus-elementene
+ * (rundelinje, fasebadge) plukker den opp via CSS. Kalles ved oppstart
+ * (main.tsx) og ved hvert persona-valg (setActiveCoachPersona).
+ */
+export function applyPersonaAccent(id?: CoachPersonaId): void {
+  if (typeof document === 'undefined') return;
+  document.documentElement.style.setProperty('--persona-accent', getPersonaAccentColor(id));
+}
+
 export function getActiveCoachPersona(): CoachPersonaId {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -112,6 +147,9 @@ export function setActiveCoachPersona(id: CoachPersonaId): void {
   } catch (err) {
     console.warn('Kunne ikke lagre trenerstemme:', err);
   }
+  // B6.1: aksentfargen følger persona-valget umiddelbart. Utenfor try-blokken
+  // av samme grunn som eviksjonen under — riktig uansett localStorage-utfall.
+  applyPersonaAccent(id);
   // BØR-2 (β6): et persona-bytte evikterer de ANDRE personaenes dekodede
   // buffere – 17–35 MB PCM per persona, så persona-shopping må ikke akkumulere.
   // Den valgte personaens buffere beholdes (re-valg = varm cache), og delte
