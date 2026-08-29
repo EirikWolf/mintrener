@@ -18,6 +18,17 @@
  * Flaggvalg: --force re-prosesserer output (cache gjenbrukes), --reprocess er
  * kun ffmpeg fra cache (uten nettverk/token), --refetch henter ny TTS (ny
  * stokastisk take) selv om cachen er fersk.
+ *
+ * VIKTIG — --force kreves for å ERSTATTE eksisterende klipp (BØR Ø1):
+ * decideTtsAction (scripts/voicebankTasks.ts) returnerer 'skip-existing' så
+ * lenge output-fila finnes og --force IKKE er satt. En vanlig kjøring rører
+ * derfor ALDRI et klipp som allerede ligger i public/audio/personas/ — det var
+ * nettopp slik det gamle 8,5 s hale-klippet start_321_short.mp3 overlevde
+ * omleggingen til en egen TTS-cue per persona. Riktig prosedyre når et klipp
+ * skal byttes ut er å navngi det OG tvinge overskriving:
+ *   npx tsx scripts/generatePersonaVoicebank.ts --only start_321_short --force
+ * (samme presedens som de 20 utdaterte klippene fra feat/lydmotor, som måtte
+ * slettes eksplisitt før regenerering — jf. Beslutning 35 i docs/DECISIONS.md).
  */
 
 import fs from 'node:fs';
