@@ -267,6 +267,8 @@ export function resolveAnnouncementPlan(input: {
 
 - [ ] **Step 2:** Implementer `createAudioDirector(engine): () => void`. Lookahead kun for persona-stien; standard-stien speiler LegacyAudioAdapter (flytt den koden inn, behold betingelsene). Ducking og «én stemme»-invarianten eies her. → PASS. **Commit** `feat(audio): AudioDirector med fristbasert lookahead og prioritetsresolver`
 
+**Planrettelse 3 (fra β2.5-funn):** `coachPersonaService.stopCurrentPersonaAudio()` kalles før hver reaktive persona-cue og gjør full `audioBufferEngine.stop()` — som under flerkjedemodellen kansellerer Directors skedulerte lookahead (f.eks. last5) hver gang halfway spilles. β3 splitter semantikken: reaktive cues skal kun stoppe HØRBAR tale (HTMLAudio-elementet + hørbare kjeder — playSequence gjør sistnevnte selv nå), mens full stop() forbeholdes pause/reset-stiene. Test: halfway-cue mens last5 er skedulert → last5 overlever.
+
 ### Task β3: Bro + TTS for egendefinerte, persona-resync
 
 **Files:** Modify `src/services/audioDirector.ts`, `src/services/coachPersonaService.ts`, tests
