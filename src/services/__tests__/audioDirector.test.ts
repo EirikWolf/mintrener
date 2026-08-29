@@ -998,6 +998,133 @@ describe('audioDirector (B3 β2)', () => {
     });
   });
 
+  describe('persona-rest-cue (siste β-oppfølging, BØR-1)', () => {
+    // rest.mp3 er produsert/manifestert/preloadet for alle personaer men var
+    // aldri koblet — samme bevisste aktivering av utriggret innhold som last5
+    // (spec § 4/§ 5). Persona-veien spiller cuen i STEDET for playRestStart-
+    // tonen; ucachet cue (eller tale av) faller tilbake til dagens tone.
+    // NB: testen «rest med persona … (som i dag)» over kjører med tomt cache
+    // og pinner dermed nettopp fallback-stien.
+    const CUSTOM_EX = { id: 'custom-42', name: 'Kjeglehopp' };
+
+    it('rest-cue + studioklipp cachet: ÉN kjede [rest, exercise-<id>] i stedet for tonen', () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.has).mockImplementation(
+        (k: string) => k === `${HC}/rest.mp3` || k === 'exercise-utfall-forover'
+      );
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', nextExercise: EX_B, endsAt: 10_000 }));
+
+      expect(audioService.playRestStart).not.toHaveBeenCalled();
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([
+        `${HC}/rest.mp3`,
+        'exercise-utfall-forover',
+      ]);
+      expect(audioClipService.playClipOrFallback).not.toHaveBeenCalled();
+    });
+
+    it('rest-cue cachet, annonsering ucachet (tts-plan): cue først, fallback-kjeden ETTER kjedeslutt', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/rest.mp3`);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', nextExercise: EX_B, endsAt: 10_000 }));
+
+      expect(audioService.playRestStart).not.toHaveBeenCalled();
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([`${HC}/rest.mp3`]);
+      // Aldri overlapp: annonseringen venter på kjedeslutt
+      expect(audioClipService.playClipOrFallback).not.toHaveBeenCalled();
+      await flush();
+      expect(audioClipService.playClipOrFallback).toHaveBeenCalledWith(
+        'exercise-utfall-forover',
+        'Neste: Utfall'
+      );
+    });
+
+    it('egendefinert neste + rest-cue: [rest, bro-neste]-kjede og DERETTER speak(navn)', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.has).mockImplementation(
+        (k: string) => k === `${HC}/rest.mp3` || k === `${HC}/bro-neste.mp3`
+      );
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', nextExercise: CUSTOM_EX, endsAt: 10_000 }));
+
+      expect(audioService.playRestStart).not.toHaveBeenCalled();
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([
+        `${HC}/rest.mp3`,
+        `${HC}/bro-neste.mp3`,
+      ]);
+      await flush();
+      expect(speechService.speak).toHaveBeenCalledWith('Kjeglehopp');
+    });
+
+    it('rest-cue cachet uten neste øvelse: cuen spilles alene', () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/rest.mp3`);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'round_rest', nextExercise: null, endsAt: 10_000 }));
+
+      expect(audioService.playRestStart).not.toHaveBeenCalled();
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([`${HC}/rest.mp3`]);
+    });
+
+    it('speechEnabled=false: dagens tone, aldri cue (stemme respekterer tale-bryteren)', () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.has).mockReturnValue(true);
+      const { engine, emit } = createFakeEngine({ speechEnabled: false });
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', nextExercise: EX_B, endsAt: 10_000 }));
+
+      expect(audioService.playRestStart).toHaveBeenCalledWith(true);
+      expect(audioBufferEngine.playSequence).not.toHaveBeenCalled();
+    });
+
+    it('standard persona: playRestStart + announceRest, aldri cue (uendret)', () => {
+      vi.mocked(audioBufferEngine.has).mockReturnValue(true);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', nextExercise: EX_B, endsAt: 10_000 }));
+
+      expect(audioService.playRestStart).toHaveBeenCalledWith(true);
+      expect(speechService.announceRest).toHaveBeenCalledWith('Utfall', 'rolig');
+      expect(audioBufferEngine.playSequence).not.toHaveBeenCalled();
+    });
+
+    it('skip under rest-cuen (tts-plan): fallback-annonseringen undertrykkes (epoch-guard)', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/rest.mp3`);
+      let resolveChain!: (v: boolean) => void;
+      vi.mocked(audioBufferEngine.playSequence).mockImplementationOnce(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveChain = resolve;
+          })
+      );
+      const { engine, emit, setNow } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', nextExercise: EX_B, endsAt: 10_000 }));
+      setNow(4_000);
+      emit(phaseStarted({ phase: 'prepare', itemIndex: 1, endsAt: 14_000 }));
+      resolveChain(true); // skipets audible-stopp løser rest-kjeden med true
+      await flush();
+
+      expect(audioClipService.playClipOrFallback).not.toHaveBeenCalledWith(
+        'exercise-utfall-forover',
+        'Neste: Utfall'
+      );
+    });
+  });
+
   describe('unsubscribe', () => {
     it('returnert opprydningsfunksjon stopper videre reaksjon på hendelser', () => {
       const { engine, emit } = createFakeEngine();

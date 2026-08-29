@@ -99,27 +99,46 @@ function isCustomExercise(ex: Exercise): boolean {
  * stemmene overlapper aldri (produkteiers valg B). Uten cachet bro: kallerens
  * fallback (dagens playClipOrFallback-kjede, som selv ender i TTS).
  */
+/**
+ * Spiller en bufferkjede og kjører oppfølgeren FØRST etter kjedeslutt —
+ * epoch- og status-gatet (fix-løkke etter spec-review): epoken fanges FØR
+ * kjeden startes; et skip/fasebytte bumper phaseEpoch, og da skal oppfølgeren
+ * aldri kjøre selv om promiset løses true (bevisst-stopp-kontrakten). Se
+ * DirectorCtx-doc. Delt av bro+TTS-veiene og persona-rest-kjedene.
+ */
+function playChainThen(ctx: DirectorCtx, keys: string[], followUp: () => void): void {
+  const epoch = ctx.getPhaseEpoch();
+  void audioBufferEngine.playSequence(keys).then(() => {
+    // Pause/reset i mellomtiden: ikke fortsett oppå en stoppet økt
+    if (epoch === ctx.getPhaseEpoch() && ctx.engine.getSnapshot().status === 'running') {
+      followUp();
+    }
+  });
+}
+
+/**
+ * prefixKeys (BØR-1, sluttreview): cachede klipp (persona-rest-cuen) som skal
+ * spilles FORAN broen i samme sample-nøyaktige kjede — aldri overlappende tale.
+ */
 function playBridgeThenTts(
   ctx: DirectorCtx,
   bridgeCue: 'bro-neste' | 'bro-naa' | 'bro-resync',
   name: string,
-  fallback: () => void
+  fallback: () => void,
+  prefixKeys: string[] = []
 ): void {
   const key = getPersonaClipKey(bridgeCue);
   if (!key || !audioBufferEngine.has(key)) {
-    fallback();
+    // Uten cachet bro skal et evt. prefiks (rest-cuen) fortsatt spilles først,
+    // med fallback-annonseringen etter kjedeslutt.
+    if (prefixKeys.length > 0) {
+      playChainThen(ctx, prefixKeys, fallback);
+    } else {
+      fallback();
+    }
     return;
   }
-  // Epoch-guard (fix-løkke etter spec-review): fanges FØR kjeden startes —
-  // et skip/fasebytte bumper phaseEpoch, og da skal navnet aldri leses selv
-  // om promiset løses true (bevisst-stopp-kontrakten). Se DirectorCtx-doc.
-  const epoch = ctx.getPhaseEpoch();
-  void audioBufferEngine.playSequence([key]).then(() => {
-    // Pause/reset i mellomtiden: ikke les navnet oppå en stoppet økt
-    if (epoch === ctx.getPhaseEpoch() && ctx.engine.getSnapshot().status === 'running') {
-      speechService.speak(name);
-    }
-  });
+  playChainThen(ctx, [...prefixKeys, key], () => speechService.speak(name));
 }
 
 /**
@@ -430,16 +449,45 @@ function mirrorRest(ctx: DirectorCtx, event: PhaseStartedEvent): void {
   const snap = ctx.engine.getSnapshot();
   const { nextExercise, tone, silent } = event;
   if (!silent) {
-    audioService.playRestStart(snap.soundEnabled);
-    if (snap.speechEnabled) {
-      if (getActiveCoachPersona() === 'standard') {
+    if (getActiveCoachPersona() === 'standard') {
+      // Standard-veien: uendret (tone + TTS-annonsering som i dag)
+      audioService.playRestStart(snap.soundEnabled);
+      if (snap.speechEnabled) {
         speechService.announceRest(nextExercise?.name, tone);
-      } else if (nextExercise) {
-        announceNextExercise(ctx, nextExercise);
       }
+    } else {
+      mirrorPersonaRest(ctx, snap, nextExercise);
     }
   }
   motionTrackerService.stop();
+}
+
+/**
+ * Persona-rest (BØR-1, sluttreview): personaens 'rest'-cue erstatter
+ * playRestStart-tonen — bevisst aktivering av produsert-men-utriggret innhold,
+ * samme presedens som last5 (spec § 4/§ 5: cuen er innspilt, manifestert og
+ * preloadet for alle personaer, men var aldri koblet). Cuen spilles FØRST og
+ * neste-øvelse-annonseringen DERETTER: i ÉN sample-nøyaktig kjede når begge er
+ * cachet, ellers etter kjedeslutt via playChainThen — aldri overlappende tale.
+ * Ucachet cue, eller tale av (cuen er stemme og respekterer tale-bryteren):
+ * dagens tone + annonsering, uendret.
+ */
+function mirrorPersonaRest(
+  ctx: DirectorCtx,
+  snap: TimerState,
+  nextExercise: Exercise | null
+): void {
+  const restKey = getPersonaClipKey('rest');
+  const restCued = snap.speechEnabled && restKey !== null && audioBufferEngine.has(restKey);
+  const prefixKeys = restCued && restKey ? [restKey] : [];
+  if (!restCued) {
+    audioService.playRestStart(snap.soundEnabled);
+  }
+  if (snap.speechEnabled && nextExercise) {
+    announceNextExercise(ctx, nextExercise, prefixKeys);
+  } else if (prefixKeys.length > 0) {
+    void audioBufferEngine.playSequence(prefixKeys);
+  }
 }
 
 /**
@@ -451,26 +499,35 @@ function mirrorRest(ctx: DirectorCtx, event: PhaseStartedEvent): void {
  *  - bridge-tts: egendefinert → bro-neste-kjede + TTS-navn (aldri overlapp)
  *  - studio/tts: dagens playClipOrFallback-kjede uendret (buffer → HTMLAudio → TTS)
  */
-function announceNextExercise(ctx: DirectorCtx, next: Exercise): void {
+function announceNextExercise(ctx: DirectorCtx, next: Exercise, prefixKeys: string[] = []): void {
   const personaKey = getPersonaClipKey('exercise-' + next.id);
+  const studioKey = 'exercise-' + next.id;
   const fallback = (): void => {
-    audioClipService.playClipOrFallback('exercise-' + next.id, 'Neste: ' + next.name);
+    audioClipService.playClipOrFallback(studioKey, 'Neste: ' + next.name);
   };
   const plan = resolveAnnouncementPlan({
     personaActive: true, // kalleren står i persona-grenen
     personaClipCached: personaKey !== null && audioBufferEngine.has(personaKey),
-    studioClipCached: audioBufferEngine.has('exercise-' + next.id),
+    studioClipCached: audioBufferEngine.has(studioKey),
     isCustomExercise: isCustomExercise(next),
     speechEnabled: true, // speech-gaten ligger hos kalleren (mirrorRest)
   });
   if (plan === 'persona' && personaKey) {
     const broKey = getPersonaClipKey('bro-neste');
-    const keys = broKey && audioBufferEngine.has(broKey) ? [broKey, personaKey] : [personaKey];
+    const nameKeys = broKey && audioBufferEngine.has(broKey) ? [broKey, personaKey] : [personaKey];
     // playSequence rejecter aldri (kontraktsfestet og NaN-vaktet i motoren) —
     // ingen redundant .catch (review-notat: én konsekvent linje, stol på kontrakten)
-    void audioBufferEngine.playSequence(keys);
+    void audioBufferEngine.playSequence([...prefixKeys, ...nameKeys]);
+  } else if (plan === 'studio' && prefixKeys.length > 0) {
+    // Rest-cue + studioklipp: begge cachet (studio-planen garanterer klippet) —
+    // én kjede, aldri overlapp (BØR-1).
+    void audioBufferEngine.playSequence([...prefixKeys, studioKey]);
   } else if (plan === 'bridge-tts') {
-    playBridgeThenTts(ctx, 'bro-neste', next.name, fallback);
+    playBridgeThenTts(ctx, 'bro-neste', next.name, fallback, prefixKeys);
+  } else if (prefixKeys.length > 0) {
+    // tts-plan med rest-cue foran: cuen først, fallback-kjeden (som selv ender
+    // i TTS) etter kjedeslutt — epoch-/status-gatet som de andre TTS-veiene.
+    playChainThen(ctx, prefixKeys, fallback);
   } else {
     fallback();
   }
