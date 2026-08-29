@@ -820,6 +820,57 @@ describe('AudioBufferEngine.scheduleSequence (absolutt anker + tidsbro)', () => 
     await expect(pending).resolves.toBe(true);
   });
 
+  it('anker uten finite tall (NaN/Infinity): false uten sideeffekter — rejecter aldri (review-punkt 3)', async () => {
+    // Uten vakten ville NaN sluppet gjennom vindussjekken (NaN-sammenligninger
+    // er false) og nådd source.start(NaN) → throw → reject i strid med kontrakten.
+    const { ctx } = await setupBridgedEngine();
+
+    const p1 = engine.scheduleSequence(['exercise-burpees'], { startAt: Number.NaN });
+    const p2 = engine.scheduleSequence(['exercise-burpees'], { endAt: Number.POSITIVE_INFINITY });
+
+    expect(ctx.createBufferSource).not.toHaveBeenCalled();
+    await expect(p1).resolves.toBe(false);
+    await expect(p2).resolves.toBe(false);
+    expect(duckStartSpy).not.toHaveBeenCalled();
+  });
+
+  it('epoch-splitt: playSequence i resume-await invalideres når en skedulert kjede blir hørbar (nyeste stemme vinner)', async () => {
+    // Pinner sideeffekten av becomeAudibleWithPreemption sitt audibleEpoch-bump:
+    // en reaktiv sekvens som venter på ctx.resume() skal se seg forbigått av en
+    // lookahead-kjede som når sitt startAt i vinduet — resolve true (bevisst
+    // stoppet-kontrakten, fallback undertrykkes), ingenting ekstra skeduleres.
+    vi.useFakeTimers();
+    const mock = await setupBridgedEngine(10);
+
+    // Skedulert kjede som blir hørbar om 2 s (toAudioTime(3000) = 12)
+    const scheduled = engine.scheduleSequence(['exercise-planke'], { startAt: 3000 });
+    expect(mock.sources).toHaveLength(1);
+
+    // Reaktiv sekvens henger i resume-await
+    let release: () => void = () => {};
+    mock.ctx.state = 'suspended';
+    mock.ctx.resume = vi.fn().mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          release = () => {
+            mock.ctx.state = 'running';
+            resolve();
+          };
+        })
+    );
+    const pending = engine.playSequence(['exercise-burpees']);
+
+    await vi.advanceTimersByTimeAsync(2000); // lookahead-kjeden blir hørbar
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mock.sources).toHaveLength(1); // den reaktive skedulerte aldri
+    await expect(pending).resolves.toBe(true);
+
+    mock.sources[0].onended?.();
+    await expect(scheduled).resolves.toBe(true);
+  });
+
   it('Planrettelse 4 (fix 4): skedulert kjede som når startAt preempter hørbar reaktiv kjede, søsken urørt', async () => {
     vi.useFakeTimers();
     const { sources } = await setupBridgedEngine(10);

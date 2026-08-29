@@ -101,8 +101,11 @@ export class AudioBufferEngine {
   // awaiten. Planrettelse 4 (fix 3): SPLITTET i to tellere (valgt fremfor
   // per-kjede-epoch fordi invalideringen skjer FØR kjeden finnes – i resume-
   // await-vinduet er det ingen kjede å henge en epoch på):
-  //  - audibleEpoch: bumpes av stop() og stopAudibleChains(). Målgruppe:
-  //    ventende playSequence (dens kjede ville blitt hørbar straks).
+  //  - audibleEpoch: bumpes av stop(), stopAudibleChains() OG
+  //    becomeAudibleWithPreemption() (skedulert kjede som når startAt tar over
+  //    som «nyeste hørbare stemme» — også over en playSequence som venter i
+  //    resume-await). Målgruppe: ventende playSequence (dens kjede ville blitt
+  //    hørbar straks).
   //  - scheduledEpoch: bumpes av stop() og cancelScheduled(). Målgruppe:
   //    ventende scheduleSequence (dens kjede ville vært en skedulert
   //    fremtidskjede – nettopp det cancelScheduled retter seg mot).
@@ -281,7 +284,10 @@ export class AudioBufferEngine {
    */
   public async scheduleSequence(
     keys: string[],
-    anchor: { endAt?: number; startAt?: number },
+    // Diskriminert union (review-punkt 3): den gamle formen { endAt?; startAt? }
+    // tillot {} — og toAudioTime(undefined as number) ga NaN som gled gjennom
+    // vindussjekken (NaN-sammenligninger er false) til source.start(NaN) → throw.
+    anchor: { endAt: number } | { startAt: number },
     opts?: { crossfadeS?: number }
   ): Promise<boolean> {
     const buffers: AudioBuffer[] = [];
@@ -302,11 +308,16 @@ export class AudioBufferEngine {
     // (n-1) skjøter overlapper hver med crossfadeS, siste klipp bidrar fullt.
     const chainDurationS = durations.reduce((sum, d) => sum + d, 0) - crossfadeS * (durations.length - 1);
 
+    // Runtime-vakt i tillegg til typen (belt & suspenders — β4 får nye kallere):
+    // NaN/Infinity ville ellers passert vindussjekken og kastet i source.start().
+    const anchorMs = 'startAt' in anchor ? anchor.startAt : anchor.endAt;
+    if (!Number.isFinite(anchorMs)) return false;
+
     const ctx = audioService.getContext();
     const startAt =
-      anchor.startAt !== undefined
+      'startAt' in anchor
         ? this.toAudioTime(anchor.startAt)
-        : this.toAudioTime(anchor.endAt as number) - chainDurationS;
+        : this.toAudioTime(anchor.endAt) - chainDurationS;
 
     // Samme sikkerhetsmargin som playSequence sin faste lead-tid: uten den
     // rekker ikke skeduleringen (og evt. ducking-planlegging) å skje før

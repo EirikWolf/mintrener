@@ -944,6 +944,26 @@ describe('audioDirector (B3 β2)', () => {
       expect(speechService.speak).not.toHaveBeenCalled();
     });
 
+    it('degradert intro-sti (fjerde vei): prepare→prepare-skip innen 2,3 s annonserer IKKE gammel øvelse', async () => {
+      // Samme lekkasjeklasse i playPrepareIntroChain sin setTimeout(2300)-
+      // gjetting: fase-/status-gaten ser 'prepare'/'running' også i den NYE
+      // prepare-fasen — kun epoch-guarden avslører skipet.
+      vi.useFakeTimers();
+      usePersona();
+      vi.mocked(coachPersonaService.playIntroThenExercise).mockResolvedValue(false);
+      const { engine, emit, setNow } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', exercise: EX_A, durationS: 10, endsAt: 10_000 }));
+      await flush(); // la .then-degraderingen sette opp timeouten
+      setNow(4_000);
+      emit(phaseStarted({ phase: 'prepare', exercise: EX_B, itemIndex: 1, durationS: 10, endsAt: 14_000 }));
+      await vi.advanceTimersByTimeAsync(2300);
+
+      expect(audioClipService.playClipOrFallback).not.toHaveBeenCalledWith('exercise-squat', 'Knebøy');
+      vi.useRealTimers();
+    });
+
     it('resync-TTS-grenen avbrutt av fasebytte: ingen speak', async () => {
       usePersona();
       vi.mocked(audioBufferEngine.has).mockImplementation((k: string) => k === `${HC}/bro-resync.mp3`);

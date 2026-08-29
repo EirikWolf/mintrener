@@ -361,6 +361,10 @@ function mirrorPrepare(ctx: DirectorCtx, event: PhaseStartedEvent): void {
  * men rekkefølgen skal ikke «ryddes» uten denne historikken.
  */
 function playPrepareIntroChain(ctx: DirectorCtx, firstEx: Exercise): void {
+  // Epoch-guard også her (fjerde skip-lekkasje-vei, review-oppfølging): ved
+  // prepare→prepare-skip innen gjettevinduet ser fase-/status-gaten fortsatt
+  // 'prepare'/'running' og ville annonsert GAMMEL øvelse over ny intro.
+  const epoch = ctx.getPhaseEpoch();
   void playIntroThenExercise(firstEx.id).then((played) => {
     if (played) return;
     // Degradert sti: bufferne er ikke dekodet ennå — spill intro via
@@ -369,7 +373,7 @@ function playPrepareIntroChain(ctx: DirectorCtx, firstEx: Exercise): void {
     playPersonaCue('intro');
     setTimeout(() => {
       const s = ctx.engine.getSnapshot();
-      if (s.phase === 'prepare' && s.status === 'running') {
+      if (epoch === ctx.getPhaseEpoch() && s.phase === 'prepare' && s.status === 'running') {
         audioClipService.playClipOrFallback('exercise-' + firstEx.id, firstEx.name);
       }
     }, 2300);
@@ -462,7 +466,9 @@ function announceNextExercise(ctx: DirectorCtx, next: Exercise): void {
   if (plan === 'persona' && personaKey) {
     const broKey = getPersonaClipKey('bro-neste');
     const keys = broKey && audioBufferEngine.has(broKey) ? [broKey, personaKey] : [personaKey];
-    void audioBufferEngine.playSequence(keys).catch(() => {});
+    // playSequence rejecter aldri (kontraktsfestet og NaN-vaktet i motoren) —
+    // ingen redundant .catch (review-notat: én konsekvent linje, stol på kontrakten)
+    void audioBufferEngine.playSequence(keys);
   } else if (plan === 'bridge-tts') {
     playBridgeThenTts(ctx, 'bro-neste', next.name, fallback);
   } else {
@@ -552,19 +558,18 @@ function announcePersonaResync(
     speechEnabled: true, // gatet av kalleren (mirrorLegacyResync)
   });
   if (plan === 'persona' && personaKey) {
-    void audioBufferEngine.playSequence([broKey, personaKey]).catch(() => {});
+    void audioBufferEngine.playSequence([broKey, personaKey]);
   } else if (plan === 'studio') {
-    void audioBufferEngine.playSequence([broKey, studioKey]).catch(() => {});
+    void audioBufferEngine.playSequence([broKey, studioKey]);
   } else {
     // bridge-tts/tts: broen spiller, TTS leser kun navnet etterpå (valg B).
-    // Epoch-guard: resync emitteres ETTER landingsfasens phase:started (jf.
-    // catchUpExpiredPhases), så epoken fanget her er landingens — et senere
-    // fasebytte/skip bumper den og undertrykker det gamle navnet (se DirectorCtx).
-    const epoch = ctx.getPhaseEpoch();
-    void audioBufferEngine.playSequence([broKey]).then(() => {
-      if (epoch === ctx.getPhaseEpoch() && ctx.engine.getSnapshot().status === 'running') {
-        speechService.speak(target.name);
-      }
-    });
+    // Delegert til playBridgeThenTts (guard-dedup, review-punkt 4) — epoch-
+    // guarden fanges der, og siden resync emitteres ETTER landingsfasens
+    // phase:started (jf. catchUpExpiredPhases) er epoken landingens: et senere
+    // fasebytte/skip bumper den og undertrykker det gamle navnet. Fallbacken
+    // fyrer aldri her (broKey er alt verifisert cachet), men bevarer semantikken.
+    playBridgeThenTts(ctx, 'bro-resync', target.name, () =>
+      audioClipService.playClipOrFallback(studioKey, fallbackText)
+    );
   }
 }

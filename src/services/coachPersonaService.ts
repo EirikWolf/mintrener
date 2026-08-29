@@ -255,9 +255,10 @@ export async function playPersonaCue(
   // Buffer-motoren først: dekodet cue starter uten HTMLAudio-latens.
   // Fyr-og-glem – kalleren trenger bare å vite at cuen faktisk startet.
   if (audioBufferEngine.has(cueUrl)) {
-    // Audible-only (Planrettelse 3): en reaktiv cue skal ikke drepe skedulert lookahead
+    // Audible-only (Planrettelse 3): en reaktiv cue skal ikke drepe skedulert lookahead.
+    // playSequence rejecter aldri (kontraktsfestet) — ingen redundant .catch.
     stopAudiblePersonaAudio();
-    void audioBufferEngine.playSequence([cueUrl]).catch(() => {});
+    void audioBufferEngine.playSequence([cueUrl]);
     return true;
   }
 
@@ -304,6 +305,6 @@ export async function playIntroThenExercise(exerciseId: string): Promise<boolean
   // Audible-only (Planrettelse 3): prepare-lookaheaden (start_321/go) er
   // typisk allerede skedulert når intro-kjeden starter — den skal overleve.
   stopAudiblePersonaAudio();
-  void audioBufferEngine.playSequence([introUrl, exerciseKey]).catch(() => {});
+  void audioBufferEngine.playSequence([introUrl, exerciseKey]);
   return true;
 }
