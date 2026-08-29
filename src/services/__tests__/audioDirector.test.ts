@@ -399,6 +399,104 @@ describe('audioDirector (B3 β2)', () => {
     });
   });
 
+  describe('start_321-stigen — full → short → pip (korte faser, live timing-funn A)', () => {
+    // De innspilte start_321-sporene er ~20 s; Tabatas 10 s-klargjøring/-pause
+    // har aldri plass (aldri-avkuttet-regelen svarer false). Stigen prøver den
+    // trimmede start_321_short-varianten FØR pip-fallbacken. scheduleSequence
+    // svarer false uten sideeffekter (ucachet/for trangt/manglende bro), så et
+    // short-forsøk etter false kan aldri gi dobbel avspilling.
+    const FULL = `${HC}/start_321.mp3`;
+    const SHORT = `${HC}/start_321_short.mp3`;
+
+    it('full variant lykkes: short forsøkes ALDRI (aldri begge)', async () => {
+      usePersona();
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', endsAt: 10_000 }));
+      await flush();
+
+      const scheduledKeys = vi
+        .mocked(audioBufferEngine.scheduleSequence)
+        .mock.calls.map(([keys]) => keys[0]);
+      expect(scheduledKeys).toContain(FULL);
+      expect(scheduledKeys).not.toContain(SHORT);
+    });
+
+    it('for trang fase (full → false): short skeduleres mot samme frist, ingen pip', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.scheduleSequence).mockImplementation(
+        async (keys: string[]) => keys[0] !== FULL
+      );
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', endsAt: 10_000 }));
+      await flush();
+
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 10_000 });
+      emit({ type: 'countdown', secondsLeft: 3 });
+      expect(audioService.playCountdownBeep).not.toHaveBeenCalled();
+    });
+
+    it('ingen variant cachet (begge → false): pip-fallback markerer grensen', async () => {
+      usePersona();
+      vi.mocked(audioBufferEngine.scheduleSequence).mockResolvedValue(false);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', endsAt: 10_000 }));
+      await flush();
+
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 10_000 });
+      emit({ type: 'countdown', secondsLeft: 3 });
+      expect(audioService.playCountdownBeep).toHaveBeenCalledWith(true);
+    });
+
+    it('short mangler i manifestet: full → false gir dagens pip-fallback direkte', async () => {
+      usePersona();
+      const original = coachPersonaService.getPersonaClipKey;
+      vi.spyOn(coachPersonaService, 'getPersonaClipKey').mockImplementation((cue, id) =>
+        cue === 'start_321_short' ? null : original(cue, id)
+      );
+      vi.mocked(audioBufferEngine.scheduleSequence).mockResolvedValue(false);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', endsAt: 10_000 }));
+      await flush();
+
+      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith([SHORT], expect.anything());
+      emit({ type: 'countdown', secondsLeft: 3 });
+      expect(audioService.playCountdownBeep).toHaveBeenCalledWith(true);
+    });
+
+    it('sent false-svar etter fristflytt: short skeduleres ALDRI mot den gamle fristen', async () => {
+      usePersona();
+      let resolveLate!: (v: boolean) => void;
+      vi.mocked(audioBufferEngine.scheduleSequence)
+        .mockImplementationOnce(
+          () =>
+            new Promise<boolean>((resolve) => {
+              resolveLate = resolve;
+            })
+        )
+        .mockResolvedValue(true);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'prepare', itemIndex: 0, endsAt: 10_000 }));
+      emit({ type: 'phase:deadlineChanged', endsAt: 12_000 });
+      // Det gamle full-forsøket svarer false ETTER at fristen flyttet — handleDeadline-
+      // Changed har alt kansellert og reskedulert mot 12 000; et short-forsøk mot
+      // 10 000 nå ville vært lyd mot en forlatt grense.
+      resolveLate(false);
+      await flush();
+
+      expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith([SHORT], { endAt: 10_000 });
+    });
+  });
+
   describe('kansellering — pause/reset/skip', () => {
     it('workout:paused → stopCurrentPersonaAudio (fade eies av bufferEngine.stop inne i den)', () => {
       const { engine, emit } = createFakeEngine();

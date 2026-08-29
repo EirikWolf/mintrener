@@ -36,7 +36,8 @@
     "intro": "/audio/personas/boyband/intro.mp3",
     "last5": "/audio/personas/boyband/last5.mp3",
     "rest": "/audio/personas/boyband/rest.mp3",
-    "start_321": "/audio/personas/boyband/start_321.mp3"
+    "start_321": "/audio/personas/boyband/start_321.mp3",
+    "start_321_short": "/audio/personas/boyband/start_321_short.mp3"
   },
   "hardcore": {
     "bro-naa": "/audio/personas/hardcore/bro-naa.mp3",
@@ -75,7 +76,8 @@
     "intro": "/audio/personas/hardcore/intro.mp3",
     "last5": "/audio/personas/hardcore/last5.mp3",
     "rest": "/audio/personas/hardcore/rest.mp3",
-    "start_321": "/audio/personas/hardcore/start_321.mp3"
+    "start_321": "/audio/personas/hardcore/start_321.mp3",
+    "start_321_short": "/audio/personas/hardcore/start_321_short.mp3"
   },
   "haugesund": {
     "bro-naa": "/audio/personas/haugesund/bro-naa.mp3",
@@ -114,7 +116,8 @@
     "intro": "/audio/personas/haugesund/intro.mp3",
     "last5": "/audio/personas/haugesund/last5.mp3",
     "rest": "/audio/personas/haugesund/rest.mp3",
-    "start_321": "/audio/personas/haugesund/start_321.mp3"
+    "start_321": "/audio/personas/haugesund/start_321.mp3",
+    "start_321_short": "/audio/personas/haugesund/start_321_short.mp3"
   },
   "romsdal": {
     "bro-naa": "/audio/personas/romsdal/bro-naa.mp3",
@@ -153,6 +156,7 @@
     "intro": "/audio/personas/romsdal/intro.mp3",
     "last5": "/audio/personas/romsdal/last5.mp3",
     "rest": "/audio/personas/romsdal/rest.mp3",
-    "start_321": "/audio/personas/romsdal/start_321.mp3"
+    "start_321": "/audio/personas/romsdal/start_321.mp3",
+    "start_321_short": "/audio/personas/romsdal/start_321_short.mp3"
   }
 }

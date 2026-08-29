@@ -80,7 +80,7 @@ type ResyncEvent = Extract<EngineEvent, { type: 'resync' }>;
 
 /** Hva som er skedulert for inneværende fase — nok til å reskedulere ved fristflytt. */
 type PendingLookahead =
-  | { kind: 'boundary'; start321Key: string; goKey: string }
+  | { kind: 'boundary'; start321Key: string; start321ShortKey: string | null; goKey: string }
   | { kind: 'last5'; key: string };
 
 /**
@@ -182,7 +182,25 @@ export function createAudioDirector(engine: AudioDirectorEngine): () => void {
       if (!ok && epoch === phaseEpoch) beepFallback = true;
     };
     if (pending.kind === 'boundary') {
-      void audioBufferEngine.scheduleSequence([pending.start321Key], { endAt: endsAt }).then(flagIfTooTight);
+      // start_321-stigen (live timing-funn A): fullvarianten (~20 s) får aldri
+      // plass i Tabatas 10 s-grensefaser — prøv den hale-trimmede short-
+      // varianten før pip-fallbacken. Trygt mot dobbel avspilling: false fra
+      // scheduleSequence er kontraktsfestet uten sideeffekter (ucachet nøkkel/
+      // manglende bro/for trangt vindu — ingenting ble skedulert), og et stopp/
+      // kansellering i resume-await-vinduet svarer true, aldri false. Stale-
+      // vakten (epoch + frist) hindrer at et SENT false-svar (resume-await)
+      // skedulerer short mot en forlatt fase eller flyttet frist —
+      // handleDeadlineChanged har da alt kansellert og reskedulert selv.
+      const shortKey = pending.start321ShortKey;
+      void audioBufferEngine.scheduleSequence([pending.start321Key], { endAt: endsAt }).then((ok) => {
+        if (ok) return;
+        if (epoch !== phaseEpoch || endsAt !== currentDeadline) return;
+        if (shortKey) {
+          void audioBufferEngine.scheduleSequence([shortKey], { endAt: endsAt }).then(flagIfTooTight);
+        } else {
+          flagIfTooTight(false);
+        }
+      });
       void audioBufferEngine.scheduleSequence([pending.goKey], { startAt: endsAt }).then(flagIfTooTight);
     } else {
       // last5-svikt gir INGEN pip-fallback: cuen er motivasjon midt i fasen,
@@ -204,7 +222,14 @@ export function createAudioDirector(engine: AudioDirectorEngine): () => void {
       // tilstand som kan drifte mellom økter.
       const goKey = getPersonaClipKey(`go-${(e.itemIndex % 3) + 1}`);
       if (!start321Key || !goKey) return;
-      pending = { kind: 'boundary', start321Key, goKey };
+      // short-varianten er valgfri (kan mangle ved bygg) — stigen degraderer
+      // da til dagens full-eller-pip-adferd.
+      pending = {
+        kind: 'boundary',
+        start321Key,
+        start321ShortKey: getPersonaClipKey('start_321_short'),
+        goKey,
+      };
       issuePending(e.endsAt);
     } else if (e.phase === 'work' && e.durationS >= LAST5_MIN_WORK_S) {
       const key = getPersonaClipKey('last5');

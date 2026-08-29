@@ -54,7 +54,7 @@ export interface TtsTask {
 export interface RecordedTask {
   readonly kind: 'recorded';
   readonly personaId: string;
-  readonly id: 'start_321';
+  readonly id: 'start_321' | 'start_321_short';
   readonly sourceRelPath: string;
   readonly outputRelPath: string;
 }
@@ -230,6 +230,10 @@ function recordedTasks(personaId: string, persona: PersonaDef): RecordedTask[] {
   if (!source) {
     throw new Error(`Mangler innspilt kildefil for persona "${personaId}"`);
   }
+  // Begge variantene kuttes fra SAMME kildeinnspilling: full lengde til lange
+  // faser, og en hale-trimmet short-variant (START321_SHORT_TAIL_S) som får
+  // plass i korte faser (Tabatas 10 s-klargjøring/-pause) der aldri-avkuttet-
+  // regelen ellers dropper 3-2-1-sporet helt.
   return [
     {
       kind: 'recorded',
@@ -237,6 +241,13 @@ function recordedTasks(personaId: string, persona: PersonaDef): RecordedTask[] {
       id: 'start_321',
       sourceRelPath: source,
       outputRelPath: outputPath(personaId, 'start_321.mp3'),
+    },
+    {
+      kind: 'recorded',
+      personaId,
+      id: 'start_321_short',
+      sourceRelPath: source,
+      outputRelPath: outputPath(personaId, 'start_321_short.mp3'),
     },
   ];
 }
@@ -425,18 +436,49 @@ export function buildTtsFfmpegArgs(inputPath: string, outputPath: string): strin
 }
 
 /**
- * Skånsom kjede for de INNSPILTE Tre-To-En-sporene: kun trim + fade +
- * loudnorm. Bevisst ingen denoise/EQ — dette er ferdig produserte vokalspor
- * som ikke skal farges av TTS-reparasjonene.
+ * Skånsom kjede for de INNSPILTE Tre-To-En-sporene: kun trim + fade + loudnorm.
+ * Bevisst ingen denoise/EQ — dette er ferdig produserte vokalspor som ikke skal
+ * farges av TTS-reparasjonene. Delt av full- og short-variantbyggerne.
  */
+const RECORDED_CHAIN: readonly string[] = [
+  'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05',
+  'areverse',
+  'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05',
+  TTS_POST.FADE,
+  'areverse',
+  TTS_POST.LOUDNORM,
+];
+
 export function buildRecordedFfmpegArgs(inputPath: string, outputPath: string): string[] {
+  return ffmpegArgs(inputPath, RECORDED_CHAIN.join(','), outputPath);
+}
+
+/**
+ * Kalibreringskonstant for start_321_short: hvor mange sekunder av HALEN på
+ * kildeinnspillingen som beholdes. Tabatas korteste grensefaser er 10 s, og
+ * scheduleSequence krever litt lead-tid — 8,5 s gir rom uten avkutting.
+ * Produkteier lytter og justerer: én linje, kjør `--only start_321_short --force`.
+ */
+export const START321_SHORT_TAIL_S = 8.5;
+
+/**
+ * Trimmet start_321-variant for korte faser: de SISTE START321_SHORT_TAIL_S
+ * sekundene av INNHOLDET. Ren atrim-tilnærming via areverse (i stedet for
+ * -sseof på inputen): kildene har 0-5 s halestillhet, så et rått tail-kutt
+ * ville gitt 3-8 s faktisk tale avhengig av persona — her trimmes stillheten
+ * FØR utsnittet måles, uten å måtte kjenne klipplengden. Deretter afade som
+ * jevner den midt-i-lyden-kuttede starten, og nøyaktig samme skånsomme kjede
+ * som fullvarianten.
+ */
+export function buildRecordedShortFfmpegArgs(inputPath: string, outputPath: string): string[] {
   const filter = [
-    'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05',
     'areverse',
+    // Samme haletrim som RECORDED_CHAIN (her først, så atrim måler ren tale)
     'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05',
-    TTS_POST.FADE,
+    `atrim=end=${START321_SHORT_TAIL_S}`,
     'areverse',
-    TTS_POST.LOUDNORM,
+    'afade=t=in:st=0:d=0.4',
+    ...RECORDED_CHAIN,
   ].join(',');
   return ffmpegArgs(inputPath, filter, outputPath);
 }
