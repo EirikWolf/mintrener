@@ -41,6 +41,13 @@ export interface AudioDirectorEngine {
 interface DirectorCtx {
   engine: AudioDirectorEngine;
   getPhaseEpoch(): number;
+  /**
+   * Melder fra at en reaktiv annonsering NETTOPP startet, og hvor lenge den
+   * varer (ms; null/0 = ukjent eller ingenting å beskytte). Directoren fester
+   * hodrommet og re-utsteder lookaheaden mot det (BØR-3) — ellers ville en
+   * fristflytt rett etterpå skedulert en nedtelling midt oppi annonseringen.
+   */
+  protectAnnouncement(durationMs: number | null): void;
 }
 
 export type AnnouncementPlan = 'persona' | 'studio' | 'bridge-tts' | 'tts' | 'beep-only';
@@ -207,6 +214,33 @@ function deriveRestChain(event: PhaseStartedEvent): AnnounceChain {
     return { cue, bridge: cachedPersonaKey('bro-neste'), name: null };
   }
   return { ...EMPTY_ANNOUNCE_CHAIN, cue };
+}
+
+/**
+ * resync (β3): [bro-resync, øvelsesnavn] etter samme spec § 4-prioritet.
+ * bridge === null betyr at broen ikke er cachet → kalleren tar dagens reaktive
+ * playClipOrFallback-sti. name === null → TTS leser navnet etter kjedeslutt.
+ *
+ * BØR-3 (andre review): dette var en TREDJE uavhengig kopi av § 4-kjeden inne i
+ * announcePersonaResync. Nå er den en utledning på linje med prepare/rest, med
+ * samme AnnounceChain-form — som også gjør at hodrommet kan måles fra den.
+ */
+function deriveResyncChain(target: Exercise): AnnounceChain {
+  const bridge = cachedPersonaKey('bro-resync');
+  if (bridge === null) return EMPTY_ANNOUNCE_CHAIN;
+  const studioKey = 'exercise-' + target.id;
+  const personaKey = getPersonaClipKey(studioKey); // exercise-<id> under personaens sti
+  const plan = resolveAnnouncementPlan({
+    personaActive: true,
+    personaClipCached: personaKey !== null && audioBufferEngine.has(personaKey),
+    studioClipCached: audioBufferEngine.has(studioKey),
+    isCustomExercise: isCustomExercise(target),
+    speechEnabled: true, // gatet av kalleren (mirrorLegacyResync)
+  });
+  if (plan === 'persona' && personaKey) return { cue: null, bridge, name: personaKey };
+  if (plan === 'studio') return { cue: null, bridge, name: studioKey };
+  // bridge-tts/tts: broen spiller, TTS leser kun navnet etterpå (valg B).
+  return { cue: null, bridge, name: null };
 }
 
 /**
@@ -415,9 +449,28 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
     return announceEndsAt === null ? null : Math.max(0, announceEndsAt - engine.getNow());
   }
 
+  /**
+   * BØR-3: en reaktiv annonsering utenfor fasestart-veien (resync-cuen etter
+   * catch-up) skal ha samme beskyttelse som fasestartens kjede. Vi fester
+   * hodrommet OG re-utsteder lookaheaden mot det — ellers ville den allerede
+   * skedulerte nedtellingen (eller neste fristflytt) blitt hørbar midt i
+   * annonseringen. Samme hygiene som handleDeadlineChanged: ny generasjon,
+   * nullstilte flagg, cancelScheduled før ny utstedelse.
+   */
+  function protectAnnouncement(durationMs: number | null): void {
+    if (durationMs === null || durationMs <= 0) return;
+    announceEndsAt = engine.getNow() + durationMs;
+    if (!pending || currentDeadline === null) return;
+    issueGen++;
+    beepFallback = false;
+    lookaheadDegraded = false;
+    audioBufferEngine.cancelScheduled();
+    issuePending(currentDeadline, durationMs);
+  }
+
   // Delt med speil-funksjonene: gir TTS-etter-kjede-veiene tilgang til
   // fase-epoken (guard mot skip-lekkasje — se DirectorCtx).
-  const ctx: DirectorCtx = { engine, getPhaseEpoch: () => phaseEpoch };
+  const ctx: DirectorCtx = { engine, getPhaseEpoch: () => phaseEpoch, protectAnnouncement };
 
   /**
    * start_321-stigen (live timing-funn A): fullvarianten (19,8–27,8 s avhengig
@@ -1039,24 +1092,18 @@ function announcePersonaResync(
   target: Exercise,
   fallbackText: string
 ): void {
-  const broKey = getPersonaClipKey('bro-resync');
   const studioKey = 'exercise-' + target.id;
-  if (!broKey || !audioBufferEngine.has(broKey)) {
+  const chain = deriveResyncChain(target);
+  if (chain.bridge === null) {
     audioClipService.playClipOrFallback(studioKey, fallbackText);
     return;
   }
-  const personaKey = getPersonaClipKey(studioKey); // exercise-<id> under personaens sti
-  const plan = resolveAnnouncementPlan({
-    personaActive: true,
-    personaClipCached: personaKey !== null && audioBufferEngine.has(personaKey),
-    studioClipCached: audioBufferEngine.has(studioKey),
-    isCustomExercise: isCustomExercise(target),
-    speechEnabled: true, // gatet av kalleren (mirrorLegacyResync)
-  });
-  if (plan === 'persona' && personaKey) {
-    void audioBufferEngine.playSequence([broKey, personaKey]);
-  } else if (plan === 'studio') {
-    void audioBufferEngine.playSequence([broKey, studioKey]);
+  // BØR-3: samme hodromsbeskyttelse som fasestartens kjede. Resync-cuen spilles
+  // nettopp i catch-up-situasjonen der lookaheaden alt er utstedt (eller
+  // fristen flyttes rett etterpå), og var før helt ubeskyttet.
+  ctx.protectAnnouncement(announceChainMs(chain));
+  if (chain.name !== null) {
+    void audioBufferEngine.playSequence(announceChainKeys(chain));
   } else {
     // bridge-tts/tts: broen spiller, TTS leser kun navnet etterpå (valg B).
     // Delegert til playBridgeThenTts (guard-dedup, review-punkt 4) — epoch-
