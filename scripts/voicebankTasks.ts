@@ -26,6 +26,8 @@ export interface ExerciseDef {
   readonly id: string;
   readonly displayText: string;
   readonly ttsText: string;
+  /** Valgfri språkoverstyring for TTS (f.eks. 'en'); default manifestets 'no'. */
+  readonly ttsLang?: string;
   readonly file: string;
 }
 
@@ -43,6 +45,10 @@ export interface TtsTask {
   readonly text: string;
   readonly seedFile: string;
   readonly outputRelPath: string;
+  /** Permanent rå-cache av TTS-nedlastingen — gjør etterbehandling gratis å iterere. */
+  readonly cacheRelPath: string;
+  /** TTS-språk for akkurat denne oppgaven ('no' med mindre ttsLang overstyrer). */
+  readonly lang: string;
 }
 
 export interface RecordedTask {
@@ -95,6 +101,10 @@ export function parseManifest(raw: unknown): VoicebankManifest {
 export interface CliOptions extends TaskFilters {
   readonly dryRun: boolean;
   readonly force: boolean;
+  /** Regenerér output fra rå-cachen med ffmpeg-kjeden — uten nettverk/token. */
+  readonly reprocess: boolean;
+  /** Tving ny TTS-henting (ny stokastisk take) selv om cachen er fersk. */
+  readonly refetch: boolean;
 }
 
 /**
@@ -111,13 +121,53 @@ export function parseCliArgs(argv: readonly string[]): CliOptions {
     }
     return value;
   };
+  const reprocess = argv.includes('--reprocess');
+  const refetch = argv.includes('--refetch');
+  if (reprocess && refetch) {
+    throw new Error(
+      'Flaggene --refetch og --reprocess kan ikke kombineres: --reprocess er kun lokal ffmpeg fra cache, --refetch henter ny TTS.',
+    );
+  }
   return {
     dryRun: argv.includes('--dry-run'),
     force: argv.includes('--force'),
     skipRecorded: argv.includes('--skip-recorded'),
+    reprocess,
+    refetch,
     persona: valueOf('--persona'),
     only: valueOf('--only'),
   };
+}
+
+export type TtsAction =
+  | 'skip-existing'
+  | 'process-from-cache'
+  | 'fetch-then-process'
+  | 'missing-cache';
+
+/**
+ * Bestemmer hva som skal skje med en TTS-oppgave (cache-kontrakten):
+ * - --refetch henter alltid ny TTS (ny stokastisk take) og re-prosesserer,
+ *   uansett cache/output. (Kombinasjon med --reprocess avvises i parseCliArgs.)
+ * - --reprocess leser alltid fra cache og rører aldri nettet; manglende
+ *   cache-fil er da en feil.
+ * - Ellers: eksisterende output uten --force → hopp over hele oppgaven.
+ * - Skal output produseres, gjenbrukes cache-fila om den finnes (GPU-tid
+ *   brukes bare én gang per tekst); bare uten cache går vi på nettet.
+ */
+export function decideTtsAction(state: {
+  readonly cacheExists: boolean;
+  readonly outputExists: boolean;
+  readonly force: boolean;
+  readonly reprocess: boolean;
+  readonly refetch?: boolean;
+}): TtsAction {
+  if (state.refetch) return 'fetch-then-process';
+  if (state.reprocess) {
+    return state.cacheExists ? 'process-from-cache' : 'missing-cache';
+  }
+  if (state.outputExists && !state.force) return 'skip-existing';
+  return state.cacheExists ? 'process-from-cache' : 'fetch-then-process';
 }
 
 /**
@@ -153,7 +203,14 @@ function outputPath(personaId: string, file: string): string {
   return `public/audio/personas/${personaId}/${file}`;
 }
 
-function cueTasks(personaId: string, persona: PersonaDef): TtsTask[] {
+/** Rå-cache: uprosesserte TTS-nedlastinger (gitignorert, men permanent lokalt). */
+export const RAW_CACHE_DIR = 'audio/raw-cache';
+
+function cachePath(personaId: string, file: string): string {
+  return `${RAW_CACHE_DIR}/${personaId}/${file}`;
+}
+
+function cueTasks(personaId: string, persona: PersonaDef, lang: string): TtsTask[] {
   return Object.entries(persona.cues).map(([cueId, cue]) => ({
     kind: 'tts',
     personaId,
@@ -161,6 +218,8 @@ function cueTasks(personaId: string, persona: PersonaDef): TtsTask[] {
     text: cue.text,
     seedFile: persona.seedFile,
     outputRelPath: outputPath(personaId, cue.file),
+    cacheRelPath: cachePath(personaId, cue.file),
+    lang,
   }));
 }
 
@@ -186,6 +245,7 @@ function exerciseTasks(
   personaId: string,
   persona: PersonaDef,
   exercises: readonly ExerciseDef[],
+  defaultLang: string,
 ): TtsTask[] {
   // Bevisst ttsText (fonetisk stavemåte), aldri displayText.
   return exercises.map((ex) => ({
@@ -195,6 +255,8 @@ function exerciseTasks(
     text: ex.ttsText,
     seedFile: persona.seedFile,
     outputRelPath: outputPath(personaId, ex.file),
+    cacheRelPath: cachePath(personaId, ex.file),
+    lang: ex.ttsLang ?? defaultLang,
   }));
 }
 
@@ -206,11 +268,12 @@ export function buildTaskList(
   manifest: VoicebankManifest,
   filters: TaskFilters,
 ): VoicebankTask[] {
+  const defaultLang = manifest.language || 'no';
   const all = Object.entries(manifest.personas).flatMap(
     ([personaId, persona]): VoicebankTask[] => [
-      ...cueTasks(personaId, persona),
+      ...cueTasks(personaId, persona, defaultLang),
       ...(filters.skipRecorded ? [] : recordedTasks(personaId, persona)),
-      ...exerciseTasks(personaId, persona, manifest.exercises),
+      ...exerciseTasks(personaId, persona, manifest.exercises, defaultLang),
     ],
   );
   return all
@@ -222,7 +285,7 @@ export interface ClonePayload {
   readonly text: string;
   readonly voice_mode: 'clone';
   readonly reference_audio_filename: string;
-  readonly language: 'no';
+  readonly language: string;
   readonly output_format: 'mp3';
 }
 
@@ -230,34 +293,103 @@ export interface ClonePayload {
  * Clone-payload for Chatterbox på Kitor. Feltet heter reference_audio_filename
  * (IKKE audio_prompt_path) og skal være bart filnavn — serveren resolver selv
  * i reference_audio/. Verifisert mot serveren i kitor-voice-audition-clone.sh.
+ * `lang` følger oppgavens ttsLang (default 'no'); seed-stemmen bærer uansett
+ * klangen, språket styrer uttaleregler.
  */
-export function buildClonePayload(text: string, seedFile: string): ClonePayload {
+export function buildClonePayload(
+  text: string,
+  seedFile: string,
+  lang: string = 'no',
+): ClonePayload {
   return {
     text,
     voice_mode: 'clone',
     reference_audio_filename: seedFile,
-    language: 'no',
+    language: lang,
     output_format: 'mp3',
   };
 }
 
+/** Sidecar-format for rå-cachen: hva klippet faktisk ble generert fra. */
+export interface CacheSidecar {
+  readonly text: string;
+  readonly lang: string;
+}
+
+/** Minimal I/O-flate for persistRawCache — fs oppfyller den direkte. */
+export interface RawCacheIo {
+  rmSync(path: string, opts: { force: boolean }): void;
+  writeFileSync(path: string, data: Uint8Array | string): void;
+}
+
 /**
- * Etterbehandlingskjede per klipp (jf. spec § 5):
- *  1. silenceremove foran, og — via areverse-trikset — bak.
- *  2. ~10 ms fade lagt som fade-inn mens lyden er reversert = fade-UT i
- *     resultatet, uten å måtte kjenne klipplengden.
- *  3. loudnorm én-pass til felles nivå på tvers av personas.
- * -ar 44100 fordi loudnorm ellers leverer 192 kHz internt samplerate.
+ * Skriver rå-cache + sidecar i kræsjtrygg rekkefølge: sidecaren slettes FØR
+ * mp3-skrivingen og skrives på nytt ETTERPÅ. Et kræsj midt i mp3-skrivingen
+ * etterlater dermed aldri en trunkert cache-fil med matchende sidecar —
+ * neste kjøring ser manglende sidecar og re-henter.
  */
-export function buildFfmpegArgs(inputPath: string, outputPath: string): string[] {
-  const filter = [
-    'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05',
-    'areverse',
-    'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05',
-    'afade=t=in:st=0:d=0.01',
-    'areverse',
-    'loudnorm=I=-16:TP=-1.5:LRA=11',
-  ].join(',');
+export function persistRawCache(
+  cachePath: string,
+  sidecarPath: string,
+  audio: Uint8Array,
+  sidecar: CacheSidecar,
+  io: RawCacheIo,
+): void {
+  io.rmSync(sidecarPath, { force: true });
+  io.writeFileSync(cachePath, audio);
+  io.writeFileSync(sidecarPath, JSON.stringify(sidecar));
+}
+
+/**
+ * Er cache-fila fortsatt gyldig for oppgaven? Sidecaren (<cachefil>.json)
+ * bærer tekst+språk klippet ble generert med; avvik (redigert manuskript,
+ * endret ttsLang) eller manglende/korrupt sidecar → re-hent fra TTS.
+ */
+export function cacheIsFresh(
+  sidecarRaw: string | null,
+  task: Pick<TtsTask, 'text' | 'lang'>,
+): boolean {
+  if (sidecarRaw === null) return false;
+  try {
+    const parsed = JSON.parse(sidecarRaw) as Partial<CacheSidecar>;
+    return parsed.text === task.text && parsed.lang === task.lang;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Etterbehandlingsparametre (v2 etter QA-runde 1, 2026-08-29). Samlet her slik
+ * at neste lytterunde er én-linjes justeringer. Hver konstant refererer
+ * QA-funnet den adresserer:
+ *  - QA-1: ord amputeres i start/slutt («ulekroppshold») — myke ansatser (/h/)
+ *    kuttes av silenceremove.
+ *  - QA-2: bakgrunnsstøy på enkelte klipp.
+ *  - QA-3: lyden er «skarp» og «tørr».
+ */
+export const TTS_POST = {
+  /** QA-2/3: fjerner rumling under taleområdet før denoise. */
+  HIGHPASS: 'highpass=f=75',
+  /** QA-2: FFT-denoise. Kjøres FØR trim så terskelen ser et rent støygulv. */
+  DENOISE: 'afftdn=nr=12:nf=-42',
+  /** QA-1: start-trim med 100 ms bevart pre-roll — fiksen for amputerte ansatser. */
+  TRIM_START: 'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.1',
+  /** QA-1: slutt-trim (via areverse) med ~60 ms rom før faden. */
+  TRIM_END: 'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.06',
+  /** ~10 ms fade mot klikk; ligger som fade-inn mens lyden er reversert. */
+  FADE: 'afade=t=in:st=0:d=0.01',
+  /** QA-3: demper skarpe s-lyder. NB: uten i= er deesser en no-op (default 0). */
+  DEESSER: 'deesser=i=0.15',
+  /** QA-3: «skarp» — senker diskanten litt. */
+  TREBLE: 'treble=g=-2.5:f=7500',
+  /** QA-3: «tørr» — litt varme i bunn. */
+  BASS: 'bass=g=1:f=180',
+  /** Felles nivå på tvers av personas (én-pass er godt nok). */
+  LOUDNORM: 'loudnorm=I=-16:TP=-1.5:LRA=11',
+} as const;
+
+function ffmpegArgs(inputPath: string, filter: string, outputPath: string): string[] {
+  // -ar 44100 fordi loudnorm ellers leverer 192 kHz internt samplerate.
   return [
     '-hide_banner',
     '-nostdin',
@@ -268,4 +400,43 @@ export function buildFfmpegArgs(inputPath: string, outputPath: string): string[]
     '-ar', '44100',
     outputPath,
   ];
+}
+
+/**
+ * Etterbehandlingskjede v2 for TTS-klipp: highpass → denoise → trim foran →
+ * (areverse) trim bak + fade → mykgjøring (deesser/treble/bass) → loudnorm.
+ * Slutt-trim/fade bruker areverse-trikset så vi slipper å kjenne klipplengden.
+ */
+export function buildTtsFfmpegArgs(inputPath: string, outputPath: string): string[] {
+  const filter = [
+    TTS_POST.HIGHPASS,
+    TTS_POST.DENOISE,
+    TTS_POST.TRIM_START,
+    'areverse',
+    TTS_POST.TRIM_END,
+    TTS_POST.FADE,
+    'areverse',
+    TTS_POST.DEESSER,
+    TTS_POST.TREBLE,
+    TTS_POST.BASS,
+    TTS_POST.LOUDNORM,
+  ].join(',');
+  return ffmpegArgs(inputPath, filter, outputPath);
+}
+
+/**
+ * Skånsom kjede for de INNSPILTE Tre-To-En-sporene: kun trim + fade +
+ * loudnorm. Bevisst ingen denoise/EQ — dette er ferdig produserte vokalspor
+ * som ikke skal farges av TTS-reparasjonene.
+ */
+export function buildRecordedFfmpegArgs(inputPath: string, outputPath: string): string[] {
+  const filter = [
+    'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05',
+    'areverse',
+    'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05',
+    TTS_POST.FADE,
+    'areverse',
+    TTS_POST.LOUDNORM,
+  ].join(',');
+  return ffmpegArgs(inputPath, filter, outputPath);
 }
