@@ -20,7 +20,6 @@ import { SkillTreeModal } from '../skills/SkillTreeModal';
 import { AiWorkoutGeneratorModal } from '../ai/AiWorkoutGeneratorModal';
 import { PainFilterModal } from './PainFilterModal';
 import { voiceCommandService, TimerVoiceCommand } from '../../services/voiceCommandService';
-import { updateMediaSession, clearMediaSession } from '../../services/mediaSessionService';
 import { STARTER_CHALLENGES } from '../../data/challenges';
 import { getActiveChallengeId, getChallengeProgress } from '../../services/challengeService';
 import { getFavoriteProgramIds } from '../../services/favoritesService';
@@ -219,26 +218,6 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
       setWeeklyProgress(null);
     }
   }, [workout, state.status]);
-
-  // MediaSession PWA Låseskjerm-kontroller (Steg 3)
-  React.useEffect(() => {
-    if (state.status === 'running' || state.status === 'paused') {
-      const exerciseTitle = state.currentExercise?.name || workout.name;
-      const phaseName = state.phase === 'work' ? 'Jobb' : state.phase === 'rest' ? 'Pause' : 'Klargjøring';
-      updateMediaSession({
-        title: exerciseTitle,
-        artist: `Min Trener • ${phaseName}`,
-        album: `${workout.name} • Runde ${state.currentRound}/${state.totalRounds}`,
-        artworkUrl: state.currentExercise ? `/images/exercises/${state.currentExercise.id}-0.png` : undefined,
-        onPlay: onResume,
-        onPause: onPause,
-        onNext: onSkipNext,
-        onPrevious: onPrevious,
-      });
-    } else {
-      clearMediaSession();
-    }
-  }, [state.status, state.phase, state.currentExercise, workout.name, state.currentRound, state.totalRounds, onResume, onPause, onSkipNext, onPrevious]);
 
   // Håndfri Stemmestyring Listener (Steg 1)
   React.useEffect(() => {
