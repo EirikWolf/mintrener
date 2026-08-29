@@ -810,6 +810,28 @@ describe('audioDirector (B3 β2)', () => {
       expect(audioService.playCountdownBeep).toHaveBeenCalledWith(true);
     });
 
+    it('BØR-1: tom kjede (hodrom 0) med varm cache — gaten er AV, pip-fallbacken består', async () => {
+      usePersona();
+      // Nedtellingsklippene er dekodet (varm cache), men det finnes ingen
+      // annonsering å beskytte: rest-cuen er ucachet og neste øvelse har
+      // verken persona- eller studioklipp → tom kjede. En tom kjede gir hodrom
+      // 0 (ikke null), så en gate som kun sjekker `!== null` ville vært aktiv
+      // med ingenting å beskytte — og i en 3–5 s grensefase ga det TOTAL
+      // stillhet der brukeren før fikk pip.
+      cacheClips({ [FULL]: 27.815, [SHORT]: 4.44 });
+      vi.mocked(audioBufferEngine.scheduleSequence).mockResolvedValue(false);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_B, endsAt: 5_000 }));
+      await flush();
+
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([FULL], { endAt: 5_000 });
+      expect(audioBufferEngine.scheduleSequence).toHaveBeenCalledWith([SHORT], { endAt: 5_000 });
+      emit({ type: 'countdown', secondsLeft: 3 });
+      expect(audioService.playCountdownBeep).toHaveBeenCalledWith(true);
+    });
+
     it('kaldstart (Ø2): short-nøkkelen finnes men bufferen er udekodet → scheduleSequence svarer false, og BÅDE pip og replan-flagg settes', async () => {
       usePersona();
       // Kommentaren i issuePending påsto at «mangler-short» konsekvent gir
