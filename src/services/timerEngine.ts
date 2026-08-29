@@ -371,6 +371,15 @@ export class TimerEngine {
     }
   }
 
+  /**
+   * Motorens «nå» (ms, samme klokke som endsAt i hendelsene) — AudioDirector
+   * måler tidsbroen mot lydklokken med denne ved workout:started (flagget
+   * minimal tilføyelse i β2: hendelsene bærer ikke selve klokkeavlesningen).
+   */
+  getNow(): number {
+    return this.now();
+  }
+
   subscribeEvents(handler: (e: EngineEvent) => void): () => void {
     this.eventHandlers.add(handler);
     return () => {
