@@ -1,4 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// Hindrer at den ekte firebase.ts initialiseres under collect (getAuth kaster
+// auth/invalid-api-key i testmiljø); firebase dras inn via telemetryService.
+vi.mock('../firebase', () => ({ db: {}, auth: {} }));
+
 import {
   generateShareUrl,
   getSharedWorkoutFromUrl,

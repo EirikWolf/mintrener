@@ -1,4 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// Hindrer at den ekte firebase.ts initialiseres under collect (getAuth kaster
+// auth/invalid-api-key i testmiljø); testene her er rene beregningsfunksjoner.
+// `auth` trengs fordi groupRoomService importerer den ved modul-lasting.
+vi.mock('../firebase', () => ({ db: {}, auth: {} }));
+
 import { calculateOneRepMax } from '../strengthLogService';
 import { calculateDistanceMeters, formatPace, generateGpxString } from '../gpsTrackingService';
 import { generateRoomCode } from '../groupRoomService';

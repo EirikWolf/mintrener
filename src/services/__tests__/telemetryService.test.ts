@@ -1,4 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// Hindrer at den ekte firebase.ts initialiseres under collect (getAuth kaster
+// auth/invalid-api-key i testmiljø); testene treffer aldri Firestore-veiene.
+vi.mock('../firebase', () => ({ db: {}, auth: {} }));
+
 import {
   getTelemetryConsent,
   setTelemetryConsent,
