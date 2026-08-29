@@ -162,6 +162,27 @@ describe('OnboardingFlow', () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
+  it('flytter fokus til overskriften ved mount og hvert steg-bytte (B4)', () => {
+    render(<OnboardingFlow onComplete={() => {}} />);
+    expect(screen.getByRole('heading', { name: 'Hvem skal trene deg?' })).toHaveFocus();
+    completeStep1();
+    expect(screen.getByRole('heading', { name: 'Hvor ofte vil du trene?' })).toHaveFocus();
+    completeStep2();
+    expect(screen.getByRole('heading', { name: 'Klar for første økt?' })).toHaveFocus();
+  });
+
+  it('▶-knappen eksponerer spilletilstand via aria-pressed', async () => {
+    // Et «ekte» audio-objekt holder spilletilstanden til onended fyrer
+    vi.mocked(playPersonaPreview).mockResolvedValueOnce({} as HTMLAudioElement);
+    render(<OnboardingFlow onComplete={() => {}} />);
+    const btn = screen.getByRole('button', { name: 'Forhåndshør Jossa' });
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+    expect(btn).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('«Hopp over» finnes også på steg 2 og 3', () => {
     const onComplete = vi.fn();
     render(<OnboardingFlow onComplete={onComplete} />);

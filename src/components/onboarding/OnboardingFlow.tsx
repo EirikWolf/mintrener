@@ -38,6 +38,15 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) =>
   const [goal, setGoal] = useState(3);
   const [customGoalOpen, setCustomGoalOpen] = useState(false);
 
+  // UU (fix-løkke B4): fokus flyttes til stegets overskrift ved mount og hvert
+  // steg-bytte, slik at skjermleser annonserer konteksten og tastaturbrukeren
+  // starter øverst i det nye steget. tabIndex={-1} gjør h1 programmatisk
+  // fokuserbar uten å legge den i tab-rekkefølgen.
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, [step]);
+
   // StrictMode-guard (samme mønster som WorkoutSummary): dobbel effekt-kjøring
   // i dev skal ikke doble started-telleren. Ref-en overlever simulert remount.
   const startedReportedRef = useRef(false);
@@ -131,7 +140,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) =>
               </div>
               <h1
                 id="onboarding-flow-title"
-                className="text-2xl font-black text-white tracking-tight"
+                ref={headingRef}
+                tabIndex={-1}
+                className="text-2xl font-black text-white tracking-tight outline-none"
               >
                 Hvem skal trene deg?
               </h1>
@@ -178,6 +189,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) =>
                           type="button"
                           onClick={() => handleTogglePreview(persona.id)}
                           aria-label={`Forhåndshør ${persona.name}`}
+                          aria-pressed={isPlaying}
                           title="Hør stemmeprøve"
                           className={`px-2.5 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1 transition-all active:scale-95 ${
                             isPlaying
@@ -224,7 +236,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) =>
             <div className="text-center space-y-2">
               <h1
                 id="onboarding-flow-title"
-                className="text-2xl font-black text-white tracking-tight"
+                ref={headingRef}
+                tabIndex={-1}
+                className="text-2xl font-black text-white tracking-tight outline-none"
               >
                 Hvor ofte vil du trene?
               </h1>
@@ -308,7 +322,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) =>
             <div className="text-center space-y-2">
               <h1
                 id="onboarding-flow-title"
-                className="text-2xl font-black text-white tracking-tight"
+                ref={headingRef}
+                tabIndex={-1}
+                className="text-2xl font-black text-white tracking-tight outline-none"
               >
                 Klar for første økt?
               </h1>

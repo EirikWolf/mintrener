@@ -411,6 +411,23 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
           </div>
           <ChevronRight className="w-4 h-4 text-zinc-400" />
         </button>
+
+        {/* Velkomstoppsett (C2, spec § 3): flyten kan gjenåpnes herfra.
+            Window-event i stedet for prop-drilling — App eier gate-staten,
+            samme mønster som 'user-profiles-changed'. */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('open-welcome-onboarding'))}
+          className="w-full flex items-center justify-between py-2.5 px-3 bg-zinc-950 hover:bg-zinc-800/80 rounded-xl border border-zinc-800 text-left transition-all"
+        >
+          <div className="flex items-center gap-2.5">
+            <Mic className="w-4 h-4 text-amber-400" />
+            <div>
+              <p className="text-xs font-bold text-white">Kjør velkomstoppsett på nytt</p>
+              <p className="text-[10px] text-zinc-400">Velg trenerstemme og ukesmål fra start</p>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-zinc-400" />
+        </button>
       </section>
 
       {/* 3. SENSORER & HARDWARE */}

@@ -21,12 +21,20 @@ test('førstegangsbruker: onboarding → persona → ukesmål → førsteside', 
   // Avslutning → førstesiden med timeren synlig
   await expect(page.getByText('Klar for første økt?')).toBeVisible();
   await page.getByRole('button', { name: 'Til første økta' }).click();
-  // exact: profilmodalen (1-spørsmåls-onboardingen) vises som forventet etter
-  // flyten (planpresisering 5 undertrykker den bare MENS flyten er oppe), og
-  // dens «Start med valgte profiler (1)» ville ellers substring-matchet START.
+
+  // B2 (planpresisering 6): profilmodalen er utsatt til neste besøk — landingen
+  // skal være timeren med START ett trykk unna, ikke en ny modal.
+  await expect(
+    page.getByRole('heading', { name: 'Hvor skal du bruke Min Trener?' })
+  ).toHaveCount(0);
+  // exact beholdes som robusthet mot fremtidige «Start …»-knapper i DOM-en.
   await expect(page.getByRole('button', { name: 'START', exact: true })).toBeVisible();
 
   // Persona-valget er persistert — treneren er i ørene ved første START
   const persona = await page.evaluate(() => localStorage.getItem('mintrener_coach_persona'));
   expect(persona).toBe('haugesund');
+
+  // START er faktisk klikkbar: økta går i gang med klargjøringsfasen
+  await page.getByRole('button', { name: 'START', exact: true }).click();
+  await expect(page.getByText('Klargjøring')).toBeVisible();
 });
