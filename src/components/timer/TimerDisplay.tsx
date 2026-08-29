@@ -26,6 +26,7 @@ import { getFavoriteProgramIds } from '../../services/favoritesService';
 import { TRAINING_PROGRAMS } from '../../data/programs';
 import { getInterruptedSession, clearInterruptedSession, InterruptedSession } from '../../services/sessionRecoveryService';
 import { checkAdaptiveProgression, ProgressionSuggestion } from '../../services/adaptiveProgressionService';
+import { WORKOUT_HISTORY_KEY } from '../../services/workoutHistoryStorage';
 import {
   Play,
   Pause,
@@ -211,7 +212,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
 
   React.useEffect(() => {
     try {
-      const raw = localStorage.getItem('mintrener_local_workout_history');
+      const raw = localStorage.getItem(WORKOUT_HISTORY_KEY);
       const hist = raw ? JSON.parse(raw) : [];
       const sug = checkAdaptiveProgression(workout, hist);
       setAdaptiveSuggestion(sug);

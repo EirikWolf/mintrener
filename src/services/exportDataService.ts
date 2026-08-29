@@ -1,6 +1,7 @@
 import { CompletedWorkoutLog } from '../types/models';
 import { CustomExerciseItem } from './customExercisesService';
 import { WorkoutTemplate } from '../types/workout';
+import { WORKOUT_HISTORY_KEY } from './workoutHistoryStorage';
 
 /**
  * Eksporterer alle treningsdata til en formatert JSON-fil for nedlasting
@@ -44,7 +45,7 @@ export async function exportFullUserDataset(_userId?: string | null): Promise<vo
   let strengthLogs: any[] = [];
 
   try {
-    const rawHist = localStorage.getItem('mintrener_local_workout_history');
+    const rawHist = localStorage.getItem(WORKOUT_HISTORY_KEY);
     if (rawHist) history = JSON.parse(rawHist);
 
     const rawEx = localStorage.getItem('mintrener_custom_exercises');
