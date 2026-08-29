@@ -431,7 +431,12 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
     const shortKey = p.start321ShortKey;
     const nowMs = engine.getNow();
     const fitsHeadroom = (key: string): boolean | null => {
-      if (headroomMs === null) return null;
+      // BØR-1: hodrom 0 er IKKE «beskytt alt» — det betyr at det ikke finnes
+      // noen annonsering å beskytte (tom kjede), eller at kjeden alt er
+      // ferdigspilt (fristflytt sent i fasen, se announceEndsAt). En aktiv gate
+      // der ville gitt total stillhet inn mot grensen: gate-grenen setter
+      // bevisst verken beepFallback eller lookaheadDegraded.
+      if (headroomMs === null || headroomMs <= 0) return null;
       const durationS = audioBufferEngine.getDuration(key);
       if (durationS === null) return null;
       return endsAt - durationS * 1000 >= nowMs + headroomMs + ANNOUNCE_SAFETY_MS;
