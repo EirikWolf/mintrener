@@ -72,6 +72,19 @@ const LAST5_LEAD_MS = 5000;
 // slik at korte intervaller ikke druknes i tale.
 const LAST5_MIN_WORK_S = 15;
 
+/**
+ * Annonserings-hodrom for endAt-forankrede grensekjeder (felttest-funn, Android/
+ * Klassisk Tabata der ALLE grensefaser er 10 s): short-varianten (8,5 s) ble
+ * endAt-forankret og STARTET ~1,5 s inn i fasen — den skedulerte kjeden
+ * preempter da (becomeAudibleWithPreemption, fade) den reaktive annonserings-
+ * kjeden som startet ved fasestart (rest-cue → bro-neste → øvelsesnavn, eller
+ * intro → førsteøvelse i prepare), og øvelsesnavnet ble ALDRI lest opp i hele
+ * økta. En kandidat med KJENT varighet skeduleres derfor kun når kjedestarten
+ * (endsAt − varighet) ligger minst så mange sekunder etter «nå» (motorklokken):
+ * 6 s gir rom til rest-cue + bro + øvelsesnavn før nedtellingen tar over.
+ */
+export const ANNOUNCE_HEADROOM_S = 6;
+
 // Grensefaser der nedtellingen kulminerer i en fasegrense med arbeids-tilrop.
 const BOUNDARY_PHASES: ReadonlyArray<IntervalPhase> = ['prepare', 'rest', 'round_rest'];
 
@@ -221,24 +234,49 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
     };
     if (pending.kind === 'boundary') {
       // start_321-stigen (live timing-funn A): fullvarianten (~20 s) får aldri
-      // plass i Tabatas 10 s-grensefaser — prøv den hale-trimmede short-
-      // varianten før pip-fallbacken. Trygt mot dobbel avspilling: false fra
+      // plass i Tabatas 10 s-grensefaser — prøv den kortere short-varianten
+      // før pip-fallbacken. Trygt mot dobbel avspilling: false fra
       // scheduleSequence er kontraktsfestet uten sideeffekter (ucachet nøkkel/
       // manglende bro/for trangt vindu — ingenting ble skedulert), og et stopp/
       // kansellering i resume-await-vinduet svarer true, aldri false. Stale-
       // vakten (epoch + frist) hindrer at et SENT false-svar (resume-await)
       // skedulerer short mot en forlatt fase eller flyttet frist —
       // handleDeadlineChanged har da alt kansellert og reskedulert selv.
+      //
+      // Annonseringsprioritet (ANNOUNCE_HEADROOM_S, felttest-funn): en kandidat
+      // med KJENT varighet skeduleres kun når kjedestarten (endsAt − varighet)
+      // gir annonseringskjeden minst hodrommet fra «nå» (motorklokken, samme
+      // tidsbase som endsAt). fitsHeadroom: null = ukjent varighet (ucachet,
+      // kaldstart) → dagens stige uendret; degraderingsflagget + replan-
+      // CurrentPhase re-evaluerer med fasit når preload er ferdig.
       const shortKey = pending.start321ShortKey;
-      void audioBufferEngine.scheduleSequence([pending.start321Key], { endAt: endsAt }).then((ok) => {
-        if (ok) return;
-        if (epoch !== phaseEpoch || endsAt !== currentDeadline || gen !== issueGen) return;
-        if (shortKey) {
+      const nowMs = engine.getNow();
+      const fitsHeadroom = (key: string): boolean | null => {
+        const durationS = audioBufferEngine.getDuration(key);
+        if (durationS === null) return null;
+        return endsAt - durationS * 1000 >= nowMs + ANNOUNCE_HEADROOM_S * 1000;
+      };
+      if (fitsHeadroom(pending.start321Key) === false) {
+        // Full er cachet men ville preemptet annonseringen — forsøk aldri full;
+        // vurder short direkte mot samme hodrom.
+        if (shortKey && fitsHeadroom(shortKey) !== false) {
           void audioBufferEngine.scheduleSequence([shortKey], { endAt: endsAt }).then(flagIfTooTight);
-        } else {
-          flagIfTooTight(false);
         }
-      });
+        // Ellers (short passer heller ikke, eller mangler): INGEN endAt-kjede
+        // og INGEN pip-/degraderingsflagg — dette er en bevisst prioritering av
+        // annonseringen, ikke en degradering. Go-tilropet på grensen skeduleres
+        // uansett (under) og markerer fasebyttet.
+      } else {
+        void audioBufferEngine.scheduleSequence([pending.start321Key], { endAt: endsAt }).then((ok) => {
+          if (ok) return;
+          if (epoch !== phaseEpoch || endsAt !== currentDeadline || gen !== issueGen) return;
+          if (shortKey) {
+            void audioBufferEngine.scheduleSequence([shortKey], { endAt: endsAt }).then(flagIfTooTight);
+          } else {
+            flagIfTooTight(false);
+          }
+        });
+      }
       void audioBufferEngine.scheduleSequence([pending.goKey], { startAt: endsAt }).then(flagIfTooTight);
     } else {
       // last5-svikt gir INGEN pip-fallback: cuen er motivasjon midt i fasen,
