@@ -9,6 +9,9 @@ export default defineConfig({
     setupFiles: './src/test/setup.ts',
     // Regeltestene krever Firestore-emulator og kjøres separat via `npm run test:rules`;
     // Playwright-røyken (e2e/) kjøres av Playwright via `npm run test:e2e`, ikke Vitest.
-    exclude: [...configDefaults.exclude, 'tests/rules/**', 'e2e/**'],
+    // .claude/ ekskluderes fordi agent-worktrees (.claude/worktrees/<navn>/) er hele
+    // repo-kopier — uten filteret sveiper vitest opp ANDRE økters testfiler og
+    // dobbelt-/feilkjører dem mot deres halvferdige tilstand.
+    exclude: [...configDefaults.exclude, 'tests/rules/**', 'e2e/**', '**/.claude/**'],
   },
 })

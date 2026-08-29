@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useSyncExternalStore } from 'react';
 import { WorkoutTemplate } from '../types/workout';
 import { TimerEngine } from '../services/timerEngine';
-import { createAudioDirector } from '../services/audioDirector';
+import { createAudioDirector, AudioDirectorHandle } from '../services/audioDirector';
 import { createVibrationSubscriber } from '../services/vibrationSubscriber';
 import { createPersistenceSubscriber } from '../services/persistenceSubscriber';
 import { createMediaSessionSubscriber } from '../services/mediaSessionSubscriber';
@@ -66,12 +66,19 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
   // skje (callbacks er ubrukelige før render). Viktig: MediaSession-abonnenten
   // fanger øktnavnet fra workout:started/restored — en sent koblet abonnent
   // ville mistet det.
+  // Directorens handle holdes i ref: startWorkout trenger replanCurrentPhase
+  // (kaldstart-replan, Oppgave B) etter at preload-promiset løses — lenge etter
+  // at abonnent-effekten monterte den.
+  const audioDirectorRef = useRef<AudioDirectorHandle | null>(null);
+
   useEffect(() => {
+    // β4: AudioDirector er ENESTE lydabonnent (spec § 4) — erstatter
+    // LegacyAudioAdapter fra α4. Kobles som resten FØR noe start()-kall kan
+    // skje, så workout:started (tidsbro-målingen) aldri går tapt.
+    const audioDirector = createAudioDirector(engine);
+    audioDirectorRef.current = audioDirector;
     const subs = [
-      // β4: AudioDirector er ENESTE lydabonnent (spec § 4) — erstatter
-      // LegacyAudioAdapter fra α4. Kobles som resten FØR noe start()-kall kan
-      // skje, så workout:started (tidsbro-målingen) aldri går tapt.
-      createAudioDirector(engine),
+      audioDirector.unsubscribe,
       createVibrationSubscriber(engine),
       createPersistenceSubscriber(engine),
       createMediaSessionSubscriber(engine, {
@@ -79,7 +86,10 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
         onPause: () => mediaControlsRef.current.pause(),
       }),
     ];
-    return () => subs.forEach((unsubscribe) => unsubscribe());
+    return () => {
+      audioDirectorRef.current = null;
+      subs.forEach((unsubscribe) => unsubscribe());
+    };
   }, [engine]);
 
   // Ticker (worker-metronom med setInterval-fallback) + visibility-opphenting.
@@ -127,7 +137,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
       // A5: brakketterer denne ene økten for ytelsesmåling — se fullførings-
       // effekten over og resetWorkout (avbrudd = forkastet rapport).
       perfMonitorService.startWorkoutMonitoring();
-      preloadPersonaAudio();
+      const personaPreload = preloadPersonaAudio();
       // Forhåndslast øktens øvelsesannonseringer så første avspilling ikke
       // betaler nettverks- og dekodekostnaden midt i en faseovergang.
       audioClipService.preloadClips(
@@ -139,6 +149,16 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
         await wakeLockService.requestLock();
       }
       engine.start(targetWorkout);
+      // Kaldstart-replan (Oppgave B, live timing-funn B): rekker ikke preloaden
+      // å dekode bufferne før første fases planLookahead, degraderer fase 1 til
+      // pip — re-planlegg inneværende fases lookahead når dekodingen fullfører.
+      // Registreres ETTER engine.start så replan aldri kan løpe før økten er i
+      // gang; Directoren guarder selv på status/aktiv fase (no-op etter reset).
+      // Promise.resolve-innpakningen tåler at testdobler mocker preloaden uten
+      // returverdi; promiset rejecter aldri (preload-kontrakten).
+      void Promise.resolve(personaPreload).then(() =>
+        audioDirectorRef.current?.replanCurrentPhase()
+      );
     },
     [engine]
   );
