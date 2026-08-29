@@ -1,6 +1,6 @@
 # Manuskript: Persona-lydbank for Chatterbox-batchen på Kitor
 
-**Dato:** 2026-08-29 · **Status:** Til linje-for-linje-godkjenning hos produkteier
+**Dato:** 2026-08-29 · **Status:** GODKJENT av produkteier 2026-08-29 med navne-/regionrettelser; dialekt-i-tekst-policy (lett markørnivå) godkjent implisitt
 **Kontrakt:** `docs/spec-b3-timerengine-audiodirector-2026-08-29.md` § 5 (cue-taksonomi, filskjema, lydkrav)
 **Relatert:** `docs/DECISIONS.md` Beslutning 25 (fonetisk uttale + Chatterbox-pipeline), `docs/plan-b3-timerengine-audiodirector-2026-08-29.md` Task β2 (go-rullering)
 
@@ -14,12 +14,14 @@ Dette dokumentet er det komplette manuskriptet for persona-lydbanken: **fire per
 
 | Persona-id | Navn | Stil |
 |:--|:--|:--|
-| `haugesund` | Jostein | Haugesund / Haugalandsk |
-| `romsdal` | Ola | Romsdalen / Molde |
+| `haugesund` | Jossa | Haugalandet (haugalandsk) |
+| `romsdal` | Ola | Romsdalen (romsdalsk) |
 | `hardcore` | Axel | Metalcore & Post-Hardcore |
 | `boyband` | Robin | 90s Boyband Pop Harmonies |
 
 (`standard` / Astrid er ren talesyntese uten cuesPath og inngår ikke i batchen.)
+
+> **Merknad om navn vs. nøkler (produkteiers rettelse 2026-08-29):** Personas stedfestes til **region**, aldri by — derfor «Jossa fra Haugalandet» og «Ola fra Romsdalen». De tekniske id-ene og filstiene (`haugesund`, `romsdal`, `/audio/personas/<id>/…`) er **stabile nøkler** og endres IKKE av denne rettelsen; kun visningsnavn og omtale i dette manuskriptet er justert.
 
 **Produksjonsparametre (Kitor / Chatterbox):**
 
@@ -27,7 +29,7 @@ Dette dokumentet er det komplette manuskriptet for persona-lydbanken: **fire per
 - Voice-cloning: seed-filene `mintrener-seed-<persona>.wav` ligger allerede på Kitor (én per persona: `mintrener-seed-haugesund.wav`, `mintrener-seed-romsdal.wav`, `mintrener-seed-hardcore.wav`, `mintrener-seed-boyband.wav`).
 - Etterbehandling per klipp (spec § 5, «Lydkrav til Kitor-pipelinen»): `silenceremove` + `afade` som i dagens pipeline, **pluss loudness-normalisering til felles nivå på tvers av personas** — nytt krav; uten dette blir volumhopp mellom persona-klipp og TTS-fallback hørbart i kjedene.
 - Filskjema (spec § 5): `/audio/personas/<persona>/<cue>.mp3` og `/audio/personas/<persona>/exercise-<id>.mp3`. Manifestet genereres ved bygg av skript i `scripts/` — manglende klipp gir byggtidsadvarsel, så **hver eneste fil i tabellene under må leveres**.
-- `start_321` genereres **ikke**: de fire eksisterende «Tre-To-En»-innspillingene (Boyband, Hardcore, Haugesund, Romsdalen) brukes som de er, normaliseres til samme loudness-nivå og legges inn som `start_321.mp3` per persona.
+- `start_321` genereres **ikke**: de fire eksisterende «Tre-To-En»-innspillingene (Boyband, Hardcore, Haugalandet, Romsdalen) brukes som de er, normaliseres til samme loudness-nivå og legges inn som `start_321.mp3` per persona.
 
 **Kjedekontekst (viktig for frasene):** `go`-tilropene skeduleres til å lande *på* fasegrensen og rullerer deterministisk (`itemIndex % 3`, plan Task β2) — de tre variantene må derfor fungere i vilkårlig rekkefølge og aldri referere til hverandre. Bro-frasene (`bro-neste`, `bro-naa`, `bro-resync`) kjedes sample-nøyaktig rett inn i et øvelsesnavn (persona-klipp eller TTS) — de må ende «åpent», som en naturlig opptakt til et substantiv.
 
@@ -37,7 +39,7 @@ Dette dokumentet er det komplette manuskriptet for persona-lydbanken: **fire per
 
 **Anbefaling:** Dialektfargen skal primært komme fra den klonede seed-stemmen, ikke fra ortografien. Teksten skrives **nær bokmål med lette, trygge dialektmarkører** — f.eks. haugesundsk «eg»/«ikkje»/«trø te» og romsdalsk «no»/«e»/«gønne på» der det faller naturlig — og aldri tung lydskrift-dialekt.
 
-**Hvorfor:** Chatterbox er trent på normalisert norsk tekst. Tung dialektal ortografi («æ veitkje ka du meine») gir uforutsigbar uttale og kan velte hele klipp, mens seed-stemmen uansett bærer klangen, tonefallet og mye av dialekten. Lette markører i teksten gir riktig ordvalg og rytme uten å gamble med modellen. Markørene holdes **konsistente per persona** (Jostein sier alltid «eg»/«ikkje», Ola alltid «no»/«e») slik at stemmen er stabil på tvers av klipp.
+**Hvorfor:** Chatterbox er trent på normalisert norsk tekst. Tung dialektal ortografi («æ veitkje ka du meine») gir uforutsigbar uttale og kan velte hele klipp, mens seed-stemmen uansett bærer klangen, tonefallet og mye av dialekten. Lette markører i teksten gir riktig ordvalg og rytme uten å gamble med modellen. Markørene holdes **konsistente per persona** (Jossa sier alltid «eg»/«ikkje», Ola alltid «no»/«e») slik at stemmen er stabil på tvers av klipp.
 
 > **⚠️ Krever produkteiers bekreftelse.** Alternativet — tyngre dialektortografi — kan prøves på 2–3 testklipp per persona først hvis ønskelig, men frasene under er skrevet etter anbefalingen.
 
@@ -47,13 +49,13 @@ Tilleggsnotat for `hardcore`: Axels intensitet skal komme fra seed-stemmen og ut
 
 ## 3. Persona-manuskript
 
-### 3.1 Jostein (`haugesund`) — Haugesund / Haugalandsk
+### 3.1 Jossa (`haugesund`) — Haugalandet / haugalandsk
 
-**Stilguide:** Jovial vestlandsk fotballtrener-energi — roper deg frem som fra sidelinjen på Haugesund stadion, alltid med glimt i øyet. Kort, direkte og rå på tempo: «gje gass», «trø te», «kjør på». Han er aldri ironisk, aldri sur, og ville aldri sagt noe forsiktig eller akademisk — det nærmeste han kommer ro er en anerkjennende latter i pausen.
+**Stilguide:** Jovial vestlandsk fotballtrener-energi fra Haugalandet — roper deg frem som fra sidelinjen på en lokalderby, alltid med glimt i øyet. Kort, direkte og rå på tempo: «gje gass», «trø te», «kjør på». Han er aldri ironisk, aldri sur, og ville aldri sagt noe forsiktig eller akademisk — det nærmeste han kommer ro er en anerkjennende latter i pausen.
 
 | Cue | Fil | Frase (sendes til TTS) | Merknad |
 |:--|:--|:--|:--|
-| `intro` | `/audio/personas/haugesund/intro.mp3` | «Velkommen te økta! Eg heite Jostein, og i dag ska me gje gass. Trø te!» | |
+| `intro` | `/audio/personas/haugesund/intro.mp3` | «Velkommen te økta! Eg heite Jossa, og i dag ska me gje gass. Trø te!» | |
 | `start_321` | `/audio/personas/haugesund/start_321.mp3` | — | **Bruk eksisterende innspilling (Tre-To-En-sporet). Genereres ikke.** |
 | `go-1` | `/audio/personas/haugesund/go-1.mp3` | «Gje gass!» | Rullerer vilkårlig |
 | `go-2` | `/audio/personas/haugesund/go-2.mp3` | «Trø te!» | Rullerer vilkårlig |
@@ -66,7 +68,7 @@ Tilleggsnotat for `hardcore`: Axels intensitet skal komme fra seed-stemmen og ut
 | `bro-naa` | `/audio/personas/haugesund/bro-naa.mp3` | «No kjøre me:» | Etterfølges direkte av øvelsesnavn |
 | `bro-resync` | `/audio/personas/haugesund/bro-resync.mp3` | «Du e no på:» | Etterfølges direkte av øvelsesnavn |
 
-### 3.2 Ola (`romsdal`) — Romsdalen / Molde
+### 3.2 Ola (`romsdal`) — Romsdalen / romsdalsk
 
 **Stilguide:** Fjellstø turkamerat fra Romsdalen — rolig glede, jevnt trykk, aldri hektisk. Han snakker som en som har gått mange fjellturer: oppmuntringen er lun og trygg («bære å gønne på», «du ligg godt an»), og han skriker aldri. Han ville aldri brukt engelske fraser eller dramatikk — det største utropet hans er et fornøyd «Der satt den!».
 
