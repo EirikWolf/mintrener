@@ -17,7 +17,8 @@
         "finish": { "text": "Ferdig! Det va rått levert — kjempegodt jobba!", "file": "finish.mp3" },
         "bro-neste": { "text": "Neste ut:", "file": "bro-neste.mp3" },
         "bro-naa": { "text": "No kjøre me:", "file": "bro-naa.mp3" },
-        "bro-resync": { "text": "Du e no på:", "file": "bro-resync.mp3" }
+        "bro-resync": { "text": "Du e no på:", "file": "bro-resync.mp3" },
+        "start_321_short": { "text": "Gjer deg klar! Tre, to, ein, kjør!", "file": "start_321_short.mp3" }
       },
       "recordedCues": { "start_321": "bruk eksisterende Tre-To-En-innspilling" }
     },
@@ -36,7 +37,8 @@
         "finish": { "text": "Der satt den! Heile økta i boks — godt jobba!", "file": "finish.mp3" },
         "bro-neste": { "text": "Neste øvelse bli:", "file": "bro-neste.mp3" },
         "bro-naa": { "text": "No ska vi ha:", "file": "bro-naa.mp3" },
-        "bro-resync": { "text": "Du e no på:", "file": "bro-resync.mp3" }
+        "bro-resync": { "text": "Du e no på:", "file": "bro-resync.mp3" },
+        "start_321_short": { "text": "Klar? Tre, to, ein, kjør!", "file": "start_321_short.mp3" }
       },
       "recordedCues": { "start_321": "bruk eksisterende Tre-To-En-innspilling" }
     },
@@ -55,7 +57,8 @@
         "finish": { "text": "Ferdig! Du knuste den! Sånn bygges legender!", "file": "finish.mp3" },
         "bro-neste": { "text": "Neste offer:", "file": "bro-neste.mp3" },
         "bro-naa": { "text": "Nå smeller det:", "file": "bro-naa.mp3" },
-        "bro-resync": { "text": "Tilbake i kampen! Du er nå på:", "file": "bro-resync.mp3" }
+        "bro-resync": { "text": "Tilbake i kampen! Du er nå på:", "file": "bro-resync.mp3" },
+        "start_321_short": { "text": "Klar til kamp! Tre! To! En! KJØR!", "file": "start_321_short.mp3" }
       },
       "recordedCues": { "start_321": "bruk eksisterende Tre-To-En-innspilling" }
     },
@@ -74,7 +77,8 @@
         "finish": { "text": "Wow, ferdig! Du var helt fantastisk i dag — ooh yeah!", "file": "finish.mp3" },
         "bro-neste": { "text": "Neste øvelse, baby:", "file": "bro-neste.mp3" },
         "bro-naa": { "text": "Og nå:", "file": "bro-naa.mp3" },
-        "bro-resync": { "text": "Du er nå på:", "file": "bro-resync.mp3" }
+        "bro-resync": { "text": "Du er nå på:", "file": "bro-resync.mp3" },
+        "start_321_short": { "text": "Er du klar? Tre, to, en, kjør baby!", "file": "start_321_short.mp3" }
       },
       "recordedCues": { "start_321": "bruk eksisterende Tre-To-En-innspilling" }
     }

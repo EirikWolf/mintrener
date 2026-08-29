@@ -1,9 +1,9 @@
 /**
  * Min Trener — batch-runner for persona-lydbanken (taksonomi v2, spec § 5).
  *
- * Genererer 144 TTS-klipp (4 personas × (11 cues + 25 øvelser)) via Chatterbox
- * voice-clone på Kitor, og etterbehandler de 4 innspilte Tre-To-En-sporene i to
- * varianter hver (full + hale-trimmet start_321_short for korte faser) = 152 oppgaver.
+ * Genererer 148 TTS-klipp (4 personas × (12 cues, inkl. start_321_short, +
+ * 25 øvelser)) via Chatterbox voice-clone på Kitor, og etterbehandler de 4
+ * innspilte Tre-To-En-sporene (full start_321) = 152 oppgaver.
  * TTS-nedlastinger caches rått i audio/raw-cache/ (gitignorert) slik at
  * etterbehandlings-iterasjon er gratis etter én GPU-runde: `--reprocess`
  * regenererer output fra cachen uten nettverk/token. TTS-klipp får v2-kjeden
@@ -32,7 +32,6 @@ import {
   NonRetryableError,
   buildClonePayload,
   buildRecordedFfmpegArgs,
-  buildRecordedShortFfmpegArgs,
   buildTaskList,
   buildTtsFfmpegArgs,
   cacheIsFresh,
@@ -233,12 +232,8 @@ function runRecordedTask(task: RecordedTask, opts: CliOptions): TaskOutcome {
   }
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   try {
-    // short-varianten kuttes til kildens siste START321_SHORT_TAIL_S sekunder
-    // (korte faser); ellers samme skånsomme kjede som fullvarianten.
-    const argsBuilder =
-      task.id === 'start_321_short' ? buildRecordedShortFfmpegArgs : buildRecordedFfmpegArgs;
     console.log(`🎛️ [${task.personaId}/${task.id}] etterbehandler innspilt spor (skånsom kjede)`);
-    postProcess(sourcePath, outputPath, argsBuilder);
+    postProcess(sourcePath, outputPath, buildRecordedFfmpegArgs);
     console.log(`   ✅ ${task.outputRelPath}`);
     return 'generated';
   } catch (err) {
