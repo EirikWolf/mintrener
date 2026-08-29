@@ -20,11 +20,18 @@ import { fetchCustomWorkouts } from './services/customWorkoutsService';
 import { ProfileOnboardingModal } from './components/profile/ProfileOnboardingModal';
 import { getUserProfilesState } from './services/profileCompositionService';
 import { UserProfilesState } from './schemas/profileSchema';
+import { OnboardingFlow } from './components/onboarding/OnboardingFlow';
+import { shouldShowOnboarding } from './services/onboardingService';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('timer');
   const [userProfiles, setUserProfiles] = useState<UserProfilesState>(() => getUserProfilesState());
   const [showOnboarding, setShowOnboarding] = useState<boolean>(() => !userProfiles.hasCompletedOnboarding);
+  // Førstegangs-onboarding (C2): fullskjerms-gate for helt ferske brukere.
+  // Ingen early-return — completed-grenen over må forbli nåbar.
+  const [showWelcomeOnboarding, setShowWelcomeOnboarding] = useState<boolean>(() =>
+    shouldShowOnboarding()
+  );
   const [selectedWorkout, setSelectedWorkout] = useState<WorkoutTemplate>(() => {
     const shared = getSharedWorkoutFromUrl();
     return shared || TABATA_WORKOUT;
@@ -203,8 +210,15 @@ export function App() {
         />
       )}
 
+      {/* Førstegangs-onboarding (C2, spec § 3): persona + ukesmål + førsteøkt.
+          Ligger på z-[60] over profilmodalen og undertrykker den mens den
+          vises (planpresisering 5) — profilmodalens egen logikk endres ikke. */}
+      {showWelcomeOnboarding && (
+        <OnboardingFlow onComplete={() => setShowWelcomeOnboarding(false)} />
+      )}
+
       {/* 1-spørsmåls Onboarding for kontekstprofiler */}
-      {showOnboarding && (
+      {showOnboarding && !showWelcomeOnboarding && (
         <ProfileOnboardingModal
           isOpen={showOnboarding}
           onClose={(newState) => {
