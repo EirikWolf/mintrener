@@ -1802,6 +1802,89 @@ describe('audioDirector (B3 β2)', () => {
         'Neste: Utfall'
       );
     });
+
+    // Studio-planen mistet fallback-stigen da studioklippet ble kjedet: der
+    // playClipOrFallback bar HTMLAudio → TTS bak seg, svarer playSequence bare
+    // false når konteksten ikke lar seg kjøre (iOS 'interrupted' etter en
+    // telefonsamtale, mislykket resume) — og annonseringen ble HELT STILLE.
+    it('studio-plan: playSequence svarer false → playClipOrFallback overtar', async () => {
+      usePersona();
+      // Kun studioklippet er dekodet (ingen persona-variant, ingen rest-cue)
+      // → plan 'studio', kjeden er navnet alene.
+      cacheClips(['exercise-utfall-forover']);
+      vi.mocked(audioBufferEngine.playSequence).mockResolvedValue(false);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', nextExercise: EX_B, endsAt: 10_000 }));
+
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith(['exercise-utfall-forover']);
+      // Ingen dobbel avspilling: fallbacken venter på motorens svar
+      expect(audioClipService.playClipOrFallback).not.toHaveBeenCalled();
+      await flush();
+      expect(audioClipService.playClipOrFallback).toHaveBeenCalledWith(
+        'exercise-utfall-forover',
+        'Neste: Utfall'
+      );
+    });
+
+    it('studio-plan: true-svar (naturlig slutt ELLER bevisst stopp) gir aldri fallback', async () => {
+      usePersona();
+      cacheClips(['exercise-utfall-forover']);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', nextExercise: EX_B, endsAt: 10_000 }));
+      await flush();
+
+      expect(audioClipService.playClipOrFallback).not.toHaveBeenCalled();
+    });
+
+    it('studio-plan: fasebytte før false-svaret → ingen gammel annonsering (stale-guard)', async () => {
+      usePersona();
+      cacheClips(['exercise-utfall-forover']);
+      let resolveChain!: (v: boolean) => void;
+      vi.mocked(audioBufferEngine.playSequence).mockImplementationOnce(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveChain = resolve;
+          })
+      );
+      const { engine, emit, setNow } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', nextExercise: EX_B, endsAt: 10_000 }));
+      // Skip til ny fase MENS motoren fortsatt venter på resume() internt …
+      setNow(4_000);
+      emit(phaseStarted({ phase: 'prepare', itemIndex: 1, endsAt: 14_000 }));
+      // … og først DA kommer false-svaret: den gamle fasens navn skal ikke
+      // legges oppå den nye fasens lyd.
+      resolveChain(false);
+      await flush();
+
+      expect(audioClipService.playClipOrFallback).not.toHaveBeenCalledWith(
+        'exercise-utfall-forover',
+        'Neste: Utfall'
+      );
+    });
+
+    it('persona-plan: false-svar gir IKKE fallback (bevisst uendret fra main)', async () => {
+      usePersona();
+      // Persona-varianten er dekodet → plan 'persona'. Den veien gikk aldri
+      // gjennom playClipOrFallback, og skal ikke begynne med det nå.
+      cacheClips([`${HC}/exercise-utfall-forover.mp3`]);
+      vi.mocked(audioBufferEngine.playSequence).mockResolvedValue(false);
+      const { engine, emit } = createFakeEngine();
+      createAudioDirector(engine);
+
+      emit(phaseStarted({ phase: 'rest', nextExercise: EX_B, endsAt: 10_000 }));
+      await flush();
+
+      expect(audioBufferEngine.playSequence).toHaveBeenCalledWith([
+        `${HC}/exercise-utfall-forover.mp3`,
+      ]);
+      expect(audioClipService.playClipOrFallback).not.toHaveBeenCalled();
+    });
   });
 
   describe('unsubscribe', () => {
