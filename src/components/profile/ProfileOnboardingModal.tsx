@@ -32,8 +32,13 @@ export const ProfileOnboardingModal: React.FC<ProfileOnboardingModalProps> = ({
   useFocusTrap(modalRef, {
     isActive: isOpen,
     onClose: () => {
-      const state = saveUserProfilesState(selectedProfiles);
-      onClose(state);
+      const defaultState: UserProfilesState = {
+        profiles: selectedProfiles.length > 0 ? selectedProfiles : ['kontor'],
+        primaryProfile: selectedProfiles[0] || 'kontor',
+        hasCompletedOnboarding: true,
+      };
+      saveUserProfilesState(defaultState);
+      onClose(defaultState);
     },
   });
 
