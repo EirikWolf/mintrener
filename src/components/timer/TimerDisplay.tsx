@@ -367,7 +367,14 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
         filter: isDimmed ? 'brightness(0.6)' : 'none',
         transition: 'filter 500ms ease, background-color 500ms ease',
       }}
-      className={`relative flex flex-col justify-between w-full h-full max-w-md mx-auto px-4 pt-1.5 pb-2 select-none overflow-hidden transition-colors duration-500 ${phaseStyle.bg}`}
+      // Under aktiv økt eier skjermen seg selv: ingen scroll, fullskjerm (kap. 4).
+      // I hvilemodus deler favorittlisten og timerseksjonen plass, og på lave
+      // viewporter (landskap, små nettbrett) får de ikke rom til begge. Da skal
+      // innholdet kunne blas — ikke klippes og legge seg oppå hverandre, slik
+      // det gjorde før (revisjon A, funn B1).
+      className={`relative flex flex-col justify-between w-full h-full max-w-md mx-auto px-4 pt-1.5 pb-2 select-none transition-colors duration-500 ${
+        state.status === 'idle' ? 'overflow-y-auto overscroll-contain' : 'overflow-hidden'
+      } ${phaseStyle.bg}`}
     >
       {/* Fokusmodus: minimal flytende stripe (lås + lyd + evt. stemmestyring) erstatter
           hele toppraden under aktiv økt, se FocusModeQuickControls over. */}
@@ -817,7 +824,13 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
       </header>
 
       {/* 2. HOVEDSEKSJON: Fase, Øvelsesnavn, Sirkulær indikator */}
-      <main className="flex flex-col items-center justify-center flex-1 my-auto space-y-1.5 landscape:space-y-0.5 text-center z-10 min-h-0">
+      {/* shrink-0 i hvilemodus: seksjonen skal vike ved å skyve innhold ned i
+          scrollen, ikke ved å presses sammen bak favorittlisten (funn B1). */}
+      <main
+        className={`flex flex-col items-center justify-center flex-1 my-auto space-y-1.5 landscape:space-y-0.5 text-center z-10 ${
+          state.status === 'idle' ? 'shrink-0' : 'min-h-0'
+        }`}
+      >
         {/* Rundenummer / Intervall & Fase-badge — forstørres i fokusmodus for lesbarhet
             på 1,5 m avstand under aktiv økt (revisjon §3.1) */}
         <div className="flex flex-col items-center gap-1">
