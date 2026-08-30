@@ -107,7 +107,11 @@ Vurder også arbeidsflyten som *prosess*: manuskript, generering, kvalitetssikri
 
 ## Del 3 — Musikk og lydbilde
 
-De fleste trener til musikk. Appen har ingen musikkfunksjon, men den har en dempingstjeneste som senker volum til 25 % når stemmen snakker. **Merk før noe planlegges: den demper `<audio>`- og `<video>`-elementer på appens egen side.** Den kan ikke røre lyd fra en annen app. Verifiser at det stemmer, og hva den i praksis demper i dag.
+De fleste trener til musikk. Appen har ingen musikkfunksjon.
+
+**Den har heller ingen demping, selv om det ser slik ut.** `audioDuckingService` kalles fra 15 steder og har refcount, par-balansert duck/unduck og auto-release — men den leter etter et attributt (`data-background-music`) som ikke finnes noe sted, hendelsen den sender har ingen lyttere, og målt på kjørende produksjon treffer selektoren null elementer. Den når ikke engang appens egen stemme, som går gjennom Web Audio. Verifisert i revisjon B1; detaljene står i filens toppkommentar.
+
+Spørsmålet er derfor ikke hvordan vi bygger videre på dempingen vi har, men **om demping skal bygges i det hele tatt** — og om det er mulig fra en PWA.
 
 **Grunnspørsmålet:** hva *er* riktig lydbilde under en økt? Musikk som driver tempo, stillhet så stemmen står klart, eller brukerens egen musikk fra sin egen tjeneste? Skal appen levere lyd i det hele tatt, eller være god på stemme og la musikken være brukerens sak?
 
