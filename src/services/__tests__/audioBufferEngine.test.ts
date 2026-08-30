@@ -239,6 +239,45 @@ describe('AudioBufferEngine.preload', () => {
   });
 });
 
+describe('AudioBufferEngine.getDuration (annonseringsprioritet, felttest-funn)', () => {
+  // Directoren trenger fasit-varighet for å avgjøre om en endAt-forankret
+  // grensekjede lar annonseringen få hodrom — hodrommet er summen av de
+  // faktiske klippene i kjeden, aldri en gjetning: ucachet nøkkel svarer null,
+  // og Directoren beholder da dagens kaldstart-stige.
+  let engine: AudioBufferEngine;
+
+  beforeEach(() => {
+    engine = new AudioBufferEngine();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  const fullKey = '/audio/personas/hardcore/start_321.mp3';
+
+  it('returnerer buffer.duration for en cachet nøkkel', async () => {
+    const { ctx } = createMockContext({ [fullKey]: 20.4 });
+    vi.spyOn(audioService, 'getContext').mockReturnValue(ctx as unknown as AudioContext);
+    stubFetchOk();
+
+    await engine.preload([fullKey]);
+
+    expect(engine.getDuration(fullKey)).toBe(20.4);
+  });
+
+  it('returnerer null for ucachet/ukjent nøkkel (aldri gjetning)', async () => {
+    const { ctx } = createMockContext({ [fullKey]: 20.4 });
+    vi.spyOn(audioService, 'getContext').mockReturnValue(ctx as unknown as AudioContext);
+    stubFetchOk();
+
+    expect(engine.getDuration(fullKey)).toBeNull();
+    await engine.preload([fullKey]);
+    expect(engine.getDuration('finnes-ikke')).toBeNull();
+  });
+});
+
 describe('AudioBufferEngine.evict (BØR-2, β6)', () => {
   let engine: AudioBufferEngine;
 

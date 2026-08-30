@@ -128,6 +128,16 @@ export class AudioBufferEngine {
   }
 
   /**
+   * Varigheten (sekunder) til et cachet klipp — null for ucachet/ukjent nøkkel.
+   * Directorens annonseringsprioritet måler hodrommet som summen av de faktiske
+   * klippene i kjeden (audioDirector.fitAnnounceChain) og trenger fasit, aldri
+   * gjetning: uten kjent varighet beholder stigen dagens kaldstart-adferd.
+   */
+  public getDuration(key: string): number | null {
+    return this.buffers.get(key)?.duration ?? null;
+  }
+
+  /**
    * Måler og lagrer offset mellom motorklokken (engine.now(), ms) og
    * AudioContext-klokken (sekunder), slik at absolutte motor-tidsstempler
    * (fasegrenser fra TimerEngine) kan oversettes til lyd-skedulering med

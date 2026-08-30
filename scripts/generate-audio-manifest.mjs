@@ -5,8 +5,8 @@
 // aldri stille TTS-fallback i prod uten spor; ekstra filer tolereres og tas med.
 // Forventet-listen hardkodes IKKE duplisert: øvelses-id-ene leses fra
 // kategorifilene i src/data/exercises/ (id-feltene er kilden), og cue-listen
-// speiler scripts/voicebank-manuskript.json (11 manus-cues + start_321 +
-// start_321_short).
+// speiler scripts/voicebank-manuskript.json (12 manus-cues, inkl. TTS-cuen
+// start_321_short, + innspilt start_321).
 //
 // NB (β6/NOTAT-1): skriptet kjøres kun av `npm run build` (prebuild-hooken) —
 // `npm run dev` regenererer IKKE manifestet. Har du lagt til/fjernet klipp i
@@ -17,8 +17,9 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
- * Cue-settet hver persona skal ha: manuskriptets 11 cues + innspilt start_321
- * i to varianter (full + hale-trimmet short for korte faser, jf. Director-stigen).
+ * Cue-settet hver persona skal ha: manuskriptets 12 TTS-cues (inkl.
+ * start_321_short, den korte 3-2-1-varianten for korte faser, jf.
+ * Director-stigen) + innspilt start_321.
  */
 export const REQUIRED_CUES = Object.freeze([
   'intro',
