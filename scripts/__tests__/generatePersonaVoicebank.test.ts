@@ -33,6 +33,7 @@ import {
   parseMeanVolumeDb,
   runSiblingTailPass,
   tailFalloffDb,
+  tailSourceRelPath,
   type SiblingPassStats,
   type TailMeasurementRecord,
   type VoicebankManifest,
@@ -630,34 +631,65 @@ describe('fetchTtsWithRetries — retry-klassifisering (mock fetch)', () => {
 // Halevakt (QA-4): automatisk deteksjon av avkuttede klipp.
 // ---------------------------------------------------------------------------
 
-describe('halevakt — tailFalloffDb / isTailSuspect', () => {
-  it('falloff er hale minus samlet (negativ når klippet dør ut)', () => {
-    expect(tailFalloffDb({ overallMeanDb: -18.3, tailMeanDb: -67.0 })).toBeCloseTo(-48.7, 5);
-    expect(tailFalloffDb({ overallMeanDb: -22.5, tailMeanDb: -24.2 })).toBeCloseTo(-1.7, 5);
+describe('halevakt — måleunderlaget er RÅFILA, ikke etterbehandlet output', () => {
+  const ttsTask = buildTaskList(manifest, { persona: 'hardcore', only: 'burpees' })
+    .find((t): t is TtsTask => t.kind === 'tts');
+
+  it('TTS-oppgaver måles på rå-cachen slik klippet kom fra Chatterbox', () => {
+    expect(ttsTask).toBeDefined();
+    expect(tailSourceRelPath(ttsTask as TtsTask)).toBe((ttsTask as TtsTask).cacheRelPath);
+    // Den etterbehandlede fila er nettopp det vi IKKE skal måle: TRIM_END/FADE
+    // bestemmer haleenergien der og inverterer signalet.
+    expect(tailSourceRelPath(ttsTask as TtsTask)).not.toBe((ttsTask as TtsTask).outputRelPath);
+    expect(tailSourceRelPath(ttsTask as TtsTask)).toContain('audio/raw-cache/');
   });
 
-  it('normale klipp (målt fasit fra lydbanken) flagges ikke', () => {
-    // hardcore/exercise-burpees og romsdal/exercise-burpees, sveip 2026-08-30.
-    expect(isTailSuspect({ overallMeanDb: -18.3, tailMeanDb: -67.0 })).toBe(false);
-    expect(isTailSuspect({ overallMeanDb: -19.2, tailMeanDb: -91.0 })).toBe(false);
-    expect(isTailSuspect({ overallMeanDb: -20.6, tailMeanDb: -39.4 })).toBe(false);
+  it('innspilte spor måles ikke i det hele tatt (ingen råfil fra Chatterbox)', () => {
+    const recorded = buildTaskList(manifest, { persona: 'hardcore', only: 'start_321' })
+      .find((t) => t.kind === 'recorded');
+    expect(recorded).toBeDefined();
+    expect(tailSourceRelPath(recorded as VoicebankTask)).toBeNull();
+  });
+});
+
+describe('halevakt — tailFalloffDb / isTailSuspect (kalibrert på rå måledata)', () => {
+  it('falloff er hale minus samlet (negativ når take-et dør ut)', () => {
+    expect(tailFalloffDb({ overallMeanDb: -21.7, tailMeanDb: -91.0 })).toBeCloseTo(-69.3, 5);
+    expect(tailFalloffDb({ overallMeanDb: -17.7, tailMeanDb: -42.1 })).toBeCloseTo(-24.4, 5);
   });
 
-  it('hale med uendret energi (avkuttet) flagges', () => {
-    expect(isTailSuspect({ overallMeanDb: -18.0, tailMeanDb: -18.0 })).toBe(true);
-    expect(isTailSuspect({ overallMeanDb: -22.5, tailMeanDb: -24.2 })).toBe(true);
+  it('friske råklipp (fasit fra audio/lyttekandidater/raa/) flagges ikke', () => {
+    // befal_1_borpis_produksjon, befal_3_borpies, hardcore_1_borpis_produksjon.
+    expect(isTailSuspect({ overallMeanDb: -21.7, tailMeanDb: -91.0 })).toBe(false); // −69,3
+    expect(isTailSuspect({ overallMeanDb: -18.8, tailMeanDb: -91.0 })).toBe(false); // −72,2
+    expect(isTailSuspect({ overallMeanDb: -21.0, tailMeanDb: -70.9 })).toBe(false); // −49,9
   });
 
-  it('grensetilfellet nøyaktig −15 dB er IKKE mistenkt (strengt over terskelen flagger)', () => {
-    expect(TAIL_FALLOFF_THRESHOLD_DB).toBe(-15);
-    expect(isTailSuspect({ overallMeanDb: -20, tailMeanDb: -35 })).toBe(false);
+  it('det avkuttede «burpii»-take-et flagges på rå måling', () => {
+    // befal_2_burpees_engelsk: −17,7 samlet, −42,1 i halen → fall −24,4 dB.
+    expect(isTailSuspect({ overallMeanDb: -17.7, tailMeanDb: -42.1 })).toBe(true);
+  });
+
+  it('grensetilfellet nøyaktig −36 dB er IKKE mistenkt (strengt over flagger)', () => {
+    expect(TAIL_FALLOFF_THRESHOLD_DB).toBe(-36);
+    expect(isTailSuspect({ overallMeanDb: -20, tailMeanDb: -56 })).toBe(false);
     // Et hår over terskelen vipper den andre veien.
-    expect(isTailSuspect({ overallMeanDb: -20, tailMeanDb: -34.9 })).toBe(true);
+    expect(isTailSuspect({ overallMeanDb: -20, tailMeanDb: -55.9 })).toBe(true);
   });
 
-  it('ikke-endelige måltall (stille klipp → -inf) gir ingen advarsel', () => {
+  it('terskelen ligger i gapet mellom fasitens avkuttede og dårligste friske', () => {
+    // Verifisert avkuttet: −24,4. Dårligste verifisert friske: −49,9.
+    expect(TAIL_FALLOFF_THRESHOLD_DB).toBeGreaterThan(-49.9);
+    expect(TAIL_FALLOFF_THRESHOLD_DB).toBeLessThan(-24.4);
+  });
+
+  it('et helt stille klipp BLIR flagget — ekte ffmpeg gir −91 dB, ikke -inf', () => {
+    // Digital stillhet rapporteres på 16-bits-gulvet, så fallet blir 0,0 dB.
+    expect(isTailSuspect({ overallMeanDb: -91.0, tailMeanDb: -91.0 })).toBe(true);
+  });
+
+  it('ikke-endelige måltall er en defensiv vakt og gir ingen advarsel', () => {
     expect(isTailSuspect({ overallMeanDb: -20, tailMeanDb: -Infinity })).toBe(false);
-    expect(isTailSuspect({ overallMeanDb: -Infinity, tailMeanDb: -Infinity })).toBe(false);
     expect(isTailSuspect({ overallMeanDb: NaN, tailMeanDb: -20 })).toBe(false);
   });
 });
