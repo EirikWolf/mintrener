@@ -8,6 +8,7 @@ import {
   fetchCustomWorkouts,
   deleteCustomWorkout,
 } from '../../services/customWorkoutsService';
+import { getFavoriteProgramIds, toggleFavoriteProgramId } from '../../services/favoritesService';
 import { ExercisePickerModal } from './ExercisePickerModal';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -21,6 +22,7 @@ import {
   Dumbbell,
   Zap,
   ArrowLeft,
+  Star,
 } from 'lucide-react';
 
 interface WorkoutBuilderViewProps {
@@ -54,11 +56,21 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
   ]);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [savedWorkouts, setSavedWorkouts] = useState<WorkoutTemplate[]>([]);
+  // Egne maler kunne ikke favorittmerkes, bare katalogprogrammer. Favorittene
+  // lagres som rene ID-er, så systemet skiller ikke på opphav — det manglet
+  // bare en inngang for brukerens eget innhold (revisjon A, funn A3).
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+
+  const handleToggleFavorite = (workoutId: string) => {
+    toggleFavoriteProgramId(workoutId);
+    setFavoriteIds(getFavoriteProgramIds());
+  };
   const [isSavedToast, setIsSavedToast] = useState(false);
   const [workoutToDelete, setWorkoutToDelete] = useState<WorkoutTemplate | null>(null);
 
   useEffect(() => {
     fetchCustomWorkouts(user?.uid).then(setSavedWorkouts);
+    setFavoriteIds(getFavoriteProgramIds());
   }, [user]);
 
   useEffect(() => {
@@ -453,6 +465,25 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
                     </p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleFavorite(w.id);
+                      }}
+                      aria-label={
+                        favoriteIds.includes(w.id)
+                          ? `Fjern ${w.name} fra favoritter`
+                          : `Legg ${w.name} til favoritter`
+                      }
+                      aria-pressed={favoriteIds.includes(w.id)}
+                      className="p-1.5 rounded-lg text-zinc-400 hover:text-amber-400 transition-colors"
+                    >
+                      <Star
+                        className={`w-3.5 h-3.5 ${
+                          favoriteIds.includes(w.id) ? 'text-amber-400 fill-current' : ''
+                        }`}
+                      />
+                    </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

@@ -40,7 +40,7 @@ export const CONTEXT_PROFILES: ContextProfile[] = [
     name: 'Senior & Sittende',
     description: 'Trygge balanseøvelser, leddmobilitet og bevegelse tilpasset stol og støtte.',
     icon: 'Heart',
-    status: 'planned',
+    status: 'active',
     targetAudience: 'Seniorer og personer med redusert mobilitet',
     voiceStyle: 'rolig',
     defaultDurationSeconds: 120,
@@ -51,13 +51,16 @@ export const CONTEXT_PROFILES: ContextProfile[] = [
     name: 'Kor & Sangere',
     description: 'Pusteøvelser, kjeveavspenning, skuldre og holdning før sang.',
     icon: 'Music',
-    status: 'planned',
+    status: 'active',
     targetAudience: 'Sangere, korister og vokalister',
     voiceStyle: 'rolig',
     defaultDurationSeconds: 120,
     badgeColor: 'bg-purple-950 text-purple-400 border-purple-800',
   },
   {
+    // Eneste profil uten programmer i katalogen (senior og kor hadde fire
+    // hver mens de sto som «planned» — flagget hadde ikke fulgt innholdet).
+    // Denne er korrekt merket: den venter på innhold, ikke på et flagg.
     id: 'idrett',
     name: 'Idrettslag & Ungdom',
     description: 'Dynamisk oppvarming, spenst, skadeforebygging og kjernestabilitet.',

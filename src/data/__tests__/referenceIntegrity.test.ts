@@ -13,6 +13,7 @@ import {
 } from '../strengthPrograms';
 import { StrengthProgramTemplateSchema } from '../../schemas/strengthSchema';
 import { PRESET_ORGANIZATIONS } from '../../services/organizationService';
+import { CONTEXT_PROFILES } from '../contextProfiles';
 
 describe('Referanseintegritet for øvelses-ID-er og treningspakker (Revisjon 2026-08-30)', () => {
   const validExerciseIds = new Set(EXERCISE_LIBRARY.map((e) => e.id));
@@ -125,6 +126,21 @@ describe('Referanseintegritet for øvelses-ID-er og treningspakker (Revisjon 202
     expect(
       missing,
       'Organisasjoner som peker på utfordringer som ikke finnes: ' + missing.join(', ')
+    ).toEqual([]);
+  });
+
+  // Senior og kor sto som «planned» — altså gråt ut med «SNART» i UI —
+  // mens katalogen hadde fire programmer for hver. Flagget hadde ikke fulgt
+  // innholdet. En profil som har programmer, skal være tilgjengelig.
+  it('profiler med programmer er merket active', () => {
+    const feilmerket = Object.values(CONTEXT_PROFILES)
+      .filter((p) => p.status === 'planned')
+      .filter((p) => TRAINING_PROGRAMS.some((prog) => prog.targetProfileId === p.id))
+      .map((p) => p.id);
+
+    expect(
+      feilmerket,
+      'Profiler som er skjult bak «SNART», men har programmer: ' + feilmerket.join(', ')
     ).toEqual([]);
   });
 
