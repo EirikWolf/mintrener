@@ -240,9 +240,31 @@ Dette er konsekvensen av svar 1, og hører hjemme i P1:
 
 **Sikkerhet**
 - Firestore-regler: en bruker kan kun lese/skrive under egen `users/{uid}`. Standardbiblioteket er lesbart for innloggede. Reglene testes med Firebase Emulator før første deploy
-- Firebase App Check aktiveres, så bare appen på trening.web.app kan snakke med backend
+- Regler som eksponerer en samling må skille `get` fra `list`. `allow read` dekker begge, og en samling som kan listes kan skrapes i sin helhet — uansett hvor lang dokument-ID-en er
 - Storage: maks filstørrelse for egne øvelsesbilder (f.eks. 2 MB), kun bildeformater, kun eier kan lese
 - Ingen brukerdata i URL-er eller delingslenker, delte økter er kopier uten personopplysninger
+- Firebase App Check: **implementert, men ikke aktivert.** Se vurderingen under
+
+**App Check — revidert vurdering (2026-08-30)**
+
+App Check var opprinnelig et P1-krav her. Vurderingen er endret etter revisjon: den er **nedgradert til P2, med en definert utløsende betingelse.**
+
+Begrunnelsen er at App Check ikke beskytter det som betyr mest. Brukerdata er dekket av innlogging og eierskapssjekk i reglene — en angriper når ikke andres treningsdata uansett. Det App Check faktisk gjør, er å skille appen fra et vilkårlig skript på den ene flaten som *må* stå åpen: anonym telemetri, som skrives før brukeren logger inn. Der kan reglene validere formen på dataene, men umulig hvem som sender dem.
+
+Restrisikoen uten App Check er dermed avgrenset til to ting, begge med lav sannsynlighet for et produkt av denne størrelsen:
+
+1. **Forgiftet telemetri.** Tellerne kan pumpes av hvem som helst med prosjekt-ID-en fra klientbundelen. Det gjør aggregert statistikk upålitelig — og siden ytelsesmålingene brukes som beslutningsgrunnlag for produksjonssetting, ville en forgiftning ikke være synlig.
+2. **Kostnad.** Uautentiserte skriv er fakturerbare operasjoner.
+
+App Check har også en egen kostnad som må veies inn: reCAPTCHA Enterprise laster tredjepartsskript og samler signaler om besøkende, altså en ny databehandler som må dokumenteres og omtales i personvernerklæringen. I tillegg risikerer håndheving å låse ute brukere som kjører en cachet PWA-versjon uten App Check-koden.
+
+**Rekkefølgen som gjelder i stedet, prioritert etter effekt per innsats:**
+
+1. **Budsjettvarsel i Google Cloud Billing** — dekker det verste realistiske utfallet (uventet regning) og tar minutter å sette opp. Dette er nå det bærende kostnadsvernet, ikke App Check
+2. **Ingen uautentisert flate med ubegrenset dokumentopprettelse.** Samlinger som tar imot skriv fra uinnloggede klienter skal ha enten TTL-policy, krav om innlogging, eller et begrenset ID-rom. En flate som kan vokse fritt og ikke kan ryddes fra klienten, er en kostnadsrisiko uavhengig av App Check
+3. **App Check aktiveres når** appen tas i bruk av andre enn utviklerens egen krets, eller når telemetrien faktisk skal styre beslutninger som betyr noe
+
+Koden er allerede på plass i `src/services/firebase.ts`, med guard mot test- og e2e-miljø, og hopper stille over seg selv når `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` mangler. Aktivering krever derfor bare en reCAPTCHA-nøkkel, en miljøvariabel, et nytt bygg — og at håndheving slås på i Firebase-konsollen etter at metrikkene viser at trafikken er verifisert.
 
 **Personvern (GDPR)**
 - Personvernerklæring og enkle vilkår på egen side før lansering
@@ -253,7 +275,7 @@ Dette er konsekvensen av svar 1, og hører hjemme i P1:
 
 **Kostnad**
 - Firebase Spark (gratis) dekker Hosting, Auth og Firestore for et lite antall brukere. Cloud Functions og Storage-egress krever Blaze (betal etter bruk)
-- Sett budsjettvarsel i Google Cloud på f.eks. 100 kr/mnd fra dag én
+- **Budsjettvarsel i Google Cloud på f.eks. 100 kr/mnd fra dag én.** Dette er ikke lenger bare god skikk — det er det bærende kostnadsvernet så lenge App Check ikke er aktivert (se sikkerhetsavsnittet). Varselet skal dokumenteres i `docs/DECISIONS.md` når det er satt opp, slik at det er etterprøvbart at det finnes
 - Firestore-modell designes for få lesinger: én økt = ett dokument, ikke ett dokument per intervall. Statistikk aggregeres i brukerdokumentet, ikke beregnes ved å lese all historikk
 - Offline-persistens reduserer lesinger betydelig
 
