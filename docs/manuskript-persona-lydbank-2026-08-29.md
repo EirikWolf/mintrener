@@ -140,7 +140,7 @@ Alle 25 øvelses-id-er er kryssjekket mot `src/data/exercises/` (bodyweight, car
 | `utfall-forover` | `exercise-utfall-forover.mp3` | Utfall forover | | |
 | `planke` | `exercise-planke.mp3` | Planke | | |
 | `mountain-climbers` | `exercise-mountain-climbers.mp3` | Mountain Climbers | Mountain Climbers (engelsk uttale, `ttsLang: "en"`) | QA-runde 1: fonetisk omskriving forkastet; uttales på engelsk slik den skrives |
-| `burpees` | `exercise-burpees.mp3` | Burpees | «Børpis» | |
+| `burpees` | `exercise-burpees.mp3` | Burpees | Burpees (engelsk uttale, `ttsLang: "en"`) | A/B-lytting 2026-08-30: «Børpis» forkastet av produkteier; uttales på engelsk slik den skrives (jf. Beslutning 39) |
 | `sideplanke` | `exercise-sideplanke.mp3` | Sideplanke | | |
 | `rygghev-superman` | `exercise-rygghev-superman.mp3` | Rygghev | | «(Superman)» strøket i tale |
 | `dips-pa-stol` | `exercise-dips-pa-stol.mp3` | Dips på stol | «Dipps på stol» | |
