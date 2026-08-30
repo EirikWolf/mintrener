@@ -393,39 +393,72 @@ export const TTS_POST = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Halevakt (QA-4, 2026-08-30): automatisk vakt mot avkuttede klipp.
+// Halevakt (QA-4, rekalibrert 2026-08-30): vakt mot avkuttede TTS-take.
 //
 // Chatterbox er stokastisk og kutter av og til halen av et take — produkteier
 // fanget «burpees» som ble til «burpii». Samme klasse som QA-1, bare i motsatt
 // ende av klippet (amputerte ANSATSER, løst med pre-roll i TRIM_START). Vi vil
 // ikke være avhengige av at et menneske hører slikt.
 //
-// Målemetoden: sammenlign mean_volume for klippets siste 50 ms mot klippets
-// samlede mean_volume. Et normalt klipp dør ut — differansen (hale minus
-// samlet) er tydelig negativ. Et avkuttet klipp har fortsatt full energi i
-// siste vindu, og differansen ligger nær null.
+// MÅLEUNDERLAGET ER RÅFILA fra Chatterbox (audio/raw-cache/), ikke det ferdig
+// etterbehandlede klippet. Grunnen er at etterbehandlingen — TRIM_END
+// (silenceremove på −45 dB) etterfulgt av FADE — er NØYAKTIG det som
+// bestemmer hvor mye energi som ligger igjen i de siste 50 ms. En måling der
+// beskriver ffmpeg-trimmingen, ikke om Chatterbox kuttet ordet, og signalet
+// blir invertert: målt på samme klipp faller det avkuttede «burpii»-take-et
+// −24,4 dB rått, men −74,0 dB etter prosessering (bunkens «sunneste»), mens et
+// friskt søsken faller −72,2 rått og −17,0 prosessert.
+//
+// Målemetoden: sammenlign mean_volume for de siste 50 ms av RÅFILA mot råfilas
+// samlede mean_volume. Et normalt take dør ut i digital stillhet — differansen
+// (hale minus samlet) er kraftig negativ. Et avkuttet take har fortsatt
+// tale-energi i siste vindu, og differansen krymper.
 // ---------------------------------------------------------------------------
 
 /** Halevinduet som måles, i sekunder (siste 50 ms av klippet). */
 export const TAIL_WINDOW_SECONDS = 0.05;
 
 /**
- * Terskel for differansen hale minus samlet mean_volume: STRENGT over denne
- * er klippet mistenkt avkuttet. Nøyaktig −15 dB er altså ikke mistenkt.
+ * Terskel for differansen hale minus samlet mean_volume MÅLT PÅ RÅFILA:
+ * STRENGT over denne er take-et mistenkt avkuttet. Nøyaktig −36 dB er altså
+ * ikke mistenkt.
  *
- * Kalibrert mot et fullt sveip av lydbanken 2026-08-30 (152 klipp, målt med
- * -sseof −0.05): typisk normalklipp faller −25 dB eller mer, spennet går ned
- * mot −70 dB. Terskelen ligger bevisst et godt stykke over det typiske slik at
- * bare haler med tilnærmet uendret energi plukkes opp.
+ * Fordelingen (sveip av audio/raw-cache/, 144 rå TTS-take, 4 personaer,
+ * 2026-08-30): min −71,8 · p10 −70,1 · p25 −69,1 · median −67,2 · p75 −64,2 ·
+ * p90 −26,6 · maks −1,1. 116 av 144 take ender i digital stillhet (halen måler
+ * −91,0 dB, 16-bits-gulvet) — derav den tette hovedklyngen rundt −67 dB.
  *
- * KJENT BEGRENSNING: en absolutt terskel alene skiller ikke alle tilfeller.
- * Sveipet viser at legitimt BRÅ take-avslutninger legger seg over terskelen
- * (verst: hardcore/exercise-hulekroppshold på −1,7 dB), og motsatt at et
- * avkuttet klipp kan lande under den — «burpii»-klippet målte −24,4 dB.
- * Derfor står SIBLING_TAIL_DEVIATION_DB ved siden av denne vakten, og derfor
- * er begge ADVARSLER som aldri avbryter kjøringen.
+ * Regnestykket bak −36: terskelen må ligge der BEGGE datasettene skiller.
+ *  1. Fasiten i audio/lyttekandidater/raa/ (produkteiers lyttetest): det
+ *     avkuttede befal_2_burpees_engelsk faller −24,4 dB, og det dårligste
+ *     VERIFISERT friske take-et faller −49,9 dB. Terskelen må ligge i det
+ *     25,5 dB brede gapet mellom dem.
+ *  2. Innenfor det gapet har produksjonsbanken sitt eget bredeste tomrom
+ *     mellom −39,9 og −33,1 dB — 6,8 dB uten et eneste take. Midtpunktet
+ *     avrundet er −36.
+ * Marginene blir 11,6 dB ned til det avkuttede take-et og 13,9 dB opp til det
+ * dårligste friske. Terskelen flagger 19 av 144 take (13,2 %) i dagens bank;
+ * de er kandidater for en lytt, ikke bekreftede feil, og vakten er derfor en
+ * ren ADVARSEL som aldri avbryter kjøringen eller rører exit-koden.
  */
-export const TAIL_FALLOFF_THRESHOLD_DB = -15;
+export const TAIL_FALLOFF_THRESHOLD_DB = -36;
+
+/**
+ * Fila halevakten skal måle, eller null når oppgaven ikke har en råfil å måle.
+ *
+ * TTS-oppgaver måles på rå-cachen: det er den uberørte nedlastingen fra
+ * Chatterbox, og cachefila ER råfila også når klippet hoppes over uten ny
+ * nedlasting — derfor virker vakten på inkrementelle kjøringer.
+ *
+ * Innspilte spor måles IKKE. De er faste, menneskeverifiserte vokalstems i
+ * repoet, ikke stokastiske TTS-take, så vakten har ingenting å vokte; de
+ * ligger dessuten utenfor fordelingen terskelen er kalibrert mot (målt fall
+ * −24,8 til −44,1 dB), og haugesund-stemmet lar seg ikke måle i det hele tatt:
+ * `-sseof` gir 0 samples og volumedetect skriver ingen mean_volume-linje.
+ */
+export function tailSourceRelPath(task: VoicebankTask): string | null {
+  return task.kind === 'tts' ? task.cacheRelPath : null;
+}
 
 export interface TailMeasurement {
   /** mean_volume for hele klippet, i dB. */
@@ -440,9 +473,14 @@ export function tailFalloffDb(m: TailMeasurement): number {
 }
 
 /**
- * Er klippet mistenkt avkuttet? Ikke-endelige måltall (digital stillhet gir
- * -inf fra volumedetect) kan ikke vurderes — da tier vakten heller enn å
- * fyre av en advarsel vi ikke kan begrunne.
+ * Er take-et mistenkt avkuttet?
+ *
+ * Silingen av ikke-endelige måltall er en REN DEFENSIV VAKT, ikke en reell
+ * kodesti: `parseMeanVolumeDb` kan produsere ±Infinity fordi ffmpeg-formatet
+ * tillater `-inf`, men ekte ffmpeg (verifisert på 8.1) rapporterer digital
+ * stillhet som −91,0 dB — 16-bits-gulvet — og aldri `-inf`. Konsekvensen er at
+ * et HELT stille klipp får fall 0,0 dB og BLIR flagget. Det er riktig oppførsel:
+ * en rå TTS-nedlasting uten lyd er en feil vi vil høre om.
  */
 export function isTailSuspect(m: TailMeasurement): boolean {
   const falloff = tailFalloffDb(m);
@@ -572,6 +610,8 @@ export function assessSiblingTail(
 export interface TailMeasurementRecord {
   readonly personaId: string;
   readonly id: string;
+  /** Råfila måltallet faktisk gjelder — ikke den etterbehandlede output-fila. */
+  readonly rawRelPath: string;
   readonly outputRelPath: string;
   readonly kind: 'tts' | 'recorded';
   readonly falloffDb: number;
@@ -583,6 +623,8 @@ export type TailSuspicionReason = 'absolute' | 'sibling';
 interface TailFlagBase {
   readonly personaId: string;
   readonly id: string;
+  /** Råfila måltallet gjelder. */
+  readonly rawRelPath: string;
   readonly outputRelPath: string;
   readonly kind: 'tts' | 'recorded';
   readonly falloffDb: number;
@@ -641,6 +683,7 @@ export function runSiblingTailPass(
       flags.push({
         personaId: m.personaId,
         id: m.id,
+        rawRelPath: m.rawRelPath,
         outputRelPath: m.outputRelPath,
         kind: m.kind,
         falloffDb: m.falloffDb,

@@ -11,20 +11,18 @@
  * skånsomme trim+fade+loudnorm-kjeden. Ingen manifest-generering her —
  * det er en egen byggtidsoppgave (β5).
  *
- * HALEVAKT (to vakter, begge advarsler): etter etterbehandling måles hvert
- * klipp med volumedetect — siste 50 ms mot klippets samlede mean_volume.
- * (1) ABSOLUTT vakt, per klipp: en hale med tilnærmet uendret energi tyder på
- *     at Chatterbox kuttet taket. Terskel: TAIL_FALLOFF_THRESHOLD_DB.
- * (2) SØSKEN-VAKT, etter at alle klipp er målt: hale-fallet er nokså likt på
- *     tvers av personaer for samme tekst, så et klipp som faller langt mindre
- *     enn søskenmedianen er mistenkt. Terskel: SIBLING_TAIL_DEVIATION_DB.
- *     Dette er vakten som ville fanget «burpii» (−24,4 dB mot søsken på −50
- *     til −72); den absolutte alene gjorde det ikke.
+ * HALEVAKT (advarsel): for hvert TTS-klipp måles RÅFILA i audio/raw-cache/
+ * med volumedetect — siste 50 ms mot råfilas samlede mean_volume. Et take som
+ * fortsatt har tale-energi i halen tyder på at Chatterbox kuttet ordet.
+ * Terskel: TAIL_FALLOFF_THRESHOLD_DB. Målingen skjer på råfila og IKKE på
+ * etterbehandlet output, fordi TRIM_END/FADE er nettopp det som bestemmer
+ * haleenergien der og inverterer signalet.
+ * Sjekken kjøres også når klippet hoppes over — cachefila er råfila — så
+ * vakten virker på inkrementelle kjøringer. Innspilte spor måles ikke: de har
+ * ingen råfil fra Chatterbox.
  * Mistanke gir en ADVARSEL med et `--refetch`-forslag og telles i
- * sluttrapporten, med mistankegrunnen synlig — kjøringen fortsetter og
- * exit-koden er urørt, for et take kan legitimt være brått. Ved delvise
- * kjøringer (--persona/--only) har søsken-vakten sjelden nok søsken; da sier
- * rapporten eksplisitt at den ikke kunne vurdere.
+ * sluttrapporten — kjøringen fortsetter og exit-koden er urørt, for et take
+ * kan legitimt være brått.
  *
  * Bruk:
  *   npx tsx scripts/generatePersonaVoicebank.ts [--dry-run] [--persona <id>]
@@ -73,6 +71,7 @@ import {
   parseMeanVolumeDb,
   runSiblingTailPass,
   tailFalloffDb,
+  tailSourceRelPath,
   updateConsecutiveFailures,
   type AbsoluteTailFlag,
   type CliOptions,
@@ -149,26 +148,35 @@ interface TailCheck {
 const NO_TAIL_CHECK: TailCheck = { measurement: null, absoluteFlag: null };
 
 /**
- * Halevaktens per-klipp-pass: måler det ferdig etterbehandlede klippet, advarer
- * hvis halen fortsatt har full energi (absolutt vakt), og leverer målingen
- * videre til søsken-passet som kjøres når hele batchen er målt.
- * Selve målingen er I/O og bor derfor her; terskler og tekst er rene
- * funksjoner i voicebankTasks.
+ * Halevaktens per-klipp-pass: måler RÅFILA fra Chatterbox (ikke den
+ * etterbehandlede output-fila — se kommentaren over TAIL_FALLOFF_THRESHOLD_DB)
+ * og advarer hvis halen fortsatt har tale-energi. Selve målingen er I/O og bor
+ * derfor her; terskel og tekst er rene funksjoner i voicebankTasks.
+ *
+ * Kjøres også når klippet HOPPES OVER: cachefila er råfila, så en inkrementell
+ * kjøring der alt ligger ferdig fra før får den samme sjekken som en full
+ * kjøring. Uten det ville vakten vært inert nettopp i den vanligste kjøringen.
  *
  * En advarsel avbryter ALDRI kjøringen: et take kan legitimt være brått, og
  * en mislykket måling skal ikke stoppe en batch som ellers går fint.
  */
-function checkTail(task: VoicebankTask, outputPath: string): TailCheck {
-  const overallMeanDb = measureMeanVolumeDb(outputPath, 'whole');
-  const tailMeanDb = measureMeanVolumeDb(outputPath, 'tail');
+function checkTail(task: VoicebankTask): TailCheck {
+  const rawRelPath = tailSourceRelPath(task);
+  // Innspilte spor har ingen råfil fra Chatterbox og måles ikke.
+  if (rawRelPath === null) return NO_TAIL_CHECK;
+  const rawPath = toAbsolute(rawRelPath);
+  if (!fs.existsSync(rawPath)) return NO_TAIL_CHECK;
+  const overallMeanDb = measureMeanVolumeDb(rawPath, 'whole');
+  const tailMeanDb = measureMeanVolumeDb(rawPath, 'tail');
   if (overallMeanDb === null || tailMeanDb === null) {
-    console.warn(`   ⚠️ Halevakt: klarte ikke måle ${task.outputRelPath} — hopper over sjekken.`);
+    console.warn(`   ⚠️ Halevakt: klarte ikke måle ${rawRelPath} — hopper over sjekken.`);
     return NO_TAIL_CHECK;
   }
   const measurement = { overallMeanDb, tailMeanDb };
   const record: TailMeasurementRecord = {
     personaId: task.personaId,
     id: task.id,
+    rawRelPath,
     outputRelPath: task.outputRelPath,
     kind: task.kind,
     falloffDb: tailFalloffDb(measurement),
@@ -282,7 +290,9 @@ async function runTtsTask(task: TtsTask, token: string, opts: CliOptions): Promi
 
   if (action === 'skip-existing') {
     console.log(`⏩ Hopper over eksisterende: ${task.personaId}/${task.id}`);
-    return plain('skipped');
+    // Halevakten måler råfila, og den ligger der uansett om vi behandlet
+    // klippet på nytt — så et hopp gir ingen grunn til å la sjekken utebli.
+    return { outcome: 'skipped', tail: checkTail(task) };
   }
   if (action === 'missing-cache') {
     console.error(
@@ -307,7 +317,7 @@ async function runTtsTask(task: TtsTask, token: string, opts: CliOptions): Promi
     postProcess(cachePath, outputPath, buildTtsFfmpegArgs);
     const kb = Math.round(fs.statSync(outputPath).size / 1024);
     console.log(`   ✅ ${task.outputRelPath} (${kb} KB)`);
-    return { outcome: 'generated', tail: checkTail(task, outputPath) };
+    return { outcome: 'generated', tail: checkTail(task) };
   } catch (err) {
     console.error(`   ❌ Feilet: ${err instanceof Error ? err.message : String(err)}`);
     return plain('failed');
@@ -331,7 +341,7 @@ function runRecordedTask(task: RecordedTask, opts: CliOptions): TaskResult {
     console.log(`🎛️ [${task.personaId}/${task.id}] etterbehandler innspilt spor (skånsom kjede)`);
     postProcess(sourcePath, outputPath, buildRecordedFfmpegArgs);
     console.log(`   ✅ ${task.outputRelPath}`);
-    return { outcome: 'generated', tail: checkTail(task, outputPath) };
+    return { outcome: 'generated', tail: NO_TAIL_CHECK };
   } catch (err) {
     console.error(`   ❌ Feilet: ${err instanceof Error ? err.message : String(err)}`);
     return plain('failed');
