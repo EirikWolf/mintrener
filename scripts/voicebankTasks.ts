@@ -418,13 +418,12 @@ export const TAIL_WINDOW_SECONDS = 0.05;
  * mot −70 dB. Terskelen ligger bevisst et godt stykke over det typiske slik at
  * bare haler med tilnærmet uendret energi plukkes opp.
  *
- * KJENT BEGRENSNING (bevisst akseptert): en absolutt terskel alene skiller
- * ikke alle tilfeller. Sveipet viser at legitimt BRÅ take-avslutninger legger
- * seg over terskelen (verst: hardcore/exercise-hulekroppshold på −1,7 dB), og
- * motsatt at et avkuttet klipp kan lande under den — det opprinnelige
- * «burpii»-klippet målte −24,4 dB mot søskenklipp på −50 til −72 dB, altså
- * avslørt av SAMMENLIGNINGEN med søsknene, ikke av en absolutt grense.
- * Derfor er dette en ADVARSEL som aldri avbryter kjøringen.
+ * KJENT BEGRENSNING: en absolutt terskel alene skiller ikke alle tilfeller.
+ * Sveipet viser at legitimt BRÅ take-avslutninger legger seg over terskelen
+ * (verst: hardcore/exercise-hulekroppshold på −1,7 dB), og motsatt at et
+ * avkuttet klipp kan lande under den — «burpii»-klippet målte −24,4 dB.
+ * Derfor står SIBLING_TAIL_DEVIATION_DB ved siden av denne vakten, og derfor
+ * er begge ADVARSLER som aldri avbryter kjøringen.
  */
 export const TAIL_FALLOFF_THRESHOLD_DB = -15;
 
@@ -481,8 +480,96 @@ export function buildVolumeDetectArgs(
   ];
 }
 
-/** Ett flagget klipp fra halevakten. */
-export interface TailFlag {
+// ---------------------------------------------------------------------------
+// Søsken-relativ halevakt (QA-4b, 2026-08-30).
+//
+// Den absolutte terskelen over ville IKKE fanget funnet den ble bygget for:
+// «burpii»-klippet målte −24,4 dB, altså godt under −15. Det som avslørte det
+// var at SØSKNENE — samme manuskripttekst generert for de andre personaene —
+// lå på −50 til −72 dB. Hale-fallet er nokså likt på tvers av personaer for
+// samme ytring; et klipp som avviker kraftig OPPOVER (mindre fall = brattere
+// kutt) er mistenkt avkuttet.
+//
+// De to vaktene fanger ulike ting og beholdes begge: den absolutte fungerer
+// per klipp (også i delvise kjøringer) og fanger haler med tilnærmet uendret
+// energi; den søsken-relative krever et bredt nok sveip, men fanger klipp som
+// dør ut «litt» og derfor glipper under en absolutt grense.
+// ---------------------------------------------------------------------------
+
+/**
+ * Hvor mye et klipps hale-fall kan ligge OVER søsknenes median før det er
+ * mistenkt. STRENGT over flagger — nøyaktig 20 dB er altså ikke mistenkt,
+ * samme kant-semantikk som TAIL_FALLOFF_THRESHOLD_DB.
+ *
+ * Kalibrering: burpii-klippet lå på −24,4 dB mot en søskenmedian rundt −70 dB,
+ * altså et avvik på ~46 dB — med god margin over 20. I motsatt ende har de 6
+ * klippene den absolutte vakten flagger i dagens bank (−1,7 til −13,2 dB, og
+ * sannsynligvis friske brå avslutninger) en innbyrdes spredning på ~11,5 dB,
+ * som holder seg under terskelen. 20 dB ligger dermed i det tomme rommet
+ * mellom normal persona-variasjon og et faktisk avkuttet take.
+ */
+export const SIBLING_TAIL_DEVIATION_DB = 20;
+
+/** Færre søsken enn dette gir ingen dom — spredningen er ikke meningsfull. */
+export const MIN_SIBLING_COUNT = 2;
+
+/**
+ * Søsken-vaktens dom. Bevisst en union og ikke en boolean: «for få søsken» er
+ * IKKE det samme som «frisk», og forskjellen skal være umulig å miste i
+ * kallstedet.
+ */
+export type SiblingTailVerdict =
+  | {
+      readonly status: 'not-assessed';
+      /** 'too-few-siblings' = delvis kjøring; 'unmeasurable' = -inf/NaN. */
+      readonly cause: 'too-few-siblings' | 'unmeasurable';
+      readonly siblingCount: number;
+    }
+  | {
+      readonly status: 'normal' | 'suspect';
+      readonly siblingCount: number;
+      readonly medianFalloffDb: number;
+      /** Klippets fall minus søskenmedianen; positivt = mindre fall enn søsknene. */
+      readonly deviationDb: number;
+    };
+
+/** Median av en ikke-tom tallrekke (partall → snittet av de to midterste). */
+function median(values: readonly number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1
+    ? (sorted[mid] as number)
+    : ((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2;
+}
+
+/**
+ * Vurderer ett klipps hale-fall mot søsknenes. Ikke-endelige måltall siles
+ * bort (digital stillhet gir -inf fra volumedetect) — både klippets eget og
+ * søsknenes — og for få brukbare søsken gir 'not-assessed'.
+ */
+export function assessSiblingTail(
+  falloffDb: number,
+  siblingFalloffsDb: readonly number[],
+): SiblingTailVerdict {
+  const usable = siblingFalloffsDb.filter((v) => Number.isFinite(v));
+  if (!Number.isFinite(falloffDb)) {
+    return { status: 'not-assessed', cause: 'unmeasurable', siblingCount: usable.length };
+  }
+  if (usable.length < MIN_SIBLING_COUNT) {
+    return { status: 'not-assessed', cause: 'too-few-siblings', siblingCount: usable.length };
+  }
+  const medianFalloffDb = median(usable);
+  const deviationDb = falloffDb - medianFalloffDb;
+  return {
+    status: deviationDb > SIBLING_TAIL_DEVIATION_DB ? 'suspect' : 'normal',
+    siblingCount: usable.length,
+    medianFalloffDb,
+    deviationDb,
+  };
+}
+
+/** Én ferdig måling fra runneren, samlet opp til søsken-passet til slutt. */
+export interface TailMeasurementRecord {
   readonly personaId: string;
   readonly id: string;
   readonly outputRelPath: string;
@@ -490,22 +577,116 @@ export interface TailFlag {
   readonly falloffDb: number;
 }
 
+/** Hvilken vakt som slo ut på et flagget klipp. */
+export type TailSuspicionReason = 'absolute' | 'sibling';
+
+interface TailFlagBase {
+  readonly personaId: string;
+  readonly id: string;
+  readonly outputRelPath: string;
+  readonly kind: 'tts' | 'recorded';
+  readonly falloffDb: number;
+}
+
+/** Den absolutte vakten: halen har tilnærmet uendret energi. */
+export interface AbsoluteTailFlag extends TailFlagBase {
+  readonly reason: 'absolute';
+}
+
+/** Søsken-vakten: klippet faller langt mindre enn søsknene på samme tekst. */
+export interface SiblingTailFlag extends TailFlagBase {
+  readonly reason: 'sibling';
+  readonly medianFalloffDb: number;
+  readonly deviationDb: number;
+  readonly siblingCount: number;
+}
+
+/** Ett flagget klipp fra halevakten, med mistankegrunnen i typen. */
+export type TailFlag = AbsoluteTailFlag | SiblingTailFlag;
+
+/** Dekningen til søsken-passet — skiller «ingen funn» fra «ikke vurdert». */
+export interface SiblingPassStats {
+  /** Antall klipp som faktisk fikk en dom (nok søsken). */
+  readonly assessed: number;
+  /** Antall klipp som ikke kunne vurderes (typisk delvise kjøringer). */
+  readonly notAssessed: number;
+}
+
+export interface SiblingPassResult {
+  readonly flags: readonly SiblingTailFlag[];
+  readonly stats: SiblingPassStats;
+}
+
+/**
+ * Søsken-passet: kjøres når ALLE målingene foreligger, siden dommen krever at
+ * søsknene er målt. Søsken = samme cue-/øvelses-id hos en ANNEN persona.
+ */
+export function runSiblingTailPass(
+  measurements: readonly TailMeasurementRecord[],
+): SiblingPassResult {
+  const flags: SiblingTailFlag[] = [];
+  let assessed = 0;
+  let notAssessed = 0;
+  for (const m of measurements) {
+    const siblings = measurements
+      .filter((other) => other.id === m.id && other.personaId !== m.personaId)
+      .map((other) => other.falloffDb);
+    const verdict = assessSiblingTail(m.falloffDb, siblings);
+    if (verdict.status === 'not-assessed') {
+      notAssessed++;
+      continue;
+    }
+    assessed++;
+    if (verdict.status === 'suspect') {
+      flags.push({
+        personaId: m.personaId,
+        id: m.id,
+        outputRelPath: m.outputRelPath,
+        kind: m.kind,
+        falloffDb: m.falloffDb,
+        reason: 'sibling',
+        medianFalloffDb: verdict.medianFalloffDb,
+        deviationDb: verdict.deviationDb,
+        siblingCount: verdict.siblingCount,
+      });
+    }
+  }
+  return { flags, stats: { assessed, notAssessed } };
+}
+
 /** `--refetch`-oppskriften som gir et nytt stokastisk take av ett klipp. */
 export function refetchCommand(personaId: string, id: string): string {
   return `--refetch --only ${id} --persona ${personaId}`;
 }
 
+/** Menneskelesbar merkelapp på vakten som slo ut. */
+const REASON_LABEL: Readonly<Record<TailSuspicionReason, string>> = {
+  absolute: 'ABSOLUTT VAKT',
+  sibling: 'SØSKEN-VAKT',
+};
+
 /**
- * Advarselslinjene for ett flagget klipp. Innspilte spor får ingen
+ * Advarselslinjene for ett flagget klipp. Grunnen står i overskriften og
+ * måltallene forklarer nettopp DEN vakten. Innspilte spor får ingen
  * refetch-oppskrift: de kommer fra en fast lokal kilde, ikke fra TTS.
  */
 export function formatTailWarning(flag: TailFlag): readonly string[] {
   const falloff = flag.falloffDb.toFixed(1);
   const lines = [
-    `   ⚠️ HALEVAKT: ${flag.outputRelPath} kan være avkuttet.`,
-    `      Fall i halen (siste ${TAIL_WINDOW_SECONDS * 1000} ms mot klippets snitt):` +
-      ` ${falloff} dB, terskel ${TAIL_FALLOFF_THRESHOLD_DB} dB — halen dør ikke ut.`,
+    `   ⚠️ HALEVAKT (${REASON_LABEL[flag.reason]}): ${flag.outputRelPath} kan være avkuttet.`,
   ];
+  if (flag.reason === 'absolute') {
+    lines.push(
+      `      Fall i halen (siste ${TAIL_WINDOW_SECONDS * 1000} ms mot klippets snitt):` +
+        ` ${falloff} dB, terskel ${TAIL_FALLOFF_THRESHOLD_DB} dB — halen dør ikke ut.`,
+    );
+  } else {
+    lines.push(
+      `      Fall i halen: ${falloff} dB mot søskenmedian ${flag.medianFalloffDb.toFixed(1)} dB` +
+        ` (${flag.siblingCount} søsken) — avvik ${flag.deviationDb.toFixed(1)} dB,` +
+        ` terskel ${SIBLING_TAIL_DEVIATION_DB} dB. Klippet slutter langt brattere enn søsknene.`,
+    );
+  }
   if (flag.kind === 'tts') {
     lines.push(
       `      Lytt på klippet; er halen borte, kjør \`${refetchCommand(flag.personaId, flag.id)}\` for et nytt take.`,
@@ -516,17 +697,66 @@ export function formatTailWarning(flag: TailFlag): readonly string[] {
   return lines;
 }
 
-/** Halevaktens del av sluttrapporten: antall flaggede klipp, og hvilke. */
-export function formatTailSummary(flags: readonly TailFlag[]): readonly string[] {
+/** Én linje per flagget klipp, med måltallene som hører til vakten. */
+function flagLine(flag: TailFlag): string {
+  const head = `       ${flag.personaId}/${flag.id} — fall i halen: ${flag.falloffDb.toFixed(1)} dB`;
+  return flag.reason === 'absolute'
+    ? head
+    : `${head}, søskenmedian ${flag.medianFalloffDb.toFixed(1)} dB (avvik ${flag.deviationDb.toFixed(1)} dB)`;
+}
+
+/**
+ * Halevaktens del av sluttrapporten. De to vaktene rapporteres hver for seg
+ * slik at man ser HVILKEN som slo ut — samme klipp kan stå under begge.
+ *
+ * `sibling` er dekningen til søsken-passet, og er med nettopp fordi «ingen
+ * funn» og «kunne ikke vurdere» må kunne skilles: en delvis kjøring
+ * (--persona/--only) har sjelden nok søsken, og skal ikke leses som at alt er
+ * friskt.
+ */
+export function formatTailSummary(
+  flags: readonly TailFlag[],
+  sibling: SiblingPassStats,
+): readonly string[] {
+  const absolute = flags.filter((f) => f.reason === 'absolute');
+  const siblingFlags = flags.filter((f) => f.reason === 'sibling');
+  const lines: string[] = [];
+
   if (flags.length === 0) {
-    return ['   Halevakt: ingen klipp flagget som mulig avkuttet.'];
+    lines.push('   Halevakt: ingen klipp flagget som mulig avkuttet.');
+  } else {
+    lines.push(
+      `   Halevakt: ${flags.length} flagg om mulig avkuttede klipp (advarsel, ikke feil):`,
+    );
+    if (absolute.length > 0) {
+      lines.push(
+        `     Absolutt vakt (halen dør ikke ut, terskel ${TAIL_FALLOFF_THRESHOLD_DB} dB) — ${absolute.length}:`,
+      );
+      lines.push(...absolute.map(flagLine));
+    }
+    if (siblingFlags.length > 0) {
+      lines.push(
+        `     Søsken-vakt (avvik over ${SIBLING_TAIL_DEVIATION_DB} dB fra søskenmedianen) — ${siblingFlags.length}:`,
+      );
+      lines.push(...siblingFlags.map(flagLine));
+    }
   }
-  return [
-    `   Halevakt: ${flags.length} klipp flagget som mulig avkuttet (advarsel, ikke feil):`,
-    ...flags.map(
-      (f) => `     ${f.personaId}/${f.id} — fall i halen: ${f.falloffDb.toFixed(1)} dB`,
-    ),
-  ];
+
+  if (sibling.assessed === 0) {
+    lines.push(
+      `   Søsken-vakt: kunne IKKE vurdere noe (${sibling.notAssessed} klipp hadde færre enn` +
+        ` ${MIN_SIBLING_COUNT} søsken). Typisk ved delvis kjøring (--persona/--only) —` +
+        ' fraværet av søsken-flagg betyr altså IKKE at klippene er friske.',
+    );
+  } else if (sibling.notAssessed > 0) {
+    lines.push(
+      `   Søsken-vakt: vurderte ${sibling.assessed} klipp; ${sibling.notAssessed} kunne IKKE vurderes` +
+        ` (færre enn ${MIN_SIBLING_COUNT} søsken).`,
+    );
+  } else {
+    lines.push(`   Søsken-vakt: vurderte alle ${sibling.assessed} målte klipp.`);
+  }
+  return lines;
 }
 
 function ffmpegArgs(inputPath: string, filter: string, outputPath: string): string[] {

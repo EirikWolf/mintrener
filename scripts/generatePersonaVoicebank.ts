@@ -11,12 +11,20 @@
  * skånsomme trim+fade+loudnorm-kjeden. Ingen manifest-generering her —
  * det er en egen byggtidsoppgave (β5).
  *
- * HALEVAKT: etter etterbehandling måles hvert klipp med volumedetect — siste
- * 50 ms mot klippets samlede mean_volume. Et normalt klipp dør ut; en hale med
- * tilnærmet uendret energi tyder på at Chatterbox kuttet taket («burpii»).
+ * HALEVAKT (to vakter, begge advarsler): etter etterbehandling måles hvert
+ * klipp med volumedetect — siste 50 ms mot klippets samlede mean_volume.
+ * (1) ABSOLUTT vakt, per klipp: en hale med tilnærmet uendret energi tyder på
+ *     at Chatterbox kuttet taket. Terskel: TAIL_FALLOFF_THRESHOLD_DB.
+ * (2) SØSKEN-VAKT, etter at alle klipp er målt: hale-fallet er nokså likt på
+ *     tvers av personaer for samme tekst, så et klipp som faller langt mindre
+ *     enn søskenmedianen er mistenkt. Terskel: SIBLING_TAIL_DEVIATION_DB.
+ *     Dette er vakten som ville fanget «burpii» (−24,4 dB mot søsken på −50
+ *     til −72); den absolutte alene gjorde det ikke.
  * Mistanke gir en ADVARSEL med et `--refetch`-forslag og telles i
- * sluttrapporten — kjøringen fortsetter, for et take kan legitimt være brått.
- * Terskel og tekst: TAIL_FALLOFF_THRESHOLD_DB i scripts/voicebankTasks.ts.
+ * sluttrapporten, med mistankegrunnen synlig — kjøringen fortsetter og
+ * exit-koden er urørt, for et take kan legitimt være brått. Ved delvise
+ * kjøringer (--persona/--only) har søsken-vakten sjelden nok søsken; da sier
+ * rapporten eksplisitt at den ikke kunne vurdere.
  *
  * Bruk:
  *   npx tsx scripts/generatePersonaVoicebank.ts [--dry-run] [--persona <id>]
@@ -63,11 +71,14 @@ import {
   parseCliArgs,
   parseManifest,
   parseMeanVolumeDb,
+  runSiblingTailPass,
   tailFalloffDb,
   updateConsecutiveFailures,
+  type AbsoluteTailFlag,
   type CliOptions,
   type RecordedTask,
   type TailFlag,
+  type TailMeasurementRecord,
   type TaskOutcome,
   type TtsTask,
   type VoicebankTask,
@@ -128,35 +139,46 @@ function measureMeanVolumeDb(filePath: string, window: 'whole' | 'tail'): number
   return parseMeanVolumeDb(res.stderr ?? '');
 }
 
+/** Resultatet av halevaktens per-klipp-pass: målingen og et evt. absolutt flagg. */
+interface TailCheck {
+  /** Tas vare på til søsken-passet; null når målingen mislyktes. */
+  readonly measurement: TailMeasurementRecord | null;
+  readonly absoluteFlag: AbsoluteTailFlag | null;
+}
+
+const NO_TAIL_CHECK: TailCheck = { measurement: null, absoluteFlag: null };
+
 /**
- * Halevakt: måler det ferdig etterbehandlede klippet og advarer hvis halen
- * fortsatt har full energi (mistenkt avkuttet take — «burpii»-tilfellet).
- * Selve målingen er I/O og bor derfor her; terskelen og teksten er rene
+ * Halevaktens per-klipp-pass: måler det ferdig etterbehandlede klippet, advarer
+ * hvis halen fortsatt har full energi (absolutt vakt), og leverer målingen
+ * videre til søsken-passet som kjøres når hele batchen er målt.
+ * Selve målingen er I/O og bor derfor her; terskler og tekst er rene
  * funksjoner i voicebankTasks.
  *
  * En advarsel avbryter ALDRI kjøringen: et take kan legitimt være brått, og
  * en mislykket måling skal ikke stoppe en batch som ellers går fint.
  */
-function checkTail(task: VoicebankTask, outputPath: string): TailFlag | null {
+function checkTail(task: VoicebankTask, outputPath: string): TailCheck {
   const overallMeanDb = measureMeanVolumeDb(outputPath, 'whole');
   const tailMeanDb = measureMeanVolumeDb(outputPath, 'tail');
   if (overallMeanDb === null || tailMeanDb === null) {
     console.warn(`   ⚠️ Halevakt: klarte ikke måle ${task.outputRelPath} — hopper over sjekken.`);
-    return null;
+    return NO_TAIL_CHECK;
   }
   const measurement = { overallMeanDb, tailMeanDb };
-  if (!isTailSuspect(measurement)) return null;
-  const flag: TailFlag = {
+  const record: TailMeasurementRecord = {
     personaId: task.personaId,
     id: task.id,
     outputRelPath: task.outputRelPath,
     kind: task.kind,
     falloffDb: tailFalloffDb(measurement),
   };
+  if (!isTailSuspect(measurement)) return { measurement: record, absoluteFlag: null };
+  const flag: AbsoluteTailFlag = { ...record, reason: 'absolute' };
   for (const line of formatTailWarning(flag)) {
     console.warn(line);
   }
-  return flag;
+  return { measurement: record, absoluteFlag: flag };
 }
 
 /** Rydder etterlatte tempfiler fra en tidligere hardt drept kjøring. */
@@ -231,13 +253,13 @@ function readSidecar(sidecarPath: string): string | null {
   return fs.existsSync(sidecarPath) ? fs.readFileSync(sidecarPath, 'utf-8') : null;
 }
 
-/** Utfallet av én oppgave, pluss halevaktens eventuelle flagg. */
+/** Utfallet av én oppgave, pluss halevaktens måling/flagg for klippet. */
 interface TaskResult {
   readonly outcome: TaskOutcome;
-  readonly tailFlag: TailFlag | null;
+  readonly tail: TailCheck;
 }
 
-const plain = (outcome: TaskOutcome): TaskResult => ({ outcome, tailFlag: null });
+const plain = (outcome: TaskOutcome): TaskResult => ({ outcome, tail: NO_TAIL_CHECK });
 
 async function runTtsTask(task: TtsTask, token: string, opts: CliOptions): Promise<TaskResult> {
   const outputPath = toAbsolute(task.outputRelPath);
@@ -285,7 +307,7 @@ async function runTtsTask(task: TtsTask, token: string, opts: CliOptions): Promi
     postProcess(cachePath, outputPath, buildTtsFfmpegArgs);
     const kb = Math.round(fs.statSync(outputPath).size / 1024);
     console.log(`   ✅ ${task.outputRelPath} (${kb} KB)`);
-    return { outcome: 'generated', tailFlag: checkTail(task, outputPath) };
+    return { outcome: 'generated', tail: checkTail(task, outputPath) };
   } catch (err) {
     console.error(`   ❌ Feilet: ${err instanceof Error ? err.message : String(err)}`);
     return plain('failed');
@@ -309,7 +331,7 @@ function runRecordedTask(task: RecordedTask, opts: CliOptions): TaskResult {
     console.log(`🎛️ [${task.personaId}/${task.id}] etterbehandler innspilt spor (skånsom kjede)`);
     postProcess(sourcePath, outputPath, buildRecordedFfmpegArgs);
     console.log(`   ✅ ${task.outputRelPath}`);
-    return { outcome: 'generated', tailFlag: checkTail(task, outputPath) };
+    return { outcome: 'generated', tail: checkTail(task, outputPath) };
   } catch (err) {
     console.error(`   ❌ Feilet: ${err instanceof Error ? err.message : String(err)}`);
     return plain('failed');
@@ -352,15 +374,19 @@ async function runAll(tasks: readonly VoicebankTask[], opts: CliOptions): Promis
   const counts: Record<TaskOutcome, number> = { generated: 0, skipped: 0, failed: 0 };
   const failedIds: string[] = [];
   const tailFlags: TailFlag[] = [];
+  // Alle hale-målinger samles opp: søsken-vakten kan først dømme når søsknene
+  // faktisk er målt, altså etter at løkka er ferdig.
+  const tailMeasurements: TailMeasurementRecord[] = [];
   let consecutiveFailures = 0;
   // Sekvensielt med vilje — én GPU på Kitor.
   for (const task of tasks) {
-    const { outcome, tailFlag } =
+    const { outcome, tail } =
       task.kind === 'tts'
         ? await runTtsTask(task, token, opts)
         : runRecordedTask(task, opts);
     counts[outcome]++;
-    if (tailFlag) tailFlags.push(tailFlag);
+    if (tail.measurement) tailMeasurements.push(tail.measurement);
+    if (tail.absoluteFlag) tailFlags.push(tail.absoluteFlag);
     if (outcome === 'failed') failedIds.push(`${task.personaId}/${task.id}`);
     consecutiveFailures = updateConsecutiveFailures(consecutiveFailures, outcome);
     if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
@@ -372,11 +398,24 @@ async function runAll(tasks: readonly VoicebankTask[], opts: CliOptions): Promis
     }
   }
 
+  // Søsken-passet til slutt: dommen er relativ til de andre personaenes klipp
+  // for samme tekst, så den kan ikke felles underveis.
+  const siblingPass = runSiblingTailPass(tailMeasurements);
+  if (siblingPass.flags.length > 0) {
+    console.log('\n🔎 Søsken-vakt (hale-fall sammenlignet på tvers av personaer):');
+    for (const flag of siblingPass.flags) {
+      for (const line of formatTailWarning(flag)) {
+        console.warn(line);
+      }
+    }
+  }
+  tailFlags.push(...siblingPass.flags);
+
   console.log('\n🏁 Sluttrapport:');
   console.log(`   Generert: ${counts.generated}, hoppet over: ${counts.skipped}, feilet: ${counts.failed}`);
   // Halevakten påvirker ikke exit-koden: flaggede klipp skal lyttes på, ikke
   // behandles som byggfeil.
-  for (const line of formatTailSummary(tailFlags)) {
+  for (const line of formatTailSummary(tailFlags, siblingPass.stats)) {
     console.log(line);
   }
   if (failedIds.length > 0) {
