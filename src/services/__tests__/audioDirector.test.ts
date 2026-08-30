@@ -666,9 +666,11 @@ describe('audioDirector (B3 β2)', () => {
       emit(phaseStarted({ phase: 'rest', itemIndex: 0, nextExercise: EX_A, endsAt: 10_000 }));
       await flush();
 
-      // (a) INGEN endAt-forankret nedtellingskjede: den degraderte kjeden
-      // (navnet alene, 6,18 s) etterlater 3,82 s — for lite til short (8,49 s)
-      // og langt for lite til full (27,8 s).
+      // (a) INGEN endAt-forankret nedtellingskjede — og årsaken er hodroms-
+      // gaten, ikke fasens lengde: short (4,44 s) ville startet 10 − 4,44 =
+      // 5,56 s inn i fasen, mens den degraderte kjeden (navnet alene, 6,185 s)
+      // pluss sikkerhetsmarginen krever 6,335 s. Short ville altså kommet midt
+      // i navnet → gates bort. Full (27,8 s) får ikke engang plass i fasen.
       expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith([FULL], expect.anything());
       expect(audioBufferEngine.scheduleSequence).not.toHaveBeenCalledWith(
         [SHORT],
@@ -897,7 +899,7 @@ describe('audioDirector (B3 β2)', () => {
       // Kjente varigheter, ingen annonseringskjede (intro/navn ucachet) → hodrom
       // 0: full (27,8 s) får plass i 40 s-fasen og forsøkes. Motoren svarer
       // likevel false (f.eks. for trangt vindu i praksis) → short.
-      cacheClips({ [FULL]: 27.815, [SHORT]: 8.489 });
+      cacheClips({ [FULL]: 27.815, [SHORT]: 4.44 });
       vi.mocked(audioBufferEngine.scheduleSequence).mockImplementation(
         async (keys: string[]) => keys[0] !== FULL
       );
