@@ -89,7 +89,7 @@
     { "id": "utfall-forover", "displayText": "Utfall forover", "ttsText": "Utfall forover", "file": "exercise-utfall-forover.mp3" },
     { "id": "planke", "displayText": "Planke", "ttsText": "Planke", "file": "exercise-planke.mp3" },
     { "id": "mountain-climbers", "displayText": "Mountain Climbers", "ttsText": "Mountain Climbers", "ttsLang": "en", "file": "exercise-mountain-climbers.mp3" },
-    { "id": "burpees", "displayText": "Burpees", "ttsText": "Børpis", "file": "exercise-burpees.mp3" },
+    { "id": "burpees", "displayText": "Burpees", "ttsText": "Burpees", "ttsLang": "en", "file": "exercise-burpees.mp3" },
     { "id": "sideplanke", "displayText": "Sideplanke", "ttsText": "Sideplanke", "file": "exercise-sideplanke.mp3" },
     { "id": "rygghev-superman", "displayText": "Rygghev", "ttsText": "Rygghev", "file": "exercise-rygghev-superman.mp3" },
     { "id": "dips-pa-stol", "displayText": "Dips på stol", "ttsText": "Dipps på stol", "file": "exercise-dips-pa-stol.mp3" },

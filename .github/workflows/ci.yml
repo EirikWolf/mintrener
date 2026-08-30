@@ -22,6 +22,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Halevaktens integrasjonstest (scripts/__tests__/halevakt.integration.test.ts)
+      # måler de committede bevisfilene med EKTE ffmpeg. Uten ffmpeg på PATH slår
+      # `describe.skipIf` inn og kalibreringsvakten finnes bare på eierens maskin —
+      # altså ikke der det teller. ubuntu-latest har ikke ffmpeg forhåndsinstallert.
+      # Gjelder kun denne jobben; rules-tests og e2e-smoke kjører ikke lydtestene.
+      - name: Install ffmpeg (halevaktens kalibreringstest)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - name: Run Vitest Unit Tests
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY || 'ci-test-key' }}

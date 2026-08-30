@@ -21,11 +21,26 @@ import {
   updateConsecutiveFailures,
   MAX_CONSECUTIVE_FAILURES,
   NonRetryableError,
+  TAIL_FALLOFF_THRESHOLD_DB,
+  TAIL_WINDOW_SECONDS,
+  buildVolumeDetectArgs,
+  formatTailSummary,
+  formatTailWarning,
+  isTailSuspect,
+  parseMeanVolumeDb,
+  tailFalloffDb,
+  tailSourceRelPath,
+  type TailCoverage,
+  type TailFlag,
   type VoicebankManifest,
   type VoicebankTask,
   type TtsTask,
 } from '../voicebankTasks';
-import { fetchTtsWithRetries } from '../generatePersonaVoicebank';
+import {
+  fetchTtsWithRetries,
+  checkTailWith,
+  type TailProbe,
+} from '../generatePersonaVoicebank';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const manifestPath = path.resolve(__dirname, '..', 'voicebank-manuskript.json');
@@ -59,7 +74,9 @@ describe('buildTaskList', () => {
       (t) => t.personaId === 'haugesund' && t.id === 'burpees',
     );
     expect(burpees?.kind).toBe('tts');
-    expect(burpees && burpees.kind === 'tts' ? burpees.text : null).toBe('Børpis');
+    // burpees er engelsk-uttalt (se «språkoverstyring»-blokken); poenget her er
+    // at ttsText brukes framfor displayText — goblet-squat bærer beviset.
+    expect(burpees && burpees.kind === 'tts' ? burpees.text : null).toBe('Burpees');
     const goblet = tasks.find(
       (t) => t.personaId === 'romsdal' && t.id === 'goblet-squat',
     );
@@ -207,6 +224,17 @@ describe('buildClonePayload', () => {
 });
 
 describe('språkoverstyring (ttsLang)', () => {
+  // Engelsk-uttalte øvelser. burpees kom til 2026-08-30 etter produkteiers
+  // A/B-lytting: den fonetiske omskrivingen «Børpis» tapte mot engelsk uttale,
+  // samme utfall som mountain-climbers fikk i QA-runde 1.
+  const ENGLISH_EXERCISE_IDS = ['mountain-climbers', 'burpees'];
+
+  it('nøyaktig 2 øvelser har ttsLang-overstyring i manuskriptet', () => {
+    const overridden = manifest.exercises.filter((ex) => ex.ttsLang !== undefined);
+    expect(overridden.map((ex) => ex.id).sort()).toEqual([...ENGLISH_EXERCISE_IDS].sort());
+    expect(overridden.every((ex) => ex.ttsLang === 'en')).toBe(true);
+  });
+
   it('mountain-climbers bærer engelsk tekst og lang=en i alle personas', () => {
     const tasks = buildTaskList(manifest, { only: 'mountain-climbers' });
     expect(tasks).toHaveLength(4);
@@ -216,11 +244,26 @@ describe('språkoverstyring (ttsLang)', () => {
     }
   });
 
+  it('burpees bærer engelsk tekst og lang=en i alle personas', () => {
+    const tasks = buildTaskList(manifest, { only: 'burpees' });
+    expect(tasks).toHaveLength(4);
+    for (const t of tasks) {
+      expect(t.kind === 'tts' ? t.text : null).toBe('Burpees');
+      expect(t.kind === 'tts' ? t.lang : null).toBe('en');
+    }
+  });
+
+  it('displayText og filnavn for burpees er uendret (visningsnavn/filsti er stabile)', () => {
+    const burpees = manifest.exercises.find((ex) => ex.id === 'burpees');
+    expect(burpees?.displayText).toBe('Burpees');
+    expect(burpees?.file).toBe('exercise-burpees.mp3');
+  });
+
   it('alle andre TTS-oppgaver (cues og øvelser) er norske', () => {
     const others = buildTaskList(manifest, {}).filter(
-      (t): t is TtsTask => t.kind === 'tts' && t.id !== 'mountain-climbers',
+      (t): t is TtsTask => t.kind === 'tts' && !ENGLISH_EXERCISE_IDS.includes(t.id),
     );
-    expect(others).toHaveLength(144);
+    expect(others).toHaveLength(140);
     expect(others.every((t) => t.lang === 'no')).toBe(true);
   });
 });
@@ -581,5 +624,374 @@ describe('fetchTtsWithRetries — retry-klassifisering (mock fetch)', () => {
     const buffer = await fetchTtsWithRetries(task, 'tok', 0);
     expect(buffer.length).toBe(4096);
     expect(mock).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Halevakt (QA-4): automatisk deteksjon av avkuttede klipp.
+// ---------------------------------------------------------------------------
+
+describe('halevakt — måleunderlaget er RÅFILA, ikke etterbehandlet output', () => {
+  const ttsTask = buildTaskList(manifest, { persona: 'hardcore', only: 'burpees' })
+    .find((t): t is TtsTask => t.kind === 'tts');
+
+  it('TTS-oppgaver måles på rå-cachen slik klippet kom fra Chatterbox', () => {
+    expect(ttsTask).toBeDefined();
+    expect(tailSourceRelPath(ttsTask as TtsTask)).toBe((ttsTask as TtsTask).cacheRelPath);
+    // Den etterbehandlede fila er nettopp det vi IKKE skal måle: TRIM_END/FADE
+    // bestemmer haleenergien der og inverterer signalet.
+    expect(tailSourceRelPath(ttsTask as TtsTask)).not.toBe((ttsTask as TtsTask).outputRelPath);
+    expect(tailSourceRelPath(ttsTask as TtsTask)).toContain('audio/raw-cache/');
+  });
+
+  it('innspilte spor måles ikke i det hele tatt (ingen råfil fra Chatterbox)', () => {
+    const recorded = buildTaskList(manifest, { persona: 'hardcore', only: 'start_321' })
+      .find((t) => t.kind === 'recorded');
+    expect(recorded).toBeDefined();
+    expect(tailSourceRelPath(recorded as VoicebankTask)).toBeNull();
+  });
+});
+
+describe('halevakt — tailFalloffDb / isTailSuspect (kalibrert på rå måledata)', () => {
+  it('falloff er hale minus samlet (negativ når take-et dør ut)', () => {
+    expect(tailFalloffDb({ overallMeanDb: -21.7, tailMeanDb: -91.0 })).toBeCloseTo(-69.3, 5);
+    expect(tailFalloffDb({ overallMeanDb: -17.7, tailMeanDb: -42.1 })).toBeCloseTo(-24.4, 5);
+  });
+
+  it('friske råklipp (fasit fra audio/lyttekandidater/raa/) flagges ikke', () => {
+    // befal_1_borpis_produksjon, befal_3_borpies, hardcore_1_borpis_produksjon.
+    expect(isTailSuspect({ overallMeanDb: -21.7, tailMeanDb: -91.0 })).toBe(false); // −69,3
+    expect(isTailSuspect({ overallMeanDb: -18.8, tailMeanDb: -91.0 })).toBe(false); // −72,2
+    expect(isTailSuspect({ overallMeanDb: -21.0, tailMeanDb: -70.9 })).toBe(false); // −49,9
+  });
+
+  it('det avkuttede «burpii»-take-et flagges på rå måling', () => {
+    // befal_2_burpees_engelsk: −17,7 samlet, −42,1 i halen → fall −24,4 dB.
+    expect(isTailSuspect({ overallMeanDb: -17.7, tailMeanDb: -42.1 })).toBe(true);
+  });
+
+  it('grensetilfellet nøyaktig −36 dB er IKKE mistenkt (strengt over flagger)', () => {
+    expect(TAIL_FALLOFF_THRESHOLD_DB).toBe(-36);
+    expect(isTailSuspect({ overallMeanDb: -20, tailMeanDb: -56 })).toBe(false);
+    // Et hår over terskelen vipper den andre veien.
+    expect(isTailSuspect({ overallMeanDb: -20, tailMeanDb: -55.9 })).toBe(true);
+  });
+
+  it('terskelen ligger i gapet mellom fasitens avkuttede og dårligste friske', () => {
+    // Verifisert avkuttet: −24,4. Dårligste verifisert friske: −49,9.
+    expect(TAIL_FALLOFF_THRESHOLD_DB).toBeGreaterThan(-49.9);
+    expect(TAIL_FALLOFF_THRESHOLD_DB).toBeLessThan(-24.4);
+  });
+
+  it('et helt stille klipp BLIR flagget — ekte ffmpeg gir −91 dB, ikke -inf', () => {
+    // Digital stillhet rapporteres på 16-bits-gulvet, så fallet blir 0,0 dB.
+    expect(isTailSuspect({ overallMeanDb: -91.0, tailMeanDb: -91.0 })).toBe(true);
+  });
+
+  it('ikke-endelige måltall er en defensiv vakt og gir ingen advarsel', () => {
+    expect(isTailSuspect({ overallMeanDb: -20, tailMeanDb: -Infinity })).toBe(false);
+    expect(isTailSuspect({ overallMeanDb: NaN, tailMeanDb: -20 })).toBe(false);
+  });
+});
+
+describe('halevakt — parseMeanVolumeDb', () => {
+  it('plukker mean_volume ut av volumedetect-utskriften', () => {
+    const stderr = [
+      '[Parsed_volumedetect_0 @ 000001c7] n_samples: 132300',
+      '[Parsed_volumedetect_0 @ 000001c7] mean_volume: -22.5 dB',
+      '[Parsed_volumedetect_0 @ 000001c7] max_volume: -1.2 dB',
+    ].join('\n');
+    expect(parseMeanVolumeDb(stderr)).toBe(-22.5);
+  });
+
+  it('tolker -inf (digital stillhet) som -Infinity', () => {
+    expect(parseMeanVolumeDb('mean_volume: -inf dB')).toBe(-Infinity);
+  });
+
+  it('gir null når utskriften ikke inneholder mean_volume', () => {
+    expect(parseMeanVolumeDb('')).toBeNull();
+    expect(parseMeanVolumeDb('ffmpeg: No such file or directory')).toBeNull();
+  });
+});
+
+describe('halevakt — buildVolumeDetectArgs', () => {
+  it('måler hele klippet uten seek', () => {
+    const args = buildVolumeDetectArgs('klipp.mp3', 'whole');
+    expect(args).toContain('volumedetect');
+    expect(args).not.toContain('-sseof');
+    expect(args[args.length - 1]).toBe('-');
+    expect(args).toContain('null');
+  });
+
+  it('måler halen med -sseof på TAIL_WINDOW_SECONDS', () => {
+    const args = buildVolumeDetectArgs('klipp.mp3', 'tail');
+    const idx = args.indexOf('-sseof');
+    expect(idx).toBeGreaterThanOrEqual(0);
+    expect(args[idx + 1]).toBe(`-${TAIL_WINDOW_SECONDS}`);
+    // -sseof må stå FØR -i for å virke som input-seek.
+    expect(idx).toBeLessThan(args.indexOf('-i'));
+  });
+
+  it('leser aldri stdin (batchen er ikke-interaktiv)', () => {
+    expect(buildVolumeDetectArgs('k.mp3', 'whole')).toContain('-nostdin');
+  });
+});
+
+describe('halevakt — rapportering (én vakt)', () => {
+  const flag = {
+    personaId: 'hardcore',
+    id: 'burpees',
+    rawRelPath: 'audio/raw-cache/hardcore/exercise-burpees.mp3',
+    outputRelPath: 'public/audio/personas/hardcore/exercise-burpees.mp3',
+    falloffDb: -24.4,
+  };
+
+  it('advarselen navngir RÅFILA, måltallet og foreslår et nytt take', () => {
+    const lines = formatTailWarning(flag).join('\n');
+    expect(lines).toContain('audio/raw-cache/hardcore/exercise-burpees.mp3');
+    expect(lines).toContain('-24.4');
+    expect(lines).toContain(`${TAIL_FALLOFF_THRESHOLD_DB}`);
+    expect(lines).toContain('--refetch --only burpees --persona hardcore');
+  });
+
+  it('advarselen sier at det er råfila som er målt, ikke det ferdige klippet', () => {
+    const lines = formatTailWarning(flag).join('\n');
+    expect(lines).toMatch(/rå/i);
+    // Det ferdige klippet nevnes som det man skal LYTTE på.
+    expect(lines).toContain('public/audio/personas/hardcore/exercise-burpees.mp3');
+  });
+
+  /** Full dekning: alt vakten fikk se, fikk den også målt. */
+  const fullDekning = (measured: number): TailCoverage => ({ measured, unmeasured: [] });
+
+  it('sluttrapporten teller og lister alle flaggede take', () => {
+    const text = formatTailSummary(
+      [flag, { ...flag, personaId: 'boyband', falloffDb: -9.4 }],
+      fullDekning(148),
+    ).join('\n');
+    expect(text).toContain('2');
+    expect(text).toContain('hardcore/burpees');
+    expect(text).toContain('boyband/burpees');
+    expect(text).toContain('-9.4');
+  });
+
+  it('sluttrapporten sier eksplisitt fra når ingenting ble flagget', () => {
+    const text = formatTailSummary([], fullDekning(148)).join('\n');
+    expect(text).toMatch(/ingen/i);
+    expect(text).not.toContain('--refetch');
+  });
+
+  it('rapporten nevner ingen søsken-vakt — den finnes ikke lenger', () => {
+    const text = formatTailSummary([flag], fullDekning(148)).join('\n');
+    expect(text).not.toMatch(/søsken/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Dekningsrapporten (reviewer B1). Vakten var TAUS når råfila manglet: den
+// returnerte null, og sluttrapporten skrev «ingen take flagget» — altså en
+// friskmelding for klipp som aldri ble målt. Det skjer i dagens bank
+// (start_321_short har ingen råfil) og for ALLE andre enn eieren
+// (audio/raw-cache/ er gitignorert, public/audio/personas/ er committet).
+// Rapporten skal derfor alltid oppgi BEGGE tallene: målt og ikke-målt.
+// ---------------------------------------------------------------------------
+describe('halevakt — dekningsrapport (full / delvis / null)', () => {
+  const flag: TailFlag = {
+    personaId: 'hardcore',
+    id: 'burpees',
+    rawRelPath: 'audio/raw-cache/hardcore/exercise-burpees.mp3',
+    outputRelPath: 'public/audio/personas/hardcore/exercise-burpees.mp3',
+    falloffDb: -24.4,
+  };
+
+  const manglerRaafil = (ids: readonly string[]): TailCoverage['unmeasured'] =>
+    ids.map((id) => ({ id, reason: 'missing-raw' as const }));
+
+  describe('FULL dekning', () => {
+    it('sier at alle klippene ble målt, og advarer ikke om dekning', () => {
+      const text = formatTailSummary([], { measured: 148, unmeasured: [] }).join('\n');
+      expect(text).toMatch(/alle 148/i);
+      expect(text).toMatch(/målt/i);
+      expect(text).not.toMatch(/DELVIS DEKNING/);
+      expect(text).not.toMatch(/INGEN DEKNING/);
+    });
+
+    it('flaggene telles mot antall MÅLTE take, ikke mot totalen', () => {
+      const text = formatTailSummary([flag], { measured: 148, unmeasured: [] }).join('\n');
+      expect(text).toContain('1 av 148');
+    });
+  });
+
+  describe('DELVIS dekning', () => {
+    const delvis: TailCoverage = {
+      measured: 144,
+      unmeasured: manglerRaafil([
+        'haugesund/start_321_short',
+        'romsdal/start_321_short',
+        'hardcore/start_321_short',
+        'boyband/start_321_short',
+      ]),
+    };
+
+    it('oppgir hvor mange som IKKE ble målt, av hvor mange', () => {
+      const text = formatTailSummary([], delvis).join('\n');
+      expect(text).toMatch(/DELVIS DEKNING/);
+      expect(text).toContain('4 av 148');
+    });
+
+    it('sier eksplisitt at fravær av flagg ikke er en friskmelding', () => {
+      const text = formatTailSummary([], delvis).join('\n');
+      expect(text).toMatch(/ikke.*friskmelding/i);
+    });
+
+    it('navngir klippene og grunnen til at de ikke lot seg måle', () => {
+      const text = formatTailSummary([], delvis).join('\n');
+      expect(text).toContain('hardcore/start_321_short');
+      expect(text).toContain('audio/raw-cache/');
+    });
+
+    it('dekningsforbeholdet står også når noe FAKTISK ble flagget', () => {
+      const text = formatTailSummary([flag], delvis).join('\n');
+      expect(text).toContain('hardcore/burpees');
+      expect(text).toMatch(/DELVIS DEKNING/);
+      expect(text).toMatch(/ikke.*friskmelding/i);
+    });
+
+    it('skiller mellom grunnene — utdatert cache er ikke det samme som manglende råfil', () => {
+      const text = formatTailSummary([], {
+        measured: 146,
+        unmeasured: [
+          { id: 'hardcore/burpees', reason: 'stale-cache' },
+          { id: 'boyband/intro', reason: 'measure-failed' },
+        ],
+      }).join('\n');
+      expect(text).toMatch(/utdatert/i);
+      expect(text).toContain('hardcore/burpees');
+      expect(text).toMatch(/mislyktes/i);
+      expect(text).toContain('boyband/intro');
+    });
+
+    it('korter ned lange lister i stedet for å fylle rapporten med id-er', () => {
+      const mange = Array.from({ length: 20 }, (_, i) => `hardcore/klipp-${i}`);
+      const text = formatTailSummary([], {
+        measured: 128,
+        unmeasured: manglerRaafil(mange),
+      }).join('\n');
+      expect(text).toContain('20 av 148');
+      expect(text).toContain('hardcore/klipp-0');
+      expect(text).toMatch(/og 14 til/);
+      expect(text).not.toContain('hardcore/klipp-19');
+    });
+  });
+
+  describe('NULL dekning (frisk klone)', () => {
+    // audio/raw-cache/ er gitignorert og public/audio/personas/ er committet:
+    // på en frisk klone går hver TTS-oppgave skip-existing → ingen råfil.
+    const ingen: TailCoverage = {
+      measured: 0,
+      unmeasured: manglerRaafil(
+        Array.from({ length: 148 }, (_, i) => `hardcore/klipp-${i}`),
+      ),
+    };
+
+    it('sier at vakten ikke kunne vurdere ET ENESTE take', () => {
+      const text = formatTailSummary([], ingen).join('\n');
+      expect(text).toMatch(/INGEN DEKNING/);
+      expect(text).toContain('0 av 148');
+      expect(text).toMatch(/ikke vurdert/i);
+    });
+
+    it('friskmelder ALDRI — «ingen take flagget» skal ikke forekomme', () => {
+      const text = formatTailSummary([], ingen).join('\n');
+      expect(text).not.toMatch(/ingen take flagget/i);
+    });
+  });
+
+  it('en kjøring uten TTS-klipp i det hele tatt sier at det ikke var noe å vurdere', () => {
+    // f.eks. `--only start_321`: bare innspilte spor, som vakten ikke måler.
+    const text = formatTailSummary([], { measured: 0, unmeasured: [] }).join('\n');
+    expect(text).toMatch(/ingen TTS-klipp/i);
+    expect(text).not.toMatch(/INGEN DEKNING/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkTail-sømmen (reviewer BØR 4). Uten denne testen kunne noen bytte
+// toAbsolute(rawRelPath) mot toAbsolute(task.outputRelPath) i runneren og
+// beholde hele suiten grønn — måleunderlaget er nettopp det Beslutning 39
+// hviler på. Måleren injiseres, samme mønster som persistRawCache sin `io`.
+// ---------------------------------------------------------------------------
+describe('halevakt — checkTailWith (injisert måler)', () => {
+  const ttsTask = buildTaskList(manifest, { persona: 'hardcore', only: 'burpees' }).find(
+    (t): t is TtsTask => t.kind === 'tts',
+  ) as TtsTask;
+  const recordedTask = buildTaskList(manifest, {
+    persona: 'hardcore',
+    only: 'start_321',
+  }).find((t) => t.kind === 'recorded') as VoicebankTask;
+
+  /** Sporer hvilke filer måleren faktisk ble bedt om å se på. */
+  function probe(
+    opts: { exists?: boolean; whole?: number | null; tail?: number | null } = {},
+  ): TailProbe & { readonly seen: string[] } {
+    const seen: string[] = [];
+    return {
+      seen,
+      exists: (p: string) => {
+        seen.push(p);
+        return opts.exists ?? true;
+      },
+      measure: (p: string, window: 'whole' | 'tail') => {
+        seen.push(p);
+        // NB: `??` duger ikke — null er et gyldig svar (mislykket måling).
+        if (window === 'whole') return 'whole' in opts ? (opts.whole as number | null) : -20;
+        return 'tail' in opts ? (opts.tail as number | null) : -91;
+      },
+    };
+  }
+
+  it('måler RÅFILA i audio/raw-cache/ — aldri den etterbehandlede output-fila', () => {
+    const p = probe();
+    checkTailWith(ttsTask, p);
+    expect(p.seen.length).toBeGreaterThan(0);
+    for (const seenPath of p.seen) {
+      const normalisert = seenPath.split('\\').join('/');
+      expect(normalisert).toContain('audio/raw-cache/');
+      expect(normalisert).not.toContain('public/audio/personas/');
+    }
+  });
+
+  it('friskt måltall gir et målt utfall uten flagg', () => {
+    const res = checkTailWith(ttsTask, probe({ whole: -20, tail: -91 }));
+    expect(res.kind).toBe('ok');
+    expect(res.kind === 'ok' && res.flag).toBeNull();
+  });
+
+  it('mistenkt måltall gir et flagg som peker på råfila og på klippet man skal lytte på', () => {
+    const res = checkTailWith(ttsTask, probe({ whole: -17.7, tail: -42.1 }));
+    expect(res.kind).toBe('ok');
+    if (res.kind !== 'ok' || res.flag === null) throw new Error('forventet flagg');
+    expect(res.flag.falloffDb).toBeCloseTo(-24.4, 5);
+    expect(res.flag.rawRelPath).toBe(ttsTask.cacheRelPath);
+    expect(res.flag.outputRelPath).toBe(ttsTask.outputRelPath);
+  });
+
+  it('manglende råfil er IKKE et friskt klipp — det er et umålt klipp', () => {
+    const p = probe({ exists: false });
+    const res = checkTailWith(ttsTask, p);
+    expect(res.kind).toBe('missing-raw');
+    // Ingen måling forsøkt når fila ikke finnes.
+    expect(p.seen).toHaveLength(1);
+  });
+
+  it('mislykket ffmpeg-måling er også et umålt klipp', () => {
+    expect(checkTailWith(ttsTask, probe({ whole: null })).kind).toBe('measure-failed');
+    expect(checkTailWith(ttsTask, probe({ tail: null })).kind).toBe('measure-failed');
+  });
+
+  it('innspilte spor er utenfor vaktens mandat og røres ikke av måleren', () => {
+    const p = probe();
+    expect(checkTailWith(recordedTask, p).kind).toBe('not-applicable');
+    expect(p.seen).toHaveLength(0);
   });
 });

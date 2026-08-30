@@ -392,6 +392,292 @@ export const TTS_POST = {
   LOUDNORM: 'loudnorm=I=-16:TP=-1.5:LRA=11',
 } as const;
 
+// ---------------------------------------------------------------------------
+// Halevakt (QA-4, rekalibrert 2026-08-30): vakt mot avkuttede TTS-take.
+//
+// Chatterbox er stokastisk og kutter av og til halen av et take — produkteier
+// fanget «burpees» som ble til «burpii». Samme klasse som QA-1, bare i motsatt
+// ende av klippet (amputerte ANSATSER, løst med pre-roll i TRIM_START). Vi vil
+// ikke være avhengige av at et menneske hører slikt.
+//
+// MÅLEUNDERLAGET ER RÅFILA fra Chatterbox (audio/raw-cache/), ikke det ferdig
+// etterbehandlede klippet. Grunnen er at etterbehandlingen — TRIM_END
+// (silenceremove på −45 dB) etterfulgt av FADE — er NØYAKTIG det som
+// bestemmer hvor mye energi som ligger igjen i de siste 50 ms. En måling der
+// beskriver ffmpeg-trimmingen, ikke om Chatterbox kuttet ordet, og signalet
+// blir invertert: målt på samme klipp faller det avkuttede «burpii»-take-et
+// −24,4 dB rått, men −74,0 dB etter prosessering (bunkens «sunneste»), mens et
+// friskt søsken faller −72,2 rått og −17,0 prosessert.
+//
+// Målemetoden: sammenlign mean_volume for de siste 50 ms av RÅFILA mot råfilas
+// samlede mean_volume. Et normalt take dør ut i digital stillhet — differansen
+// (hale minus samlet) er kraftig negativ. Et avkuttet take har fortsatt
+// tale-energi i siste vindu, og differansen krymper.
+// ---------------------------------------------------------------------------
+
+/** Halevinduet som måles, i sekunder (siste 50 ms av klippet). */
+export const TAIL_WINDOW_SECONDS = 0.05;
+
+/**
+ * Terskel for differansen hale minus samlet mean_volume MÅLT PÅ RÅFILA:
+ * STRENGT over denne er take-et mistenkt avkuttet. Nøyaktig −36 dB er altså
+ * ikke mistenkt.
+ *
+ * Fordelingen (sveip av audio/raw-cache/, 144 rå TTS-take, 4 personaer,
+ * 2026-08-30): min −71,8 · p10 −70,1 · p25 −69,1 · median −67,2 · p75 −64,2 ·
+ * p90 −26,6 · maks −1,1. 116 av 144 take ender i digital stillhet (halen måler
+ * −91,0 dB, 16-bits-gulvet) — derav den tette hovedklyngen rundt −67 dB.
+ *
+ * Regnestykket bak −36: terskelen må ligge der BEGGE datasettene skiller.
+ *  1. Fasiten i audio/lyttekandidater/raa/ (produkteiers lyttetest): det
+ *     avkuttede befal_2_burpees_engelsk faller −24,4 dB, og det dårligste
+ *     VERIFISERT friske take-et faller −49,9 dB. Terskelen må ligge i det
+ *     25,5 dB brede gapet mellom dem.
+ *  2. Innenfor det gapet har produksjonsbanken sitt eget bredeste tomrom
+ *     mellom −39,9 og −33,1 dB — 6,8 dB uten et eneste take. Midtpunktet
+ *     avrundet er −36.
+ * Marginene blir 11,6 dB ned til det avkuttede take-et og 13,9 dB opp til det
+ * dårligste friske. Terskelen flagger 19 av 144 take (13,2 %) i dagens bank;
+ * de er kandidater for en lytt, ikke bekreftede feil, og vakten er derfor en
+ * ren ADVARSEL som aldri avbryter kjøringen eller rører exit-koden.
+ */
+export const TAIL_FALLOFF_THRESHOLD_DB = -36;
+
+/**
+ * Fila halevakten skal måle, eller null når oppgaven ikke har en råfil å måle.
+ *
+ * TTS-oppgaver måles på rå-cachen: det er den uberørte nedlastingen fra
+ * Chatterbox, og cachefila ER råfila også når klippet hoppes over uten ny
+ * nedlasting — derfor virker vakten på inkrementelle kjøringer.
+ *
+ * Innspilte spor måles IKKE. De er faste, menneskeverifiserte vokalstems i
+ * repoet, ikke stokastiske TTS-take, så vakten har ingenting å vokte; de
+ * ligger dessuten utenfor fordelingen terskelen er kalibrert mot (målt fall
+ * −24,8 til −44,1 dB), og haugesund-stemmet lar seg ikke måle i det hele tatt:
+ * `-sseof` gir 0 samples og volumedetect skriver ingen mean_volume-linje.
+ */
+export function tailSourceRelPath(task: VoicebankTask): string | null {
+  return task.kind === 'tts' ? task.cacheRelPath : null;
+}
+
+export interface TailMeasurement {
+  /** mean_volume for hele klippet, i dB. */
+  readonly overallMeanDb: number;
+  /** mean_volume for de siste TAIL_WINDOW_SECONDS, i dB. */
+  readonly tailMeanDb: number;
+}
+
+/** Hvor mye halen har falt i forhold til klippet som helhet (negativt = dør ut). */
+export function tailFalloffDb(m: TailMeasurement): number {
+  return m.tailMeanDb - m.overallMeanDb;
+}
+
+/**
+ * Er take-et mistenkt avkuttet?
+ *
+ * Silingen av ikke-endelige måltall er en REN DEFENSIV VAKT, ikke en reell
+ * kodesti: `parseMeanVolumeDb` kan produsere ±Infinity fordi ffmpeg-formatet
+ * tillater `-inf`, men ekte ffmpeg (verifisert på 8.1) rapporterer digital
+ * stillhet som −91,0 dB — 16-bits-gulvet — og aldri `-inf`. Konsekvensen er at
+ * et HELT stille klipp får fall 0,0 dB og BLIR flagget. Det er riktig oppførsel:
+ * en rå TTS-nedlasting uten lyd er en feil vi vil høre om.
+ */
+export function isTailSuspect(m: TailMeasurement): boolean {
+  const falloff = tailFalloffDb(m);
+  if (!Number.isFinite(falloff)) return false;
+  return falloff > TAIL_FALLOFF_THRESHOLD_DB;
+}
+
+/** Plukker `mean_volume: -22.5 dB` ut av volumedetect sin stderr-utskrift. */
+export function parseMeanVolumeDb(ffmpegStderr: string): number | null {
+  const match = /mean_volume:\s*(-?(?:inf|\d+(?:\.\d+)?))\s*dB/i.exec(ffmpegStderr);
+  if (!match?.[1]) return null;
+  const raw = match[1];
+  if (raw.endsWith('inf')) return raw.startsWith('-') ? -Infinity : Infinity;
+  return Number.parseFloat(raw);
+}
+
+/**
+ * ffmpeg-argumenter for én volumedetect-måling. 'tail' seeker med -sseof
+ * (input-seek relativt til slutten) — det er nettopp den varianten
+ * terskelen over er kalibrert mot.
+ */
+export function buildVolumeDetectArgs(
+  inputPath: string,
+  window: 'whole' | 'tail',
+): string[] {
+  return [
+    '-hide_banner',
+    '-nostdin',
+    '-nostats',
+    ...(window === 'tail' ? ['-sseof', `-${TAIL_WINDOW_SECONDS}`] : []),
+    '-i', inputPath,
+    '-af', 'volumedetect',
+    '-f', 'null',
+    '-',
+  ];
+}
+
+/** Ett flagget take fra halevakten — én ferdig hale-måling over terskel. */
+export interface TailFlag {
+  readonly personaId: string;
+  readonly id: string;
+  /** Råfila måltallet faktisk gjelder — ikke den etterbehandlede output-fila. */
+  readonly rawRelPath: string;
+  readonly outputRelPath: string;
+  readonly falloffDb: number;
+}
+
+/** Hvorfor vakten ikke fikk et måltall for et TTS-klipp. */
+export type TailUnmeasuredReason =
+  | 'missing-raw'
+  | 'stale-cache'
+  | 'measure-failed'
+  | 'task-failed';
+
+/** Ett TTS-klipp halevakten IKKE fikk vurdert, og grunnen til det. */
+export interface TailUnmeasured {
+  /** `<persona>/<id>`, samme form som de feilede oppgavene i sluttrapporten. */
+  readonly id: string;
+  readonly reason: TailUnmeasuredReason;
+}
+
+/**
+ * Halevaktens dekning over én kjøring. Nevneren er TTS-klippene: innspilte
+ * spor er utenfor vaktens mandat (se tailSourceRelPath) og telles ikke.
+ */
+export interface TailCoverage {
+  /** Antall TTS-klipp vakten faktisk fikk et måltall for. */
+  readonly measured: number;
+  /** TTS-klippene den ikke fikk måltall for, med grunn. */
+  readonly unmeasured: readonly TailUnmeasured[];
+}
+
+/** `--refetch`-oppskriften som gir et nytt stokastisk take av ett klipp. */
+export function refetchCommand(personaId: string, id: string): string {
+  return `--refetch --only ${id} --persona ${personaId}`;
+}
+
+/**
+ * Advarselslinjene for ett flagget take. Advarselen navngir RÅFILA som ble
+ * målt (det er den måltallet gjelder) OG det ferdige klippet man skal lytte
+ * på, slik at ingen prøver å etterprøve tallet på feil fil.
+ *
+ * Bare TTS-oppgaver kan flagges — innspilte spor måles ikke (se
+ * tailSourceRelPath) — så refetch-oppskriften er alltid relevant.
+ */
+export function formatTailWarning(flag: TailFlag): readonly string[] {
+  return [
+    `   ⚠️ HALEVAKT: ${flag.outputRelPath} kan være avkuttet.`,
+    `      Målt på råfila ${flag.rawRelPath} — fall i halen (siste` +
+      ` ${TAIL_WINDOW_SECONDS * 1000} ms mot råfilas snitt): ${flag.falloffDb.toFixed(1)} dB,` +
+      ` terskel ${TAIL_FALLOFF_THRESHOLD_DB} dB. Take-et dør ikke ut i stillhet.`,
+    `      Lytt på klippet; er halen borte, kjør \`${refetchCommand(flag.personaId, flag.id)}\` for et nytt take.`,
+  ];
+}
+
+/** Én linje per flagget take i sluttrapporten. */
+function flagLine(flag: TailFlag): string {
+  return `       ${flag.personaId}/${flag.id} — fall i halen: ${flag.falloffDb.toFixed(1)} dB`;
+}
+
+/** Menneskelesbar grunn per dekningshull, brukt i sluttrapporten. */
+const UNMEASURED_REASON_TEXT: Readonly<Record<TailUnmeasuredReason, string>> = {
+  'missing-raw':
+    'råfila mangler i audio/raw-cache/ (aldri hentet, eller frisk klone — mappa er gitignorert)',
+  'stale-cache':
+    'rå-cachen er utdatert (manuskriptteksten er endret) — råfila svarer verken til dagens tekst eller til klippet i public/',
+  'measure-failed': 'ffmpeg-målingen mislyktes',
+  'task-failed': 'oppgaven feilet før vakten rakk å måle',
+};
+
+/** Rapporten skal være lesbar; en full id-liste kan være 148 linjer lang. */
+const MAX_LISTED_UNMEASURED = 6;
+
+const REASON_ORDER: readonly TailUnmeasuredReason[] = [
+  'missing-raw',
+  'stale-cache',
+  'measure-failed',
+  'task-failed',
+];
+
+/** Én gruppe per grunn, med en avkortet id-liste under. */
+function formatUnmeasuredGroups(gaps: readonly TailUnmeasured[]): readonly string[] {
+  return REASON_ORDER.flatMap((reason) => {
+    const ids = gaps.filter((g) => g.reason === reason).map((g) => g.id);
+    if (ids.length === 0) return [];
+    const shown = ids.slice(0, MAX_LISTED_UNMEASURED).join(', ');
+    const rest =
+      ids.length > MAX_LISTED_UNMEASURED
+        ? ` … og ${ids.length - MAX_LISTED_UNMEASURED} til`
+        : '';
+    return [
+      `        ${ids.length} × ${UNMEASURED_REASON_TEXT[reason]}:`,
+      `           ${shown}${rest}`,
+    ];
+  });
+}
+
+/**
+ * Halevaktens del av sluttrapporten — flagg OG dekning.
+ *
+ * Dekningstallene er ikke pynt (reviewer B1): vakten kan bare uttale seg om
+ * take den faktisk har målt, og den måler ingenting når råfila i
+ * audio/raw-cache/ ikke finnes. Det er ikke et hypotetisk tilfelle — mappa er
+ * gitignorert mens public/audio/personas/ er committet, så på en frisk klone
+ * hoppes hvert eneste TTS-klipp over uten måleunderlag. En rapport som bare
+ * skrev «ingen take flagget» friskmeldte da 148 uvurderte klipp.
+ *
+ * Derfor: antall MÅLTE og antall IKKE-MÅLTE står alltid side om side, og
+ * «ingen flagg» får aldri stå alene når dekningen er delvis eller null.
+ */
+export function formatTailSummary(
+  flags: readonly TailFlag[],
+  coverage: TailCoverage,
+): readonly string[] {
+  const gaps = coverage.unmeasured;
+  const total = coverage.measured + gaps.length;
+
+  // Ingen TTS-oppgaver i kjøringen (f.eks. `--only start_321`): vakten har
+  // ingenting å vokte, og det er noe helt annet enn manglende dekning.
+  if (total === 0) {
+    return ['   Halevakt: ingen TTS-klipp i denne kjøringen — ingenting å vurdere.'];
+  }
+
+  const lines: string[] = [];
+  if (coverage.measured === 0) {
+    lines.push(
+      `   ⚠️ Halevakt: INGEN DEKNING — 0 av ${total} TTS-klipp ble målt.`,
+      '      Vakten har ikke vurdert et eneste take og sier derfor ingenting om',
+      '      hvorvidt noen av dem er avkuttet.',
+    );
+  } else if (flags.length === 0) {
+    lines.push(
+      `   Halevakt: ingen av de ${coverage.measured} målte take-ene er flagget som mulig avkuttet.`,
+    );
+  } else {
+    lines.push(
+      `   Halevakt: ${flags.length} av ${coverage.measured} målte take flagget som mulig` +
+        ` avkuttet (advarsel, ikke feil — terskel ${TAIL_FALLOFF_THRESHOLD_DB} dB):`,
+      ...flags.map(flagLine),
+    );
+  }
+
+  if (gaps.length === 0) {
+    lines.push(`      Dekning: alle ${total} TTS-klipp ble målt.`);
+    return lines;
+  }
+  if (coverage.measured > 0) {
+    lines.push(
+      `      ⚠️ DELVIS DEKNING: ${gaps.length} av ${total} TTS-klipp kunne ikke måles.`,
+      '      Fravær av flagg er derfor IKKE en friskmelding — de umålte klippene',
+      '      er uvurderte, ikke friske.',
+    );
+  }
+  lines.push(...formatUnmeasuredGroups(gaps));
+  return lines;
+}
+
 function ffmpegArgs(inputPath: string, filter: string, outputPath: string): string[] {
   // -ar 44100 fordi loudnorm ellers leverer 192 kHz internt samplerate.
   return [
