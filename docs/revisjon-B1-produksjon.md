@@ -66,7 +66,7 @@ Innhold i dag: 25 øvelser med to stillbilder hver, og fire syntetiske trenerste
 
 | Kapasitet | Verktøy | Målt | Lisens |
 |---|---|---|---|
-| Bilde | Flux Dev fp8 / SDXL i ComfyUI | ~30–60 s per bilde | Flux.1-dev: **ikke-kommersiell** |
+| Bilde | Flux Dev fp8 / SDXL i ComfyUI | ~30–60 s per bilde | Flux.1-dev: modellen er ikke-kommersiell, men **utdataene er frie** (lest 2026-08-30) |
 | Video (i2v) | Wan 2.2 14B + Turbo | 195–256 s per 5 s-klipp | apache-2.0 |
 | Video, raskere | LTX 13B 0.9.8 | **70 s** per 5 s-klipp | — |
 | Video **med lyd** | MiniMax H3 | ~2 min per sekund video | ⚠️ **kun interne eksperimenter** |

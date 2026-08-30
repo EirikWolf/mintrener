@@ -56,6 +56,7 @@ import {
 } from '../../services/coachPersonaService';
 import { getWeeklyGoal, setWeeklyGoal } from '../../services/weeklyGoalService';
 import { getUserBirthYear, setUserBirthYear, getUserMaxHeartRate } from '../../services/heartRateZoneService';
+import { bluetoothHeartRateService } from '../../services/bluetoothHeartRateService';
 
 interface SettingsMoreViewProps {
   soundEnabled: boolean;
@@ -82,6 +83,9 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
 }) => {
   const { user, signInWithGoogle, logout, deleteAccount } = useAuth();
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
+  // Ikke lov pulsbelte på enheter uten Web Bluetooth — pulsmåleren skjuler
+  // seg selv der, og teksten må følge etter (revisjon B2).
+  const harBluetooth = bluetoothHeartRateService.isSupported();
   const [birthYearInput, setBirthYearInput] = useState<string>(() => {
     const y = getUserBirthYear();
     return y === null ? '' : String(y);
@@ -440,8 +444,14 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
           <div className="flex items-center gap-2.5">
             <Activity className="w-4 h-4 text-emerald-400" />
             <div>
-              <p className="text-xs font-bold text-white">Sensordiagnostikk & Pulsbelte</p>
-              <p className="text-[10px] text-zinc-400">Bluetooth pulsmåler, bevegelse og GPS</p>
+              <p className="text-xs font-bold text-white">
+                Sensordiagnostikk{harBluetooth ? ' & Pulsbelte' : ''}
+              </p>
+              <p className="text-[10px] text-zinc-400">
+                {harBluetooth
+                  ? 'Bluetooth pulsmåler, bevegelse og GPS'
+                  : 'Bevegelse og GPS. Pulsbelte krever Web Bluetooth, som ikke finnes på iPhone'}
+              </p>
             </div>
           </div>
           <ChevronRight className="w-4 h-4 text-zinc-400" />

@@ -17,6 +17,7 @@ import {
   GraduationCap,
 } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { bluetoothHeartRateService } from '../../services/bluetoothHeartRateService';
 
 interface AboutGuideModalProps {
   onClose: () => void;
@@ -26,6 +27,11 @@ export const AboutGuideModal: React.FC<AboutGuideModalProps> = ({ onClose }) => 
   const [activeSection, setActiveSection] = useState<'oversikt' | 'funksjoner' | 'tips' | 'basis' | 'om'>('oversikt');
   const modalRef = useRef<HTMLDivElement>(null);
   useFocusTrap(modalRef, { onClose });
+
+  // Veiledningen skal ikke love funksjoner enheten ikke har. Web Bluetooth
+  // finnes ikke på iOS, og pulsmåleren skjuler seg selv der — da må teksten
+  // gjøre det samme (revisjon B2).
+  const harBluetooth = bluetoothHeartRateService.isSupported();
 
   const modal = (
     <div
@@ -224,10 +230,12 @@ export const AboutGuideModal: React.FC<AboutGuideModalProps> = ({ onClose }) => 
               <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-1">
                 <div className="font-bold text-white flex items-center gap-1.5 text-xs">
                   <Activity className="w-3.5 h-3.5 text-cyan-400" />
-                  3. Bevegelsesteller & Bluetooth Puls
+                  3. Bevegelsesteller{harBluetooth ? ' & Bluetooth Puls' : ''}
                 </div>
                 <p className="text-[11px] text-zinc-400">
-                  Under «Puls & Sensorer» kan du koble til Bluetooth pulsbelte (f.eks. Polar/Garmin). Mobilen kan også telle repetisjoner via innebygde bevegelsessensorer.
+                  {harBluetooth
+                    ? 'Under «Puls & Sensorer» kan du koble til Bluetooth pulsbelte (f.eks. Polar/Garmin). Mobilen kan også telle repetisjoner via innebygde bevegelsessensorer.'
+                    : 'Mobilen teller repetisjoner via innebygde bevegelsessensorer. Pulsbelte krever Web Bluetooth, som iPhone og iPad ikke støtter — derfor vises ikke pulsmåling på denne enheten.'}
                 </p>
               </div>
 
