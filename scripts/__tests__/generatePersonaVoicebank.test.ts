@@ -23,12 +23,18 @@ import {
   NonRetryableError,
   TAIL_FALLOFF_THRESHOLD_DB,
   TAIL_WINDOW_SECONDS,
+  SIBLING_TAIL_DEVIATION_DB,
+  MIN_SIBLING_COUNT,
+  assessSiblingTail,
   buildVolumeDetectArgs,
   formatTailSummary,
   formatTailWarning,
   isTailSuspect,
   parseMeanVolumeDb,
+  runSiblingTailPass,
   tailFalloffDb,
+  type SiblingPassStats,
+  type TailMeasurementRecord,
   type VoicebankManifest,
   type VoicebankTask,
   type TtsTask,
@@ -699,6 +705,123 @@ describe('halevakt — buildVolumeDetectArgs', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Søsken-relativ halevakt (QA-4b): et klipps hale-fall mot søsknenes median.
+//
+// «Søsken» = samme cue-/øvelses-id generert for de ANDRE personaene fra samme
+// manuskripttekst. Fasittallene under er fra sveipet 2026-08-30.
+// ---------------------------------------------------------------------------
+
+describe('halevakt — assessSiblingTail', () => {
+  it('burpii-funnet: −24,4 dB mot søsken på −50…−72 flagges som mistenkt', () => {
+    const verdict = assessSiblingTail(-24.4, [-50.0, -67.0, -72.0]);
+    expect(verdict.status).toBe('suspect');
+    if (verdict.status !== 'suspect') return;
+    // Medianen av søsknene er −67; avviket er ~42,6 dB, langt over 20.
+    expect(verdict.medianFalloffDb).toBeCloseTo(-67.0, 5);
+    expect(verdict.deviationDb).toBeCloseTo(42.6, 5);
+    expect(verdict.siblingCount).toBe(3);
+  });
+
+  it('jevn spredning rundt medianen flagges ikke', () => {
+    const verdict = assessSiblingTail(-48.0, [-52.0, -45.0, -50.0, -58.0]);
+    expect(verdict.status).toBe('normal');
+    if (verdict.status !== 'normal') return;
+    // Partall antall søsken → medianen er snittet av de to midterste (−50/−52).
+    expect(verdict.medianFalloffDb).toBeCloseTo(-51.0, 5);
+    expect(verdict.deviationDb).toBeCloseTo(3.0, 5);
+  });
+
+  it('nøyaktig på terskelen er IKKE mistenkt (strengt over flagger)', () => {
+    expect(SIBLING_TAIL_DEVIATION_DB).toBe(20);
+    expect(assessSiblingTail(-30, [-50, -50, -50]).status).toBe('normal');
+    // Et hår over vipper den andre veien.
+    expect(assessSiblingTail(-29.9, [-50, -50, -50]).status).toBe('suspect');
+  });
+
+  it('for få søsken gir «ikke vurdert» — aldri «frisk»', () => {
+    expect(MIN_SIBLING_COUNT).toBe(2);
+    const none = assessSiblingTail(-2.0, []);
+    expect(none.status).toBe('not-assessed');
+    if (none.status === 'not-assessed') {
+      expect(none.cause).toBe('too-few-siblings');
+      expect(none.siblingCount).toBe(0);
+    }
+    // Ett søsken holder ikke, selv når avviket er enormt.
+    const one = assessSiblingTail(-2.0, [-70.0]);
+    expect(one.status).toBe('not-assessed');
+    if (one.status === 'not-assessed') expect(one.siblingCount).toBe(1);
+    // To søsken er nok.
+    expect(assessSiblingTail(-2.0, [-70.0, -68.0]).status).toBe('suspect');
+  });
+
+  it('et klipp som dør ut LENGER enn medianen flagges aldri', () => {
+    const verdict = assessSiblingTail(-91.0, [-50.0, -52.0, -48.0]);
+    expect(verdict.status).toBe('normal');
+    if (verdict.status !== 'normal') return;
+    // Negativt avvik = brattere utdøing enn søsknene, det motsatte av avkuttet.
+    expect(verdict.deviationDb).toBeCloseTo(-41.0, 5);
+  });
+
+  it('ikke-endelige måltall kan ikke vurderes (verken klipp eller søsken)', () => {
+    const own = assessSiblingTail(-Infinity, [-50, -52, -48]);
+    expect(own.status).toBe('not-assessed');
+    if (own.status === 'not-assessed') expect(own.cause).toBe('unmeasurable');
+    // −inf-søsken siles bort; her er det bare ett brukbart igjen.
+    const siblings = assessSiblingTail(-2.0, [-Infinity, NaN, -70.0]);
+    expect(siblings.status).toBe('not-assessed');
+    if (siblings.status === 'not-assessed') expect(siblings.siblingCount).toBe(1);
+  });
+});
+
+describe('halevakt — runSiblingTailPass', () => {
+  const measure = (
+    personaId: string,
+    id: string,
+    falloffDb: number,
+  ): TailMeasurementRecord => ({
+    personaId,
+    id,
+    outputRelPath: `public/audio/personas/${personaId}/exercise-${id}.mp3`,
+    kind: 'tts',
+    falloffDb,
+  });
+
+  it('grupperer på id og sammenligner bare på tvers av personaer', () => {
+    const { flags, stats } = runSiblingTailPass([
+      measure('hardcore', 'burpees', -24.4),
+      measure('romsdal', 'burpees', -67.0),
+      measure('boyband', 'burpees', -50.0),
+      measure('haugesund', 'burpees', -72.0),
+    ]);
+    expect(stats.assessed).toBe(4);
+    expect(stats.notAssessed).toBe(0);
+    expect(flags).toHaveLength(1);
+    expect(flags[0]?.personaId).toBe('hardcore');
+    expect(flags[0]?.reason).toBe('sibling');
+  });
+
+  it('en id med for få klipp telles som «ikke vurdert», ikke som frisk', () => {
+    const { flags, stats } = runSiblingTailPass([
+      measure('hardcore', 'burpees', -2.0),
+      measure('romsdal', 'burpees', -70.0),
+    ]);
+    // Hvert klipp har bare ETT søsken → ingen av dem kan vurderes.
+    expect(flags).toHaveLength(0);
+    expect(stats.assessed).toBe(0);
+    expect(stats.notAssessed).toBe(2);
+  });
+
+  it('delvis kjøring (--persona) gir null vurderinger, ikke null funn', () => {
+    const { stats } = runSiblingTailPass([
+      measure('hardcore', 'burpees', -2.0),
+      measure('hardcore', 'bro-naa', -4.1),
+    ]);
+    expect(stats.assessed).toBe(0);
+    expect(stats.notAssessed).toBe(2);
+  });
+});
+
 describe('halevakt — rapportering', () => {
   const ttsFlag = {
     personaId: 'hardcore',
@@ -706,7 +829,20 @@ describe('halevakt — rapportering', () => {
     outputRelPath: 'public/audio/personas/hardcore/exercise-burpees.mp3',
     kind: 'tts' as const,
     falloffDb: -2.4,
+    reason: 'absolute' as const,
   };
+  const siblingFlag = {
+    personaId: 'hardcore',
+    id: 'burpees',
+    outputRelPath: 'public/audio/personas/hardcore/exercise-burpees.mp3',
+    kind: 'tts' as const,
+    falloffDb: -24.4,
+    reason: 'sibling' as const,
+    medianFalloffDb: -67.0,
+    deviationDb: 42.6,
+    siblingCount: 3,
+  };
+  const fullPass: SiblingPassStats = { assessed: 152, notAssessed: 0 };
 
   it('advarselen navngir fila, måltallene og foreslår et nytt take', () => {
     const lines = formatTailWarning(ttsFlag).join('\n');
@@ -722,22 +858,50 @@ describe('halevakt — rapportering', () => {
       outputRelPath: 'public/audio/personas/romsdal/start_321.mp3',
       kind: 'recorded',
       falloffDb: -3.1,
+      reason: 'absolute',
     }).join('\n');
     expect(lines).not.toContain('--refetch');
     expect(lines).toContain('start_321.mp3');
   });
 
+  it('søsken-advarselen viser medianen og avviket, ikke bare det absolutte fallet', () => {
+    const lines = formatTailWarning(siblingFlag).join('\n');
+    expect(lines).toMatch(/søsken/i);
+    expect(lines).toContain('-67.0');
+    expect(lines).toContain('42.6');
+    expect(lines).toContain('--refetch --only burpees --persona hardcore');
+  });
+
   it('sluttrapporten teller og lister alle flaggede klipp', () => {
-    const lines = formatTailSummary([ttsFlag, { ...ttsFlag, personaId: 'boyband', falloffDb: -9.4 }]);
+    const lines = formatTailSummary(
+      [ttsFlag, { ...ttsFlag, personaId: 'boyband', falloffDb: -9.4 }],
+      fullPass,
+    );
     const text = lines.join('\n');
     expect(text).toContain('2');
     expect(text).toContain('hardcore/burpees');
     expect(text).toContain('boyband/burpees');
   });
 
+  it('sluttrapporten skiller de to mistankegrunnene fra hverandre', () => {
+    const text = formatTailSummary([ttsFlag, siblingFlag], fullPass).join('\n');
+    expect(text).toMatch(/absolutt/i);
+    expect(text).toMatch(/søsken/i);
+    // Samme klipp kan slå ut på begge vakter — begge grunnene skal vises.
+    expect(text.match(/hardcore\/burpees/g)).toHaveLength(2);
+  });
+
   it('sluttrapporten sier eksplisitt fra når ingenting ble flagget', () => {
-    const text = formatTailSummary([]).join('\n');
+    const text = formatTailSummary([], fullPass).join('\n');
     expect(text).toMatch(/ingen/i);
     expect(text).not.toContain('--refetch');
+  });
+
+  it('delvis kjøring: rapporten sier at søsken-vakten IKKE kunne vurdere', () => {
+    const text = formatTailSummary([], { assessed: 0, notAssessed: 26 }).join('\n');
+    expect(text).toMatch(/ikke vurdere/i);
+    expect(text).toContain('26');
+    // Må ikke kunne leses som «alt er friskt».
+    expect(text).toMatch(/--persona|--only|delvis/i);
   });
 });
