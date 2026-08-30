@@ -363,6 +363,28 @@ function playChainThen(ctx: DirectorCtx, keys: string[], followUp: () => void): 
   });
 }
 
+/**
+ * Som playChainThen, men oppfølgeren er en FALLBACK: den kjører KUN når
+ * playSequence svarte false — motorens «ingenting ble spilt»-svar (ucachet
+ * nøkkel, eller en kontekst som ikke lar seg kjøre etter mislykket resume).
+ * true dekker BÅDE naturlig kjedeslutt og bevisst stopp og gir aldri fallback,
+ * så dobbel avspilling er utelukket i begge retninger.
+ *
+ * Samme epoch-/status-gate som playChainThen, og av samme grunn: motoren
+ * awaiter ctx.resume() før den svarer false, så svaret kan lande ETTER at et
+ * skip/fasebytte har startet ny lyd — og da er stillhet bedre enn et gammelt
+ * øvelsesnavn oppå den nye fasen.
+ */
+function playChainOrFallback(ctx: DirectorCtx, keys: string[], fallback: () => void): void {
+  const epoch = ctx.getPhaseEpoch();
+  void audioBufferEngine.playSequence(keys).then((ok) => {
+    if (ok) return;
+    if (epoch === ctx.getPhaseEpoch() && ctx.engine.getSnapshot().status === 'running') {
+      fallback();
+    }
+  });
+}
+
 function playBridgeThenTts(
   ctx: DirectorCtx,
   bridgeCue: 'bro-neste' | 'bro-naa' | 'bro-resync',
@@ -1003,17 +1025,31 @@ function mirrorPersonaRest(
  * ALLEREDE utledet av deriveAnnounceChain (som selv ruter gjennom
  * resolveAnnouncementPlan — spec § 4-kjeden håndheves ETT sted) og evt.
  * degradert av fitAnnounceChain; her gjenstår kun avspillingsformen:
- *  - navnebuffer i kjeden: ÉN sample-nøyaktig kjede (persona- eller studioklipp)
+ *  - navnebuffer i kjeden: ÉN sample-nøyaktig kjede (persona- eller studioklipp).
+ *    Studioklippet beholder i tillegg sin gamle fallback-stige (HTMLAudio →
+ *    TTS) hvis motoren ikke fikk spilt kjeden i det hele tatt.
  *  - bare bro: bro-kjede + TTS-navn etter kjedeslutt (aldri overlapp)
  *  - ingen av delene: dagens playClipOrFallback-kjede uendret
  *    (buffer → HTMLAudio → TTS), evt. etter rest-cuen.
  */
 function announceNextExercise(ctx: DirectorCtx, next: Exercise, chain: AnnounceChain): void {
+  const studioKey = 'exercise-' + next.id;
   const prefixKeys = chain.cue !== null ? [chain.cue] : [];
   const fallback = (): void => {
-    audioClipService.playClipOrFallback('exercise-' + next.id, 'Neste: ' + next.name);
+    audioClipService.playClipOrFallback(studioKey, 'Neste: ' + next.name);
   };
-  if (chain.name !== null) {
+  if (chain.name === studioKey) {
+    // 'studio'-planen (samme diskriminator som deriveRestChain bruker: persona-
+    // nøkler er personaens filsti, aldri den bare studio-nøkkelen). Her gikk
+    // veien FØR gjennom playClipOrFallback, som bar HTMLAudio → TTS bak seg.
+    // Kjedingen tok den stigen bort, og etter et avbrudd (telefonsamtale, iOS
+    // 'interrupted') ble annonseringen helt stille. Fallbacken gjenopprettes —
+    // gatet, se playChainOrFallback.
+    playChainOrFallback(ctx, announceChainKeys(chain), fallback);
+  } else if (chain.name !== null) {
+    // persona-klipp: BEVISST uten fallback (uendret). Personaens egen stemme
+    // har ingen HTMLAudio-variant å falle ned på, og studioklippet ville brutt
+    // persona-illusjonen midt i økta.
     // playSequence rejecter aldri (kontraktsfestet og NaN-vaktet i motoren) —
     // ingen redundant .catch (review-notat: én konsekvent linje, stol på kontrakten)
     void audioBufferEngine.playSequence(announceChainKeys(chain));
