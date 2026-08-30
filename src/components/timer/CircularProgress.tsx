@@ -137,8 +137,8 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
         <span
           className={`font-mono tabular-nums font-black tracking-tight ${colors.text} drop-shadow-lg leading-none ${
             remainingSeconds >= 100
-              ? 'text-[clamp(3.5rem,15vh,7.5rem)]'
-              : 'text-[clamp(4.5rem,22vh,10.5rem)]'
+              ? 'text-[clamp(3.5rem,18vh,9rem)]'
+              : 'text-[clamp(4.5rem,25vh,13rem)]'
           }`}
         >
           {remainingSeconds}
