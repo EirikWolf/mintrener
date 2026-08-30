@@ -32,19 +32,21 @@ Kravene systemet skal måles mot står i `docs/trening-app-spesifikasjon.md`.
 
 ---
 
-## Panelet
+## Fagperspektiver
 
-Lever som et tverrfaglig panel, ikke som én generalist. Hver stemme skal være gjenkjennelig, og uenighet skal stå igjen i rapporten — ikke glattes ut.
+Revisjonen skal dekke disse fagenes perspektiver. **Men ikke iscenesett et panel.** Én leser som spiller sju roller produserer teater, ikke innsikt — og en påstand blir ikke sannere av at den tillegges «visuell designer».
 
-| Fagperson | Mandat |
+Bruk i stedet fagene som **motsetninger i saken**: der to hensyn faktisk trekker i hver sin retning, skal spenningen stå igjen i rapporten, med begge sider og hva som avgjør. Tilgjengelighet mot informasjonstetthet, tempo mot trygghet, dybde mot enkelhet. Vil dere ha ekte flerstemmighet, kjør fagene som separate revisjoner og flett resultatene — ikke som roller i én tekst.
+
+| Fagperspektiv | Mandat |
 |---|---|
-| **Interaksjonsdesigner** | Navigasjon, mentale modeller, hvor ting «bor» og om brukeren kan gjette det |
-| **Visuell designer** | Hierarki, typografi, farge som informasjonsbærer, hva øyet finner først |
-| **Spesialist i universell utforming** | WCAG 2.2 AA (norsk lov), tastatur, skjermleser, kontrast, trykkflater, kognitiv tilgjengelighet |
-| **Fysioterapeut / PT** | Er øvelsene forsvarlige og trygge for de svakeste målgruppene? Er dosering og progresjon fornuftig? |
-| **Innholdsdesigner (norsk)** | Mikrotekst, tone, bokmålskvalitet — og om språket lover noe appen ikke holder |
-| **Produktsjef** | Verdi per funksjon, hva som bør fjernes, hva som blokkerer lansering |
-| **Utforskende tester** | Avbrutt økt, mistet nett, skjerm som slukker, raske gjentatte trykk |
+| **Interaksjonsdesign** | Navigasjon, mentale modeller, hvor ting «bor» og om brukeren kan gjette det |
+| **Visuell design** | Hierarki, typografi, farge som informasjonsbærer, hva øyet finner først |
+| **Universell utforming** | WCAG 2.2 AA (norsk lov), tastatur, skjermleser, kontrast, trykkflater, kognitiv tilgjengelighet |
+| **Treningsfaglig (fysioterapi/PT)** | Er øvelsene forsvarlige og trygge for de svakeste målgruppene? Er dosering og progresjon fornuftig? |
+| **Innholdsdesign (norsk)** | Mikrotekst, tone, bokmålskvalitet — og om språket lover noe appen ikke holder |
+| **Produktledelse** | Verdi per funksjon, hva som bør fjernes, hva som blokkerer lansering |
+| **Utforskende testing** | Avbrutt økt, mistet nett, skjerm som slukker, raske gjentatte trykk |
 
 ---
 
@@ -85,6 +87,8 @@ Bruk navngitte rammeverk og oppgi hvilket. Et funn uten begrunnelse er en smaksd
 
 ## Del 3 — Opplevelsen uten lyd
 
+> **Forutsetter at revisoren kan høre.** Kan du ikke spille av lyd, si det og hopp over vurderingen av *hva* stemmene gjør. Resten av delen — teksten som finnes, hvor den skal vises, hva som erstatter lydsignalene — kan besvares fra manuskriptet og grensesnittet alene. Ikke gjett deg til hvordan lyden oppleves.
+
 Mye av veiledningen ligger i tale. En døv eller tunghørt bruker — eller en som trener der lyd ikke er et alternativ — får ikke den delen av produktet. Det er et likeverdighetsspørsmål og under WCAG også et krav om tekstalternativ.
 
 **Utgangspunktet er bedre enn det ser ut:** teksten finnes allerede. Hvert lydklipp er generert fra `scripts/voicebank-manuskript.json`, der replikken står som ren tekst. Underteksting krever ingen transkribering, bare visning. Vurder hvor liten jobben egentlig er.
@@ -113,31 +117,16 @@ Hvis det minste steget er en kalenderoppføring fremfor et varslingssystem, si d
 
 ---
 
-## Del 5 — Lærer produktet av bruk?
-
-Ikke en ønskeliste. Vi vil vite hvordan produktet blir bedre av å bli brukt, uten at noen skriver ny kode.
-
-**Kartlegg sløyfene som finnes.** Systemet samler allerede inn øktvurderinger («for lett / passe / for tungt»), telemetri, personlige rekorder og historikk. For hver: *hvor går dataene, og hva endrer seg som følge av dem?* En innsamling som ikke påvirker noe er ikke en sløyfe — den er en kostnad. Finn de åpne endene.
-
-**Foreslå lukking**, med det minste inngrepet først, og prioritér der dataene allerede finnes.
-
-**Vurder tilbakemeldingen.** Får brukeren vite at systemet har lært noe? En tilpasning som skjer usynlig oppleves ikke som intelligens, men som uforutsigbarhet.
-
-**Moonshots — tre til fem.** Hvert forslag skal bygge på noe som allerede finnes, navngi hva som må på plass først, og si hva som gjør det vanskelig å kopiere. Et moonshot uten fundament er en distraksjon.
-
----
-
 ## Leveranse
 
 1. **Førsteinntrykk** — skriv denne før alt annet. Hva forsto du straks, hva måtte du lete etter, hva trodde du feil, hva ga du opp? Rå notater; verdien ligger i at de er uinformerte.
-2. **Panelets sammendrag** — én til to sider. Modenhet, viktigste innsikt per fagperson, og uenigheter i panelet med begge sider.
+2. **Sammendrag** — én til to sider. Modenhet, viktigste innsikt, og de faglige motsetningene du støtte på, med begge sider og hva som avgjør.
 3. **Svar på A–D** — hva som skjer, hvorfor det trolig ble slik, hva det koster brukeren, hva du anbefaler.
 4. **Funnliste** sortert som *blokker / alvorlig / moderat / polering*. Per funn: observasjon · begrunnelse med rammeverk eller lovkrav · konsekvens · forslag · antatt innsats.
    **Blokker** betyr: hindrer en bruker i å fullføre noe sentralt, bryter lov, eller ødelegger data eller tillit. Et lovbrudd er en blokker selv om de fleste brukere ikke merker det. Er du i tvil, plassér det som blokker og si hvorfor du tvilte.
 5. **Redesign av startskjermen** — spørsmål D er strukturelt, ikke kosmetisk. Hva bør skjermen inneholde, i hvilken rekkefølge, hva flyttes eller fjernes? Ord, gjerne enkel skisse. Begrunn ut fra hva brukeren faktisk gjør der.
-6. **Innovasjonskapittel** — sløyfekart, forslag til lukking, moonshots med fundament.
-7. **Veikart:** denne uken · før lansering · neste kvartal · **fjern eller frys**. Det siste punktet tas like alvorlig som de andre.
-8. **Kryssjekk mot tidligere revisjoner** (les dem nå). Hva så du som de ikke så? Hva er du uenig i? Hvilke funn står fortsatt åpne, og hva sier det om hvordan vi jobber?
+6. **Veikart:** denne uken · før lansering · neste kvartal · **fjern eller frys**. Det siste punktet tas like alvorlig som de andre.
+7. **Kryssjekk mot tidligere revisjoner** (les dem nå). Hva så du som de ikke så? Hva er du uenig i? Hvilke funn står fortsatt åpne, og hva sier det om hvordan vi jobber?
 
 ---
 

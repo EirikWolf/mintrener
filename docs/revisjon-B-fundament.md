@@ -28,17 +28,17 @@ Innhold i dag: 25 øvelser med to stillbilder hver, og fire syntetiske trenerste
 
 ---
 
-## Panelet
+## Fagperspektiver
 
-Lever som et tverrfaglig panel. Uenighet skal stå igjen i rapporten, ikke glattes ut.
+Revisjonen skal dekke disse fagenes perspektiver — men **ikke iscenesett et panel.** Én leser som spiller fem roller produserer teater, ikke innsikt. Bruk fagene som **motsetninger i saken**: der to hensyn faktisk trekker i hver sin retning (kvalitet mot kostnad, åpenhet mot lisens, fleksibilitet mot offline-løftet), skal spenningen stå igjen med begge sider og hva som avgjør.
 
-| Fagperson | Mandat |
+| Fagperspektiv | Mandat |
 |---|---|
-| **Medieproduksjons-ingeniør (ML/GPU)** | Produksjonslinjer for bilde, video og stemme: kapasitet, kostnad per enhet, reproduserbarhet, hva som skalerer når biblioteket vokser |
-| **Frontend-/plattformarkitekt** | Hva plattformen faktisk tillater, hva som er løsbart i web, og hva som krever native |
-| **Lyddesigner** | Stemme og lydbilde som opplevelse: timing, avbrytelser, verdi mot kostnad |
-| **Produktsjef** | Verdi per investering, hva som bør fryses, hva som blokkerer lansering |
-| **Jurist / lisensansvarlig** | Lisens på modeller, kilder og generert innhold — for et produkt som er åpent tilgjengelig og der inntekt ikke er utelukket |
+| **Medieproduksjon (ML/GPU)** | Produksjonslinjer for bilde, video og stemme: kapasitet, kostnad per enhet, reproduserbarhet, hva som skalerer når biblioteket vokser |
+| **Plattformarkitektur** | Hva plattformen faktisk tillater, hva som er løsbart i web, og hva som krever native |
+| **Lyddesign** | Stemme og lydbilde som opplevelse: timing, avbrytelser, verdi mot kostnad |
+| **Produktledelse** | Verdi per investering, hva som bør fryses, hva som blokkerer lansering |
+| **Lisens og juridisk** | Lisens på modeller, kilder og generert innhold — for et produkt som er åpent tilgjengelig og der inntekt ikke er utelukket |
 
 ---
 
@@ -162,16 +162,33 @@ Vurder om dette forklarer noe større: biblioteket har stått stille på 25 øve
 
 ---
 
+## Del 7 — Lærer produktet av bruk?
+
+Denne delen krever kodelesing og hører derfor hjemme her, ikke i Revisjon A.
+
+Ikke en ønskeliste. Vi vil vite hvordan produktet blir bedre av å bli brukt, uten at noen skriver ny kode.
+
+**Kartlegg sløyfene som finnes.** Systemet samler allerede inn øktvurderinger («for lett / passe / for tungt»), telemetri, personlige rekorder og historikk. For hver: *hvor går dataene, og hva endrer seg som følge av dem?* En innsamling som ikke påvirker noe er ikke en sløyfe — den er en kostnad. Finn de åpne endene. Merk at telemetrien skrives til seks dokumenter, men bare tre leses tilbake (se del 6).
+
+**Foreslå lukking**, med det minste inngrepet først, og prioritér der dataene allerede finnes.
+
+**Vurder tilbakemeldingen.** Får brukeren vite at systemet har lært noe? En tilpasning som skjer usynlig oppleves ikke som intelligens, men som uforutsigbarhet.
+
+**Moonshots — tre til fem.** Hvert forslag skal bygge på noe som allerede finnes, navngi hva som må på plass først, og si hva som gjør det vanskelig å kopiere. Et moonshot uten fundament er en distraksjon.
+
+---
+
 ## Leveranse
 
-1. **Sammendrag** — én til to sider. Viktigste innsikt per fagperson, og uenigheter i panelet med begge sider.
+1. **Sammendrag** — én til to sider. Viktigste innsikt, og de faglige motsetningene du støtte på, med begge sider og hva som avgjør.
 2. **Bevegelse** — alternativene mot hverandre med kostnad, filstørrelse, lisens og redigerbarhet. Klar anbefaling om *om*, *hvor* og *når* bevegelse skal vises. Ta stilling til om det minste steget (kryssing mellom de to bildene som finnes) bør prøves først. Inkludér kildestrategi: hva bygges selv, hva hentes åpent, på hvilket juridisk grunnlag.
 3. **Stemme** — lokal seed-produksjon mot dagens eksterne, kritikk av produksjonsprosessen, og anbefalt arkitektur for kontekstbevisst coaching, med minste steg.
 4. **Lydbilde** — hva appen skal levere av lyd, med tydelig skille mellom hva som er mulig fra en PWA i dag, hva som krever native, og hva som krever tredjepartsavtale.
 5. **Modelltabell** — område · dagens valg · anbefaling (behold / bytt / utred) · begrunnelse · byttekostnad. Lisens eksplisitt vurdert per valg. Ta stilling til om de regelbaserte funksjonene bør kalle seg AI.
 6. **Plattformnotat** — regnskapet for PWA-valget, skilt fra det som bare ikke er forsøkt løst i web, med utløsende betingelser for et eventuelt bytte.
 7. **Forvaltningsnotat** — hvorfor flaten mangler, hvilke spørsmål som ikke kan besvares i dag, og funnene delt i fire: bygg eget · koble til noe som finnes · hold det i terminalen · flytt innholdet ut av koden. Svar i tre nivåer (før lansering / flere forvaltere / ved vekst), og si hva som *ikke* bør bygges.
-8. **Veikart:** denne uken · før lansering · neste kvartal · **fjern eller frys**.
+8. **Læringssløyfer og moonshots (del 7)** — sløyfekart med de åpne endene, forslag til lukking med minste inngrep først, og moonshots med fundament.
+9. **Veikart:** denne uken · før lansering · neste kvartal · **fjern eller frys**.
 
 Alle notater skal oppgi **hva som må være sant for at anbefalingen skal holde**, og **hva som ville fått deg til å ombestemme deg**.
 
