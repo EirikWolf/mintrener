@@ -39,4 +39,24 @@ describe('SpeechService (Norsk stemmeveiledning)', () => {
     expect(normalizeTextForSpeech('Gjør deg klar til push-ups')).toContain('armhevinger');
     expect(normalizeTextForSpeech('Bjørnegang')).toBe('bjørne gang');
   });
+
+  it('prioriterer kvinnelige norske stemmer (f.eks. Iselin, Nora) foran mannlige (f.eks. Jon)', () => {
+    const mockVoices = [
+      { name: 'Microsoft Jon - Norwegian (Bokmål)', lang: 'nb-NO', default: true },
+      { name: 'Microsoft Iselin Online (Natural) - Norwegian (Bokmål)', lang: 'nb-NO', default: false },
+      { name: 'Google US English', lang: 'en-US', default: false },
+    ] as unknown as SpeechSynthesisVoice[];
+
+    const mockSynth = {
+      getVoices: () => mockVoices,
+      speak: vi.fn(),
+      cancel: vi.fn(),
+      resume: vi.fn(),
+      paused: false,
+    };
+
+    (speechService as any).synth = mockSynth;
+    const selected = speechService.loadVoice();
+    expect(selected?.name).toContain('Iselin');
+  });
 });

@@ -61,6 +61,38 @@ export function normalizeTextForSpeech(raw: string): string {
   return text;
 }
 
+const FEMALE_VOICE_HINTS = [
+  'iselin',
+  'nora',
+  'pernille',
+  'hedda',
+  'ingrid',
+  'liv',
+  'astrid',
+  'bente',
+  'hulda',
+  'kari',
+  'marit',
+  'silje',
+  'google',
+  'female',
+  'woman',
+  'kvinne',
+  'kvinnelig',
+];
+
+const MALE_VOICE_HINTS = [
+  'jon',
+  'henrik',
+  'jonas',
+  'stian',
+  'male',
+  'mann',
+  'mannlig',
+  'david',
+  'george',
+];
+
 export class SpeechService {
   private synth: SpeechSynthesis | null = null;
   private voice: SpeechSynthesisVoice | null = null;
@@ -107,19 +139,51 @@ export class SpeechService {
     const voices = this.synth.getVoices();
     if (!voices || voices.length === 0) return null;
 
-    // 1. Prioriter norske stemmer (nb-NO, no-NO, nn-NO)
-    const norwegian = voices.find(
+    // 1. Filtrer alle norske stemmer (nb-NO, no-NO, nn-NO)
+    const norwegianVoices = voices.filter(
       (v) =>
         v.lang.toLowerCase().startsWith('nb') ||
         v.lang.toLowerCase().startsWith('no') ||
         v.lang.toLowerCase().startsWith('nn')
     );
-    if (norwegian) {
-      this.voice = norwegian;
-      return norwegian;
+
+    if (norwegianVoices.length > 0) {
+      // 1a. Prioriter eksplisitt kvinnelige norske stemmer (Iselin, Nora, Pernille, Hedda, Google osv.)
+      const femaleNorwegian = norwegianVoices.find((v) => {
+        const nameLower = v.name.toLowerCase();
+        return FEMALE_VOICE_HINTS.some((hint) => nameLower.includes(hint));
+      });
+      if (femaleNorwegian) {
+        this.voice = femaleNorwegian;
+        return femaleNorwegian;
+      }
+
+      // 1b. Velg stemmer som ikke eksplisitt er mannlige
+      const neutralNorwegian = norwegianVoices.find((v) => {
+        const nameLower = v.name.toLowerCase();
+        return !MALE_VOICE_HINTS.some((hint) => nameLower.includes(hint));
+      });
+      if (neutralNorwegian) {
+        this.voice = neutralNorwegian;
+        return neutralNorwegian;
+      }
+
+      // 1c. Fallback til første norske stemme
+      this.voice = norwegianVoices[0];
+      return norwegianVoices[0];
     }
 
-    // 2. Fallback til standardspråk
+    // 2. Hvis ingen norske stemmer finnes, prioriter en kvinnelig stemme
+    const femaleFallback = voices.find((v) => {
+      const nameLower = v.name.toLowerCase();
+      return FEMALE_VOICE_HINTS.some((hint) => nameLower.includes(hint));
+    });
+    if (femaleFallback) {
+      this.voice = femaleFallback;
+      return femaleFallback;
+    }
+
+    // 3. Fallback til standardspråk
     const fallback = voices.find((v) => v.default) || voices[0] || null;
     this.voice = fallback;
     return fallback;
@@ -128,7 +192,7 @@ export class SpeechService {
   public getVoiceInfo(): { name: string; lang: string; isNorwegian: boolean } {
     const v = this.voice || this.loadVoice();
     if (!v) {
-      return { name: 'Standard nettleserstemme', lang: 'nb-NO', isNorwegian: true };
+      return { name: 'Astrid (Standard kvinnestemme)', lang: 'nb-NO', isNorwegian: true };
     }
     const isNorwegian =
       v.lang.toLowerCase().startsWith('nb') ||
@@ -173,9 +237,14 @@ export class SpeechService {
         utterance.lang = 'nb-NO';
       }
 
+      const voiceNameLower = (activeVoice?.name || '').toLowerCase();
+      const isKnownMale = MALE_VOICE_HINTS.some((hint) => voiceNameLower.includes(hint));
+
       utterance.volume = 1.0;
       utterance.rate = rate;
-      utterance.pitch = 1.0;
+      // Hvis enheten kun har en mannlig stemme (f.eks. kun Microsoft Jon installert),
+      // heves pitch til 1.2 for å modulere mot en kvinnelig karakter (Astrid).
+      utterance.pitch = isKnownMale ? 1.2 : 1.05;
 
       // Chrome Android bugfix & Audio Ducking: demper bakgrunnsmusikk mens stemmen snakker
       utterance.onstart = () => {

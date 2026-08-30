@@ -8,7 +8,9 @@ Denne revisjonen handler om alt brukeren møter. Teknologivalg, medieproduksjon,
 
 ## Metodekrav
 
-**Bruk appen i minst 30 minutter før du åpner én kildefil.** Gjennomfør en hel økt. Lag en egen øvelse. Bygg et program. Prøv å finne igjen noe du lagret. Skriv ned alt du lurer på underveis, også det som føles for dumt til å spørre om.
+**Bruk appen før du åpner én kildefil** — og gi det ordentlig tid; et menneske bør regne minst en halvtime. Rekkefølgen er det bindende, ikke minuttene. Gjennomfør en hel økt. Lag en egen øvelse. Bygg et program. Prøv å finne igjen noe du lagret. Skriv ned alt du lurer på underveis, også det som føles for dumt til å spørre om.
+
+Deretter forankrer du funnene i koden. Observér først, forklar etterpå.
 
 Den notatlisten er ditt mest verdifulle funn, og den kan ikke rekonstrueres senere: i det øyeblikket du forstår *hvorfor* noe er som det er, slutter du å se *at* det er rart.
 
@@ -58,11 +60,11 @@ Favoritter finnes for programmer. Egne øvelser lages, men behandles annerledes.
 **B. Hvorfor er det to TV-ikoner på forsiden?**
 Verifisert: `TimerDisplay.tsx` linje 421 og 722 — to knapper, samme ikon, samme farge, **identisk handling**, 300 linjer fra hverandre. Skjermlesertekstene skiller seg med én bindestrek. Det interessante er ikke hvilken som skal bort, men **hvordan duplikater oppstår uten at noen ser dem** — og hvor mange flere som finnes.
 
-**C. Hvorfor starter økten på en ny side?**
-Er en økt et *sted man går til*, eller en *tilstand skjermen går inn i*? Begge er forsvarbare. Hvilken har appen valgt, er den konsekvent, og hva skjer med brukerens orientering i overgangen? Merk: ingen URL-ruting, så tilbakeknappen lukker appen.
+**C. Hvorfor føles det som at økten starter på en ny side?**
+Produkteier opplevde det slik, men teknisk stemmer det ikke: økten er en tilstand i samme skjerm, ikke et eget sted. Opplevelsen kommer trolig av at bunnmenyen forsvinner når økten kjører. **Det er nettopp spriket som er interessant.** Er en økt et *sted man går til*, eller en *tilstand skjermen går inn i*? Hvilken modell har appen valgt, er valget gjennomført, og hva skjer med brukerens orientering når skjermen delvis bytter karakter uten å bytte sted? Merk: ingen URL-ruting, så tilbakeknappen lukker appen.
 
-**D. Hvorfor har forsiden en stor nedtellingssirkel når økten starter et annet sted?**
-Sirkelen er startskjermens største element og viser en nedtelling som ikke går. Favorittøktene — det brukeren faktisk skal velge mellom — ligger under. **Observert på prod: i bredt format overlapper nedtellingslaget favorittlisten og teksten kolliderer.** Hva *bør* startskjermen bruke plassen på?
+**D. Hva skal startskjermen egentlig bruke plassen på?**
+Nedtellingssirkelen er skjermens største element, og den deler plass med favorittøktene — det brukeren faktisk skal velge mellom. **Observert på prod: i bredt format overlapper de to lagene og teksten kolliderer.** To informasjonsstrukturer okkuperer samme piksler uten at noen av dem viker. Hva bør skjermen prioritere, og hva sier dagens prioritering om hvem den er laget for?
 
 **Finn minst fem funn til av samme klasse:** duplikater, elementer uten forsvar, funksjoner som lover mer enn de gir, ting som er der fordi de ble bygget.
 
@@ -131,6 +133,7 @@ Ikke en ønskeliste. Vi vil vite hvordan produktet blir bedre av å bli brukt, u
 2. **Panelets sammendrag** — én til to sider. Modenhet, viktigste innsikt per fagperson, og uenigheter i panelet med begge sider.
 3. **Svar på A–D** — hva som skjer, hvorfor det trolig ble slik, hva det koster brukeren, hva du anbefaler.
 4. **Funnliste** sortert som *blokker / alvorlig / moderat / polering*. Per funn: observasjon · begrunnelse med rammeverk eller lovkrav · konsekvens · forslag · antatt innsats.
+   **Blokker** betyr: hindrer en bruker i å fullføre noe sentralt, bryter lov, eller ødelegger data eller tillit. Et lovbrudd er en blokker selv om de fleste brukere ikke merker det. Er du i tvil, plassér det som blokker og si hvorfor du tvilte.
 5. **Redesign av startskjermen** — spørsmål D er strukturelt, ikke kosmetisk. Hva bør skjermen inneholde, i hvilken rekkefølge, hva flyttes eller fjernes? Ord, gjerne enkel skisse. Begrunn ut fra hva brukeren faktisk gjør der.
 6. **Innovasjonskapittel** — sløyfekart, forslag til lukking, moonshots med fundament.
 7. **Veikart:** denne uken · før lansering · neste kvartal · **fjern eller frys**. Det siste punktet tas like alvorlig som de andre.
