@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { PRESET_WORKOUTS, TABATA_WORKOUT } from './data/mockWorkouts';
 import { WorkoutTemplate } from './types/workout';
 import { useIntervalTimer } from './hooks/useIntervalTimer';
@@ -8,7 +8,15 @@ import { ExerciseLibraryView } from './components/library/ExerciseLibraryView';
 import { WorkoutHistoryView } from './components/history/WorkoutHistoryView';
 import { ProgramCatalogView } from './components/programs/ProgramCatalogView';
 import { WorkoutBuilderView } from './components/builder/WorkoutBuilderView';
-import { ExerciseImageCuratorView } from './components/curator/ExerciseImageCuratorView';
+import { IS_CURATOR_ENABLED } from './constants/featureFlags';
+
+// Lat import: kuratoren er et internt verktøy og skal ikke ligge i
+// produksjonsbundelen. Med flagget av blir chunken aldri hentet.
+const ExerciseImageCuratorView = lazy(() =>
+  import('./components/curator/ExerciseImageCuratorView').then((m) => ({
+    default: m.ExerciseImageCuratorView,
+  }))
+);
 import { SettingsMoreView } from './components/settings/SettingsMoreView';
 import { BottomNav, AppTab } from './components/navigation/BottomNav';
 import { ErrorToast } from './components/feedback/ErrorToast';
@@ -180,7 +188,7 @@ export function App() {
             onToggleVibrate={toggleVibrate}
             onToggleWakeLock={toggleWakeLock}
             onToggleSpeech={toggleSpeech}
-            onOpenCurator={() => setActiveTab('curator')}
+            onOpenCurator={IS_CURATOR_ENABLED ? () => setActiveTab('curator') : undefined}
             onOpenPrograms={() => setActiveTab('programs')}
           />
         ) : activeTab === 'programs' ? (
@@ -206,10 +214,12 @@ export function App() {
           <WorkoutHistoryView
             onNavigateToTimer={() => setActiveTab('timer')}
           />
-        ) : activeTab === 'curator' && user ? (
-          <ExerciseImageCuratorView
-            onNavigateToTimer={() => setActiveTab('timer')}
-          />
+        ) : activeTab === 'curator' && IS_CURATOR_ENABLED ? (
+          <Suspense fallback={null}>
+            <ExerciseImageCuratorView
+              onNavigateToTimer={() => setActiveTab('timer')}
+            />
+          </Suspense>
         ) : (
           <SettingsMoreView
             soundEnabled={state.soundEnabled}
@@ -220,7 +230,7 @@ export function App() {
             onToggleWakeLock={toggleWakeLock}
             speechEnabled={state.speechEnabled}
             onToggleSpeech={toggleSpeech}
-            onOpenCurator={user ? () => setActiveTab('curator') : undefined}
+            onOpenCurator={IS_CURATOR_ENABLED ? () => setActiveTab('curator') : undefined}
           />
         )}
       </div>

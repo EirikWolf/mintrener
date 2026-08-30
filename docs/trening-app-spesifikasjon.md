@@ -260,7 +260,7 @@ App Check har også en egen kostnad som må veies inn: reCAPTCHA Enterprise last
 
 **Rekkefølgen som gjelder i stedet, prioritert etter effekt per innsats:**
 
-1. **Budsjettvarsel i Google Cloud Billing** — dekker det verste realistiske utfallet (uventet regning) og tar minutter å sette opp. Dette er nå det bærende kostnadsvernet, ikke App Check
+1. **Kvotevern, ikke budsjettvern.** Prosjektet kjører på Firebase Spark uten betalingskonto — verifisert 2026-08-30: `billingEnabled: false`. Det betyr at et budsjettvarsel verken lar seg sette opp eller trengs; kostnader kan ikke påløpe. **Men risikoen forsvinner ikke, den bytter form:** misbruk av den uautentiserte skriveflaten brenner opp dagskvoten, og da slutter appen å virke for ekte brukere. Trusselen er utilgjengelighet, ikke en regning. Følg forbruket i Firebase-konsollens bruksfane, og behandle en uventet kvotetopp som et sikkerhetssignal
 2. **Ingen uautentisert flate med ubegrenset dokumentopprettelse.** Samlinger som tar imot skriv fra uinnloggede klienter skal ha enten TTL-policy, krav om innlogging, eller et begrenset ID-rom. En flate som kan vokse fritt og ikke kan ryddes fra klienten, er en kostnadsrisiko uavhengig av App Check
 3. **App Check aktiveres når** appen tas i bruk av andre enn utviklerens egen krets, eller når telemetrien faktisk skal styre beslutninger som betyr noe
 
@@ -275,7 +275,7 @@ Koden er allerede på plass i `src/services/firebase.ts`, med guard mot test- og
 
 **Kostnad**
 - Firebase Spark (gratis) dekker Hosting, Auth og Firestore for et lite antall brukere. Cloud Functions og Storage-egress krever Blaze (betal etter bruk)
-- **Budsjettvarsel i Google Cloud på f.eks. 100 kr/mnd fra dag én.** Dette er ikke lenger bare god skikk — det er det bærende kostnadsvernet så lenge App Check ikke er aktivert (se sikkerhetsavsnittet). Varselet skal dokumenteres i `docs/DECISIONS.md` når det er satt opp, slik at det er etterprøvbart at det finnes
+- **Budsjettvarsel gjelder først fra den dagen prosjektet får en betalingskonto.** Per 2026-08-30 har det ikke det (`billingEnabled: false`), så vernet er kvotebasert, ikke kronebasert — se sikkerhetsavsnittet. Kobles Blaze på senere, for eksempel for Cloud Functions, skal budsjettvarsel settes opp **i samme operasjon** og dokumenteres i `docs/DECISIONS.md`. Det er da vernet går fra «tjenesten stopper» til «regningen vokser», og det skiftet må ikke skje ubemerket
 - Firestore-modell designes for få lesinger: én økt = ett dokument, ikke ett dokument per intervall. Statistikk aggregeres i brukerdokumentet, ikke beregnes ved å lese all historikk
 - Offline-persistens reduserer lesinger betydelig
 
