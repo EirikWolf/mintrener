@@ -34,9 +34,11 @@ describe('organizationService', () => {
     expect(res.success).toBe(false);
   });
 
-  it('henter aggregert statistikk over terskel 3 uten enkeltperson-logger', () => {
-    const stats = getOrganizationStats('org-lillesterk');
-    expect(stats.activeMembersCount).toBeGreaterThanOrEqual(3);
-    expect(stats.totalMinutesThisWeek).toBeGreaterThan(0);
+  // Testen bekreftet tidligere at getOrganizationStats returnerte tall over
+  // personvernterskelen — men tallene var hardkodet og like for alle
+  // organisasjoner. Den verifiserte altså fiksjonen, ikke funksjonen.
+  it('returnerer null til ekte aggregering finnes, framfor oppdiktede tall', () => {
+    expect(getOrganizationStats('org-lillesterk')).toBeNull();
+    expect(getOrganizationStats('org-koret-var')).toBeNull();
   });
 });

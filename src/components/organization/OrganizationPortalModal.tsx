@@ -147,7 +147,17 @@ export const OrganizationPortalModal: React.FC<OrganizationPortalModalProps> = (
                   </span>
                 </div>
 
-                {/* Aggregerte Nøkkeltall */}
+                {/* Aggregerte nøkkeltall. Uten backend-aggregering finnes ingen
+                    tall å vise — da sier vi det, framfor å vise oppdiktede. */}
+                {!stats && (
+                  <div className="pt-1 border-t border-zinc-800/80">
+                    <p className="text-[10px] text-zinc-400 text-center leading-relaxed py-1.5">
+                      Felles statistikk vises når minst tre medlemmer har trent i samme
+                      periode. Enkeltpersoners økter vises aldri.
+                    </p>
+                  </div>
+                )}
+
                 {stats && (
                   <div className="grid grid-cols-2 gap-2 pt-1 border-t border-zinc-800/80 text-center">
                     <div className="p-2 bg-zinc-900/60 rounded-xl border border-zinc-800">

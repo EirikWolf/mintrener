@@ -8,7 +8,9 @@ export const PRESET_ORGANIZATIONS: Organization[] = [
     name: 'LilleSterk Eldresenter & Kommune',
     department: 'Senioraktivitet',
     joinCode: 'LILLESTERK',
-    activeChallengeId: 'balanse-og-styrke-senior-28',
+    // Nærmeste eksisterende utfordring for seniorprofilen. Pekte tidligere på
+    // 'balanse-og-styrke-senior-28', som aldri har eksistert (revisjon B2).
+    activeChallengeId: 'morgenmobilitet-28-dager',
     settings: {
       dailyBreakTime: '11:00',
       allowLeaderboards: false,
@@ -19,7 +21,9 @@ export const PRESET_ORGANIZATIONS: Organization[] = [
     name: 'Koret Vår & Vokalensemble',
     department: 'Sang & Pust',
     joinCode: 'KOR2026',
-    activeChallengeId: 'diafragma-pust-og-holdning-14',
+    // Ingen utfordring i katalogen passer et kor. Feltet står tomt framfor å
+    // peke på noe tilfeldig — 'diafragma-pust-og-holdning-14' fantes aldri.
+    activeChallengeId: undefined,
     settings: {
       dailyBreakTime: '18:30',
       allowLeaderboards: false,
@@ -104,13 +108,16 @@ export function leaveOrganization(): void {
 /**
  * Henter anonymiserte aggregater for organisasjonen (uten enkeltperson-overvåkning).
  */
-export function getOrganizationStats(orgId: string): OrganizationStats {
-  // Simulerer aggregert statistikk over terskel 3
-  return {
-    orgId,
-    activeMembersCount: 8,
-    totalMinutesThisWeek: 142,
-    totalSessionsThisWeek: 26,
-    commonChallengeProgressPercent: 68,
-  };
+export function getOrganizationStats(_orgId: string): OrganizationStats | null {
+  // Returnerte tidligere hardkodede tall (8 medlemmer, 142 minutter) for ALLE
+  // organisasjoner, alltid — presentert i portalen som ekte statistikk.
+  // Beslutning 44 kalte det «klar B2B-infrastruktur»; revisjon B2 målte det.
+  //
+  // Aggregering krever et backend-ledd som ikke finnes: medlemsøkter må telles
+  // på tvers av brukere, og personvernterskelen (minimum tre personer) må
+  // håndheves der dataene er — ikke i klienten. Til det er bygget returnerer
+  // vi null, og portalen sier at statistikk ikke er tilgjengelig ennå.
+  //
+  // Oppdiktede tall vist som ekte statistikk er verre enn ingen statistikk.
+  return null;
 }

@@ -12,6 +12,7 @@ import {
   STRENGTH_EVIDENCE_BASIS,
 } from '../strengthPrograms';
 import { StrengthProgramTemplateSchema } from '../../schemas/strengthSchema';
+import { PRESET_ORGANIZATIONS } from '../../services/organizationService';
 
 describe('Referanseintegritet for øvelses-ID-er og treningspakker (Revisjon 2026-08-30)', () => {
   const validExerciseIds = new Set(EXERCISE_LIBRARY.map((e) => e.id));
@@ -110,6 +111,21 @@ describe('Referanseintegritet for øvelses-ID-er og treningspakker (Revisjon 202
       expect(allIdrettExerciseIds).toContain('copenhagen-planke');
       expect(allIdrettExerciseIds).toContain('ettbeins-landing');
     });
+  });
+
+  // Organisasjonene peker på utfordringer, ikke øvelser — samme feilklasse,
+  // annen samling. Den sto utenfor testen da den ble skrevet, og to
+  // spøkelses-IDer nådde produksjon (revisjon B2, 2026-08-31).
+  it('alle utfordrings-IDer i PRESET_ORGANIZATIONS finnes i STARTER_CHALLENGES', () => {
+    const validChallengeIds = new Set(STARTER_CHALLENGES.map((c) => c.id));
+    const missing = PRESET_ORGANIZATIONS
+      .filter((org) => org.activeChallengeId && !validChallengeIds.has(org.activeChallengeId))
+      .map((org) => `${org.id} → ${org.activeChallengeId}`);
+
+    expect(
+      missing,
+      'Organisasjoner som peker på utfordringer som ikke finnes: ' + missing.join(', ')
+    ).toEqual([]);
   });
 
   describe('Styrkeprogrammer for «Sterkere 12 uker» (2, 3 og 4 dager)', () => {

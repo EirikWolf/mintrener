@@ -16,6 +16,19 @@ export interface FullExportPayload {
   badges?: any;
   weeklyGoal?: any;
   coachPersona?: any;
+  // Lagt til etter revisjon B2: eksporten dekket 9 av 32 registernøkler, og
+  // Beslutning 40 kalte den likevel «fullstendig». Fødselsår er eksplisitt
+  // merket «Personopplysning» i registeret og manglet.
+  birthYear?: any;
+  userProfiles?: any;
+  userSettings?: any;
+  preferredLanguage?: any;
+  favoriteProgramIds?: any;
+  weeklyGoalLog?: any;
+  strengthExerciseLogs?: any;
+  skillTreeProgress?: any;
+  programOverrides?: any;
+  activeChallengeId?: any;
 }
 
 /**
@@ -68,6 +81,26 @@ export async function exportFullUserDataset(userId?: string | null): Promise<voi
   let badges: any = null;
   let weeklyGoal: any = null;
   let coachPersona: any = null;
+  let birthYear: any = null;
+  let userProfiles: any = null;
+  let userSettings: any = null;
+  let preferredLanguage: any = null;
+  let favoriteProgramIds: any = null;
+  let weeklyGoalLog: any = null;
+  let strengthExerciseLogs: any = null;
+  let skillTreeProgress: any = null;
+  let programOverrides: any = null;
+  let activeChallengeId: any = null;
+
+  /** Leser og parser en JSON-nøkkel; null hvis den mangler eller er korrupt. */
+  const lesJson = (nøkkel: string): any => {
+    try {
+      const rå = localStorage.getItem(nøkkel);
+      return rå ? JSON.parse(rå) : null;
+    } catch {
+      return null;
+    }
+  };
 
   try {
     if (userId) {
@@ -99,6 +132,19 @@ export async function exportFullUserDataset(userId?: string | null): Promise<voi
     if (rawGoal) weeklyGoal = JSON.parse(rawGoal);
 
     coachPersona = localStorage.getItem(STORAGE_KEYS.COACH_PERSONA) || 'standard';
+
+    // Resten av registeret. Alt som ikke er med her, skal stå i
+    // UTENFOR_EKSPORT i exportDataService.dekning.test.ts med en grunn.
+    birthYear = localStorage.getItem(STORAGE_KEYS.USER_BIRTH_YEAR);
+    preferredLanguage = localStorage.getItem(STORAGE_KEYS.PREFERRED_LANGUAGE);
+    activeChallengeId = localStorage.getItem(STORAGE_KEYS.ACTIVE_CHALLENGE_ID);
+    userProfiles = lesJson(STORAGE_KEYS.USER_PROFILES);
+    userSettings = lesJson(STORAGE_KEYS.USER_SETTINGS);
+    favoriteProgramIds = lesJson(STORAGE_KEYS.FAVORITE_PROGRAM_IDS);
+    weeklyGoalLog = lesJson(STORAGE_KEYS.WEEKLY_GOAL_LOG);
+    strengthExerciseLogs = lesJson(STORAGE_KEYS.STRENGTH_EXERCISE_LOGS);
+    skillTreeProgress = lesJson(STORAGE_KEYS.SKILL_TREE_PROGRESS);
+    programOverrides = lesJson(STORAGE_KEYS.PROGRAM_OVERRIDES);
   } catch (e) {
     console.warn('Feil ved lesing av data for eksport:', e);
   }
@@ -109,6 +155,16 @@ export async function exportFullUserDataset(userId?: string | null): Promise<voi
     badges,
     weeklyGoal,
     coachPersona,
+    birthYear,
+    userProfiles,
+    userSettings,
+    preferredLanguage,
+    favoriteProgramIds,
+    weeklyGoalLog,
+    strengthExerciseLogs,
+    skillTreeProgress,
+    programOverrides,
+    activeChallengeId,
   });
 }
 
