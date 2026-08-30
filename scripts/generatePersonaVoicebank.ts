@@ -11,6 +11,13 @@
  * skånsomme trim+fade+loudnorm-kjeden. Ingen manifest-generering her —
  * det er en egen byggtidsoppgave (β5).
  *
+ * HALEVAKT: etter etterbehandling måles hvert klipp med volumedetect — siste
+ * 50 ms mot klippets samlede mean_volume. Et normalt klipp dør ut; en hale med
+ * tilnærmet uendret energi tyder på at Chatterbox kuttet taket («burpii»).
+ * Mistanke gir en ADVARSEL med et `--refetch`-forslag og telles i
+ * sluttrapporten — kjøringen fortsetter, for et take kan legitimt være brått.
+ * Terskel og tekst: TAIL_FALLOFF_THRESHOLD_DB i scripts/voicebankTasks.ts.
+ *
  * Bruk:
  *   npx tsx scripts/generatePersonaVoicebank.ts [--dry-run] [--persona <id>]
  *     [--only <cueId|exerciseId>] [--force] [--skip-recorded] [--reprocess] [--refetch]
@@ -45,15 +52,22 @@ import {
   buildRecordedFfmpegArgs,
   buildTaskList,
   buildTtsFfmpegArgs,
+  buildVolumeDetectArgs,
   cacheIsFresh,
   decideTtsAction,
+  formatTailSummary,
+  formatTailWarning,
+  isTailSuspect,
   persistRawCache,
   isRetryableHttpStatus,
   parseCliArgs,
   parseManifest,
+  parseMeanVolumeDb,
+  tailFalloffDb,
   updateConsecutiveFailures,
   type CliOptions,
   type RecordedTask,
+  type TailFlag,
   type TaskOutcome,
   type TtsTask,
   type VoicebankTask,
@@ -102,6 +116,47 @@ function postProcess(
     throw new Error(`ffmpeg feilet (exit ${res.status ?? '?'}): ${detail}`);
   }
   fs.renameSync(tmpPath, outputPath);
+}
+
+/** Én volumedetect-måling av et ferdig klipp. null = målingen mislyktes. */
+function measureMeanVolumeDb(filePath: string, window: 'whole' | 'tail'): number | null {
+  const res = spawnSync('ffmpeg', buildVolumeDetectArgs(filePath, window), {
+    encoding: 'utf-8',
+  });
+  // volumedetect skriver måltallene til stderr; -f null gir ingen utdatafil.
+  if (res.error || res.status !== 0) return null;
+  return parseMeanVolumeDb(res.stderr ?? '');
+}
+
+/**
+ * Halevakt: måler det ferdig etterbehandlede klippet og advarer hvis halen
+ * fortsatt har full energi (mistenkt avkuttet take — «burpii»-tilfellet).
+ * Selve målingen er I/O og bor derfor her; terskelen og teksten er rene
+ * funksjoner i voicebankTasks.
+ *
+ * En advarsel avbryter ALDRI kjøringen: et take kan legitimt være brått, og
+ * en mislykket måling skal ikke stoppe en batch som ellers går fint.
+ */
+function checkTail(task: VoicebankTask, outputPath: string): TailFlag | null {
+  const overallMeanDb = measureMeanVolumeDb(outputPath, 'whole');
+  const tailMeanDb = measureMeanVolumeDb(outputPath, 'tail');
+  if (overallMeanDb === null || tailMeanDb === null) {
+    console.warn(`   ⚠️ Halevakt: klarte ikke måle ${task.outputRelPath} — hopper over sjekken.`);
+    return null;
+  }
+  const measurement = { overallMeanDb, tailMeanDb };
+  if (!isTailSuspect(measurement)) return null;
+  const flag: TailFlag = {
+    personaId: task.personaId,
+    id: task.id,
+    outputRelPath: task.outputRelPath,
+    kind: task.kind,
+    falloffDb: tailFalloffDb(measurement),
+  };
+  for (const line of formatTailWarning(flag)) {
+    console.warn(line);
+  }
+  return flag;
 }
 
 /** Rydder etterlatte tempfiler fra en tidligere hardt drept kjøring. */
@@ -176,7 +231,15 @@ function readSidecar(sidecarPath: string): string | null {
   return fs.existsSync(sidecarPath) ? fs.readFileSync(sidecarPath, 'utf-8') : null;
 }
 
-async function runTtsTask(task: TtsTask, token: string, opts: CliOptions): Promise<TaskOutcome> {
+/** Utfallet av én oppgave, pluss halevaktens eventuelle flagg. */
+interface TaskResult {
+  readonly outcome: TaskOutcome;
+  readonly tailFlag: TailFlag | null;
+}
+
+const plain = (outcome: TaskOutcome): TaskResult => ({ outcome, tailFlag: null });
+
+async function runTtsTask(task: TtsTask, token: string, opts: CliOptions): Promise<TaskResult> {
   const outputPath = toAbsolute(task.outputRelPath);
   const cachePath = toAbsolute(task.cacheRelPath);
   const sidecarPath = `${cachePath}.json`;
@@ -197,13 +260,13 @@ async function runTtsTask(task: TtsTask, token: string, opts: CliOptions): Promi
 
   if (action === 'skip-existing') {
     console.log(`⏩ Hopper over eksisterende: ${task.personaId}/${task.id}`);
-    return 'skipped';
+    return plain('skipped');
   }
   if (action === 'missing-cache') {
     console.error(
       `   ❌ [${task.personaId}/${task.id}] --reprocess uten gyldig cache-fil (${task.cacheRelPath}) — kjør TTS-runden først.`,
     );
-    return 'failed';
+    return plain('failed');
   }
 
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
@@ -222,34 +285,34 @@ async function runTtsTask(task: TtsTask, token: string, opts: CliOptions): Promi
     postProcess(cachePath, outputPath, buildTtsFfmpegArgs);
     const kb = Math.round(fs.statSync(outputPath).size / 1024);
     console.log(`   ✅ ${task.outputRelPath} (${kb} KB)`);
-    return 'generated';
+    return { outcome: 'generated', tailFlag: checkTail(task, outputPath) };
   } catch (err) {
     console.error(`   ❌ Feilet: ${err instanceof Error ? err.message : String(err)}`);
-    return 'failed';
+    return plain('failed');
   }
 }
 
-function runRecordedTask(task: RecordedTask, opts: CliOptions): TaskOutcome {
+function runRecordedTask(task: RecordedTask, opts: CliOptions): TaskResult {
   const outputPath = toAbsolute(task.outputRelPath);
   const sourcePath = toAbsolute(task.sourceRelPath);
   // --reprocess regenererer også innspilte spor (kilden ligger alltid lokalt).
   if (!opts.force && !opts.reprocess && fs.existsSync(outputPath)) {
     console.log(`⏩ Hopper over eksisterende: ${task.personaId}/${task.id}`);
-    return 'skipped';
+    return plain('skipped');
   }
   if (!fs.existsSync(sourcePath)) {
     console.error(`   ❌ Fant ikke innspilt kilde: ${sourcePath}`);
-    return 'failed';
+    return plain('failed');
   }
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   try {
     console.log(`🎛️ [${task.personaId}/${task.id}] etterbehandler innspilt spor (skånsom kjede)`);
     postProcess(sourcePath, outputPath, buildRecordedFfmpegArgs);
     console.log(`   ✅ ${task.outputRelPath}`);
-    return 'generated';
+    return { outcome: 'generated', tailFlag: checkTail(task, outputPath) };
   } catch (err) {
     console.error(`   ❌ Feilet: ${err instanceof Error ? err.message : String(err)}`);
-    return 'failed';
+    return plain('failed');
   }
 }
 
@@ -288,14 +351,16 @@ async function runAll(tasks: readonly VoicebankTask[], opts: CliOptions): Promis
 
   const counts: Record<TaskOutcome, number> = { generated: 0, skipped: 0, failed: 0 };
   const failedIds: string[] = [];
+  const tailFlags: TailFlag[] = [];
   let consecutiveFailures = 0;
   // Sekvensielt med vilje — én GPU på Kitor.
   for (const task of tasks) {
-    const outcome =
+    const { outcome, tailFlag } =
       task.kind === 'tts'
         ? await runTtsTask(task, token, opts)
         : runRecordedTask(task, opts);
     counts[outcome]++;
+    if (tailFlag) tailFlags.push(tailFlag);
     if (outcome === 'failed') failedIds.push(`${task.personaId}/${task.id}`);
     consecutiveFailures = updateConsecutiveFailures(consecutiveFailures, outcome);
     if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
@@ -309,6 +374,11 @@ async function runAll(tasks: readonly VoicebankTask[], opts: CliOptions): Promis
 
   console.log('\n🏁 Sluttrapport:');
   console.log(`   Generert: ${counts.generated}, hoppet over: ${counts.skipped}, feilet: ${counts.failed}`);
+  // Halevakten påvirker ikke exit-koden: flaggede klipp skal lyttes på, ikke
+  // behandles som byggfeil.
+  for (const line of formatTailSummary(tailFlags)) {
+    console.log(line);
+  }
   if (failedIds.length > 0) {
     console.log('   Feilede oppgaver (kjør på nytt med --persona/--only):');
     for (const id of failedIds) {
