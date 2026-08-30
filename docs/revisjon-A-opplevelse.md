@@ -2,7 +2,7 @@
 
 **Objekt:** «Min Trener», norsk PWA for intervalltrening. Live: `https://mintrener.web.app` · Kode: `github.com/EirikWolf/mintrener` (offentlig) · Dokumentasjon i `docs/`.
 
-Denne revisjonen handler om alt brukeren møter. Teknologivalg, medieproduksjon, plattform og forvaltning dekkes i **Revisjon B** — hold deg unna dem her.
+Denne revisjonen handler om alt brukeren møter. Medieproduksjon, stemme og lisens dekkes i **Revisjon B1**; plattform, forvaltning og læringssløyfer i **Revisjon B2** — hold deg unna dem her.
 
 ---
 
@@ -17,6 +17,8 @@ Den notatlisten er ditt mest verdifulle funn, og den kan ikke rekonstrueres sene
 Tidligere revisjoner ligger i `docs/`. Les dem **sist**, som kryssjekk.
 
 Ellers: mål framfor anslå (kontrast, piksler, antall trykk). Skill observasjon fra vurdering. Oppgi fil og linje der det er relevant. Vær kritisk, men gi alltid et forslag — og si hva som er bra, så vi vet hva som ikke må røres.
+
+**Når et spørsmål krever en fysisk enhet.** Emulert viewport er ikke det samme som en telefon i hånden. Skjermleser i praksis, lyd ved skjermlås, hvordan trykkflater treffer med tommelen, og hva som skjer når skjermen slukker midt i en økt — det må måles på en ekte iPhone og en ekte Android. **Har du ikke enhetene: si det, og la spørsmålet stå ubesvart.** En lærebokgjengivelse i revisjonsform er verre enn et hull, fordi den ser ut som et funn og blir behandlet som ett. Marker hva som gjenstår og hva slags utstyr som skal til.
 
 ---
 
