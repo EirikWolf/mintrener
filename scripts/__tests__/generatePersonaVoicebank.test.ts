@@ -59,7 +59,9 @@ describe('buildTaskList', () => {
       (t) => t.personaId === 'haugesund' && t.id === 'burpees',
     );
     expect(burpees?.kind).toBe('tts');
-    expect(burpees && burpees.kind === 'tts' ? burpees.text : null).toBe('Børpis');
+    // burpees er engelsk-uttalt (se «språkoverstyring»-blokken); poenget her er
+    // at ttsText brukes framfor displayText — goblet-squat bærer beviset.
+    expect(burpees && burpees.kind === 'tts' ? burpees.text : null).toBe('Burpees');
     const goblet = tasks.find(
       (t) => t.personaId === 'romsdal' && t.id === 'goblet-squat',
     );
@@ -207,6 +209,17 @@ describe('buildClonePayload', () => {
 });
 
 describe('språkoverstyring (ttsLang)', () => {
+  // Engelsk-uttalte øvelser. burpees kom til 2026-08-30 etter produkteiers
+  // A/B-lytting: den fonetiske omskrivingen «Børpis» tapte mot engelsk uttale,
+  // samme utfall som mountain-climbers fikk i QA-runde 1.
+  const ENGLISH_EXERCISE_IDS = ['mountain-climbers', 'burpees'];
+
+  it('nøyaktig 2 øvelser har ttsLang-overstyring i manuskriptet', () => {
+    const overridden = manifest.exercises.filter((ex) => ex.ttsLang !== undefined);
+    expect(overridden.map((ex) => ex.id).sort()).toEqual([...ENGLISH_EXERCISE_IDS].sort());
+    expect(overridden.every((ex) => ex.ttsLang === 'en')).toBe(true);
+  });
+
   it('mountain-climbers bærer engelsk tekst og lang=en i alle personas', () => {
     const tasks = buildTaskList(manifest, { only: 'mountain-climbers' });
     expect(tasks).toHaveLength(4);
@@ -216,11 +229,26 @@ describe('språkoverstyring (ttsLang)', () => {
     }
   });
 
+  it('burpees bærer engelsk tekst og lang=en i alle personas', () => {
+    const tasks = buildTaskList(manifest, { only: 'burpees' });
+    expect(tasks).toHaveLength(4);
+    for (const t of tasks) {
+      expect(t.kind === 'tts' ? t.text : null).toBe('Burpees');
+      expect(t.kind === 'tts' ? t.lang : null).toBe('en');
+    }
+  });
+
+  it('displayText og filnavn for burpees er uendret (visningsnavn/filsti er stabile)', () => {
+    const burpees = manifest.exercises.find((ex) => ex.id === 'burpees');
+    expect(burpees?.displayText).toBe('Burpees');
+    expect(burpees?.file).toBe('exercise-burpees.mp3');
+  });
+
   it('alle andre TTS-oppgaver (cues og øvelser) er norske', () => {
     const others = buildTaskList(manifest, {}).filter(
-      (t): t is TtsTask => t.kind === 'tts' && t.id !== 'mountain-climbers',
+      (t): t is TtsTask => t.kind === 'tts' && !ENGLISH_EXERCISE_IDS.includes(t.id),
     );
-    expect(others).toHaveLength(144);
+    expect(others).toHaveLength(140);
     expect(others.every((t) => t.lang === 'no')).toBe(true);
   });
 });
