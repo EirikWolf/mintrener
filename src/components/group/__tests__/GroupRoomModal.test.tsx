@@ -96,6 +96,11 @@ async function createRoomAsHost() {
   fireEvent.click(screen.getByRole('button', { name: /Opprett rom & generer kode/ }));
   await screen.findByText('K7M9P2');
 
+  // Abonnementet settes opp i en useEffect på roomCode, altså etter at
+  // romkoden er rendret. Testene under bruker snapshotCb, som er undefined
+  // til effekten har kjørt — vent derfor på den her, ikke i hver test.
+  await waitFor(() => expect(snapshotCb).toBeDefined());
+
   return { ...rendered, snapshotCb: () => snapshotCb };
 }
 
@@ -240,8 +245,14 @@ describe('GroupRoomModal – join-flyt (deltaker)', () => {
     expect(screen.getByText(/Venter på at verten \(Eirik\) skal starte økten/)).toBeInTheDocument();
     // Input oppercases før innsending
     expect(mockedJoin).toHaveBeenCalledWith('K7M9P2');
-    // Deltakeren abonnerer på rommet for å fange vertens start
-    expect(mockedSubscribe).toHaveBeenCalledWith('K7M9P2', expect.any(Function));
+    // Deltakeren abonnerer på rommet for å fange vertens start.
+    // Abonnementet settes opp i en useEffect på roomCode, altså etter at
+    // teksten over er rendret — uten waitFor er assertionen et kappløp mot
+    // effekten, og den taper på trege maskiner (observert rødt i CI, grønt
+    // lokalt, uten kodeendring imellom).
+    await waitFor(() =>
+      expect(mockedSubscribe).toHaveBeenCalledWith('K7M9P2', expect.any(Function))
+    );
   });
 });
 
