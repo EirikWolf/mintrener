@@ -36,6 +36,26 @@ Det samme gjelder lyd: kan du ikke spille av, skal du ikke vurdere hvordan stemm
 
 ---
 
+## Før du svarer på noe: har vi stilt riktig spørsmål?
+
+**Denne bestillingen er skrevet av folk som allerede har bygget en løsning, og den bærer preg av det.** Spørsmålene tar utgangspunkt i hva vi har gjort, og alternativene vi lister er som regel varianter av vår egen tilnærming. Det er en systematisk skjevhet, og vi vil at du skal bryte den.
+
+**Du har eksplisitt mandat til å forkaste premisset.** Mener du vi løser feil problem, at et spørsmål ikke er verdt å stille, eller at hele kategorien vi tenker innenfor er feil — si det, og bruk plassen på det i stedet. Tidligere revisjoner har gjort nettopp dette, og det var de mest verdifulle funnene. En bekreftelse av vår egen tenkning er nesten verdiløs for oss.
+
+Tre grep vi ber om konkret:
+
+**1. Vurder alltid nullalternativet.** For hvert forslag: hva skjer om vi ikke gjør noe av dette? Hvem savner det, og hvor fort? En funksjon som ikke bygges har null vedlikeholdskostnad, null feilrate og null forvirring — det er en reell konkurrent til enhver løsning.
+
+**2. Se utover vår egen liste.** Der vi lister alternativer, er listen et utgangspunkt, ikke en meny. Finnes det en tilnærming vi ikke har tenkt på — også en som løser behovet på en helt annen måte enn vi forestiller oss — er det den vi vil høre om.
+
+**3. Hva gjør de som er best i verden på dette?** Ikke som benchmarking-øvelse, men fordi noen har brukt år på problemer vi har brukt dager på. Hva gjør de, hvorfor tror du de valgte slik, og hva har de forkastet underveis? Vær like interessert i hva de har **valgt bort** som i hva de har bygget — det forteller ofte mer. Vi har en egen konkurrentanalyse i `docs/vedlegg-c-konkurrentanalyse-og-neste-fase.md`; les den, men behandle den som vårt utgangspunkt, ikke som fasit. Finner du at den er utdatert eller for smal, si det.
+
+Et konkret eksempel på skjevheten, fra vår egen prosess: vi begynte med å tenke stillbilder til øvelsene, gikk videre til å vurdere video, og har dermed i praksis låst oss til spørsmålet «hvilket format skal demonstrasjonen ha». Det er kanskje feil spørsmål. Kanskje trenger brukeren ikke se en demonstrasjon i det hele tatt. Kanskje er det viktigste å se seg selv, ikke en modell. Kanskje ligger svaret i lyd, i tekst, i timing — eller i noe vi ikke har språk for ennå.
+
+**Vi vil heller ha et godt begrunnet forslag som river opp planen vår, enn en pen gjennomføring av den.**
+
+---
+
 ## Systemet kort
 
 React/TypeScript-PWA, Firebase (hosting, innlogging, database), ~40 000 linjer, 780 tester. Mobil først, offline-orientert, åpen for alle med Google-konto. Bygget svært raskt med reell testdisiplin, men også kraftig funksjonstilvekst.
@@ -65,7 +85,9 @@ Innhold i dag: 25 øvelser med to stillbilder hver, og fire syntetiske trenerste
 
 Øvelseskortene viser i dag to stillbilder: start og slutt. Spørsmålet er todelt, og delene må ikke slås sammen.
 
-**Produksjon.** Hva er beste måte å vise en bevegelse på? Utred minst disse, gjerne flere:
+**Men først, det åpne spørsmålet:** trenger brukeren i det hele tatt å se en demonstrasjon på skjermen? Vi har antatt ja, og hoppet rett til formatvalget. En som har gjort knebøy 200 ganger trenger neppe et bilde. En som trener med telefonen på gulvet ser ikke skjermen uansett. Og noen ville hatt mer nytte av å se *seg selv* enn en modell. Ta stilling til det før du velger format.
+
+**Produksjon.** Gitt at demonstrasjon skal vises: hva er beste måte? Listen under er vårt utgangspunkt, ikke en meny — vi er mest interessert i noe vi ikke har tenkt på:
 
 - Kryssing mellom de to bildene som allerede finnes — spesifikasjonen foreslo nettopp dette, og det er aldri bygget. Hva koster det, og hvor langt rekker det?
 - AI-generert video fra eksisterende stillbilder
@@ -123,8 +145,6 @@ Spørsmålet er derfor ikke hvordan vi bygger videre på dempingen vi har, men *
 - Hva er avhengighetsrisikoen ved å knytte kjerneopplevelsen til en tredjeparts vilkår?
 
 **Alternativet som må vurderes på like fot:** i stedet for å kjempe om kontroll over brukerens musikkapp — gjør stemmen tydelig nok til å bære gjennom musikk som spiller. Kortere replikker, plassering i frekvensbildet, et signal før tale. Ingen integrasjon, ingen innpakning, ingen tredjepart. Er det godt nok? Er svaret ja, bør det gjøres først uansett.
-
----
 
 ---
 
