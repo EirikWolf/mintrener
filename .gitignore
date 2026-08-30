@@ -46,3 +46,4 @@ playwright-report/
 
 # Rå-cache for TTS-nedlastinger (permanent lokalt, aldri i repoet)
 audio/raw-cache/
+.superpowers/
