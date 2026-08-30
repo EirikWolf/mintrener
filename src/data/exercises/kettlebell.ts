@@ -1,6 +1,6 @@
-import { ExerciseItem } from '../../schemas/exerciseSchema';
+import { ExerciseInput } from '../../schemas/exerciseSchema';
 
-export const KETTLEBELL_EXERCISES: ExerciseItem[] = [
+export const KETTLEBELL_EXERCISES: ExerciseInput[] = [
   {
     id: 'kettlebell-swing',
     navn: { nb: 'Kettlebell-swing', en: 'Kettlebell Swing' },

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { WorkoutTemplate } from '../../types/workout';
 import {
   PAIN_POINTS,
@@ -7,8 +7,11 @@ import {
 } from '../../services/injuryAlternativeService';
 import {
   convertToDeloadWorkout,
+  assessFatigueAndDeload,
 } from '../../services/fatigueDeloadService';
-import { ShieldAlert, X, Check, ArrowRight, Sparkles, HeartPulse } from 'lucide-react';
+import { getCompletedWorkoutLogs } from '../../services/workoutHistoryStorage';
+import { ShieldAlert, X, Check, ArrowRight, Sparkles, HeartPulse, BatteryCharging } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface PainFilterModalProps {
   workout: WorkoutTemplate;
@@ -22,16 +25,13 @@ export const PainFilterModal: React.FC<PainFilterModalProps> = ({
   onApplyWorkout,
 }) => {
   const [selectedPainPoints, setSelectedPainPoints] = useState<PainPointId[]>([]);
-  const [isDeloadActive, setIsDeloadActive] = useState<boolean>(false);
+  const fatigueAssessment = assessFatigueAndDeload(getCompletedWorkoutLogs());
+  const [isDeloadActive, setIsDeloadActive] = useState<boolean>(
+    () => fatigueAssessment.needsDeload
+  );
 
-  // WCAG: Lukk ved Escape-tast
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, { onClose });
 
   const togglePainPoint = (id: PainPointId) => {
     setSelectedPainPoints((prev) =>
@@ -61,10 +61,12 @@ export const PainFilterModal: React.FC<PainFilterModalProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 text-white"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="pain-filter-title"
-        className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4"
+        className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4 focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-850 pb-3 shrink-0">
@@ -90,6 +92,21 @@ export const PainFilterModal: React.FC<PainFilterModalProps> = ({
           </button>
         </div>
 
+        {/* Tretthets- & Deload-anbefaling hvis detektert */}
+        {fatigueAssessment.needsDeload && (
+          <div className="p-3.5 bg-cyan-950/40 border border-cyan-500/50 rounded-2xl shrink-0 flex items-start gap-2.5">
+            <BatteryCharging className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5 animate-pulse" />
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-cyan-200">
+                Foreslått: Aktiv Deload-uke (Superkompensasjon)
+              </p>
+              <p className="text-[11px] text-zinc-300 leading-relaxed">
+                {fatigueAssessment.reason} {fatigueAssessment.suggestedAction}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Velg smertepunkter */}
         <div className="space-y-2 shrink-0">
           <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
@@ -104,9 +121,9 @@ export const PainFilterModal: React.FC<PainFilterModalProps> = ({
                   onClick={() => togglePainPoint(point.id)}
                   role="checkbox"
                   aria-checked={isSelected}
-                  className={`p-2.5 rounded-2xl border text-left transition-all flex items-start gap-2.5 ${
+                  className={`p-3 rounded-2xl border text-left transition-all flex items-start gap-2.5 ${
                     isSelected
-                      ? 'bg-rose-950/40 border-rose-500 text-white shadow-sm ring-1 ring-rose-500/30'
+                      ? 'bg-rose-500/20 border-rose-500/60 text-white shadow-sm'
                       : 'bg-zinc-900/80 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
                   }`}
                 >

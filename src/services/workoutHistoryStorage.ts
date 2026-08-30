@@ -60,3 +60,17 @@ export function migrateWorkoutHistoryKeys(): void {
     // localStorage utilgjengelig (privat modus o.l.) – appen virker uten.
   }
 }
+
+/**
+ * Henter alle fullførte økter fra kanonisk lokal lagring.
+ */
+export function getCompletedWorkoutLogs(): CompletedWorkoutLog[] {
+  try {
+    const raw = localStorage.getItem(WORKOUT_HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}

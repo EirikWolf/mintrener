@@ -20,3 +20,11 @@ export function addWeeksToKey(key: string, n: number): string {
   const [y, m, d] = key.split('-').map(Number);
   return weekKey(new Date(y, m - 1, d + n * 7));
 }
+
+/** 'YYYY-MM-DD' i lokal kalendertid (aldri toISOString — den er UTC). */
+export function toLocalDateString(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}

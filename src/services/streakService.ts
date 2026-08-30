@@ -1,9 +1,9 @@
-import { weekKey, addWeeksToKey } from './weekUtils';
+import { weekKey, addWeeksToKey, toLocalDateString } from './weekUtils';
 import type { CompletedWorkoutLog } from '../types/models';
 
 /**
  * Beregner nåværende streak (antall dager på rad med minst én fullført økt),
- * regnet bakover fra i dag/i går.
+ * regnet bakover fra i dag/i går i brukerens lokale tidssone.
  *
  * Ren, testbar funksjon som tar imot en liste med ISO-datoer (YYYY-MM-DD)
  * i stedet for hele historikkobjekter. Brukes både av WorkoutSummary.tsx
@@ -14,8 +14,8 @@ export function computeStreakDays(dates: string[]): number {
   const uniqueDates = Array.from(new Set(dates)).sort().reverse();
   if (uniqueDates.length === 0) return 0;
 
-  const today = new Date().toISOString().split('T')[0];
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const today = toLocalDateString(new Date());
+  const yesterday = toLocalDateString(new Date(Date.now() - 86400000));
 
   if (!uniqueDates.includes(today) && !uniqueDates.includes(yesterday)) {
     return 0;

@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { PrivacyPolicyModal } from '../legal/PrivacyPolicyModal';
 import { AboutGuideModal } from '../help/AboutGuideModal';
-import { User as UserIcon, LogOut, Trash2, X, Shield, HelpCircle } from 'lucide-react';
+import { OrganizationPortalModal } from '../organization/OrganizationPortalModal';
+import { User as UserIcon, LogOut, Trash2, X, Shield, HelpCircle, Building2 } from 'lucide-react';
 import { showErrorToast } from '../../services/errorToastService';
 
 interface UserMenuProps {
@@ -15,6 +16,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const [isOrgOpen, setIsOrgOpen] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -77,26 +79,26 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
           setIsConfirmingDelete(false);
         }
       }}
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="user-profile-title"
-        className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-6 relative z-[101]"
+        className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-5"
       >
         {/* Header */}
-        <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-          <div id="user-profile-title" className="flex items-center gap-2 text-zinc-400 text-xs font-bold uppercase tracking-wider">
-            <Shield className="w-4 h-4 text-emerald-400" />
-            Min Profil
-          </div>
+        <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+          <h2 id="user-profile-title" className="text-lg font-bold text-white">
+            Din Profil
+          </h2>
           <button
             onClick={() => {
               setIsOpen(false);
               setIsConfirmingDelete(false);
             }}
-            className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800"
+            aria-label="Lukk profil"
+            className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -108,46 +110,56 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
             <img
               src={user.photoURL}
               alt={user.displayName || 'Bruker'}
-              className="w-12 h-12 rounded-full border-2 border-emerald-500"
+              className="w-12 h-12 rounded-full border border-emerald-500"
             />
           ) : (
-            <div className="w-12 h-12 rounded-full bg-emerald-600 flex items-center justify-center text-lg font-black text-white">
+            <div className="w-12 h-12 rounded-full bg-emerald-600 flex items-center justify-center text-lg font-bold text-white">
               {user.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
             </div>
           )}
           <div className="overflow-hidden">
-            <h3 className="font-bold text-white text-base truncate">
+            <p className="font-bold text-sm text-white truncate">
               {user.displayName || 'Navnløs bruker'}
-            </h3>
+            </p>
             <p className="text-xs text-zinc-400 truncate">{user.email}</p>
           </div>
         </div>
 
         {/* Handlinger */}
-        <div className="space-y-2.5 pt-2">
-          {/* Bildekurator */}
+        <div className="space-y-2 pt-2 border-t border-zinc-800">
+          {/* Kurator-snarvei for trenere/innholdsskapere */}
           {onOpenCurator && (
             <button
               onClick={() => {
-                onOpenCurator();
                 setIsOpen(false);
+                onOpenCurator();
               }}
-              className="w-full py-2.5 px-4 rounded-2xl bg-zinc-950/80 hover:bg-zinc-800 text-emerald-400 hover:text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all border border-emerald-900/40"
+              className="w-full py-2.5 px-4 rounded-2xl bg-zinc-950/80 hover:bg-zinc-800 text-amber-400 hover:text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-all border border-amber-900/40"
             >
-              <Shield className="w-3.5 h-3.5 text-cyan-400" />
-              Bildekurator & QA (Kitor)
+              <span>⭐</span>
+              <span>Treningskurator & Validering</span>
             </button>
           )}
 
+          {/* Logg ut */}
           <button
             onClick={() => {
               logout();
               setIsOpen(false);
             }}
-            className="w-full py-3 px-4 rounded-2xl bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-zinc-200 font-bold text-xs flex items-center justify-center gap-2 transition-all"
+            className="w-full py-2.5 px-4 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold flex items-center justify-center gap-2 transition-all"
           >
             <LogOut className="w-4 h-4" />
             Logg ut
+          </button>
+
+          {/* Organisasjon & Bedriftsavtale */}
+          <button
+            onClick={() => setIsOrgOpen(true)}
+            className="w-full py-2.5 px-4 rounded-2xl bg-zinc-950/80 hover:bg-zinc-800 text-blue-400 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all border border-blue-900/40"
+          >
+            <Building2 className="w-3.5 h-3.5" />
+            Bedrift, Kor & Organisasjon
           </button>
 
           {/* Om Min Trener & Veiledning */}
@@ -192,7 +204,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
                 <button
                   onClick={handleDelete}
                   disabled={isDeleting}
-                  className="flex-1 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1"
+                  className="flex-1 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1"
                 >
                   {isDeleting ? 'Sletter...' : 'Ja, slett alt'}
                 </button>
@@ -206,17 +218,16 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
 
   return (
     <>
-      {/* Avatar-knapp i topplinjen */}
       <button
         onClick={() => setIsOpen(true)}
-        aria-label="Åpne brukerprofil"
-        className="relative rounded-full p-0.5 border border-zinc-700 hover:border-emerald-500 transition-all active:scale-95 shadow-sm"
+        aria-label="Profil og innstillinger"
+        className="p-1 rounded-full hover:bg-zinc-800 transition-colors flex items-center gap-2"
       >
         {user.photoURL ? (
           <img
             src={user.photoURL}
             alt={user.displayName || 'Bruker'}
-            className="w-7 h-7 rounded-full object-cover"
+            className="w-7 h-7 rounded-full border border-emerald-500"
           />
         ) : (
           <div className="w-7 h-7 rounded-full bg-emerald-700 flex items-center justify-center text-xs font-bold text-white">
@@ -226,7 +237,12 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
       </button>
 
       {/* Profil Modal (Portal til document.body) */}
-      {typeof document !== 'undefined' && modal && createPortal(modal, document.body)}
+      {typeof document !== 'undefined' && isOpen && createPortal(modal, document.body)}
+
+      {/* Organisasjonsportal Modal */}
+      {isOrgOpen && (
+        <OrganizationPortalModal onClose={() => setIsOrgOpen(false)} />
+      )}
 
       {/* Personvern Modal */}
       {isPrivacyOpen && (

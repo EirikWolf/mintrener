@@ -49,13 +49,26 @@ export const StrengthLoggerModal: React.FC<StrengthLoggerModalProps> = ({
     });
   }, [exerciseId, user]);
 
-  // Hviletimer intervall
+  // Hviletimer med veggklokke-differanse (Date.now()) slik at den overlever bakgrunnsmodus
+  const restTargetTimeRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (restSecondsRemaining !== null && restSecondsRemaining > 0) {
+      if (!restTargetTimeRef.current) {
+        restTargetTimeRef.current = Date.now() + restSecondsRemaining * 1000;
+      }
       restTimerRef.current = window.setInterval(() => {
-        setRestSecondsRemaining((prev) => (prev !== null && prev > 0 ? prev - 1 : 0));
-      }, 1000);
-    } else if (restSecondsRemaining === 0) {
+        if (!restTargetTimeRef.current) return;
+        const diffMs = restTargetTimeRef.current - Date.now();
+        const remaining = Math.max(0, Math.ceil(diffMs / 1000));
+        setRestSecondsRemaining(remaining);
+        if (remaining === 0) {
+          restTargetTimeRef.current = null;
+          if (restTimerRef.current) clearInterval(restTimerRef.current);
+        }
+      }, 500);
+    } else {
+      restTargetTimeRef.current = null;
       if (restTimerRef.current) clearInterval(restTimerRef.current);
     }
     return () => {
@@ -70,7 +83,8 @@ export const StrengthLoggerModal: React.FC<StrengthLoggerModalProps> = ({
     setSets(updated);
 
     if (isNowCompleted) {
-      // Start hviletimer automatisk
+      // Start hviletimer automatisk med ferskt måltidspunkt
+      restTargetTimeRef.current = Date.now() + restDuration * 1000;
       setRestSecondsRemaining(restDuration);
     }
   };

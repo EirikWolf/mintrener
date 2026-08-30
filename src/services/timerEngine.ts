@@ -1,6 +1,7 @@
 import { WorkoutTemplate, TimerState, IntervalPhase } from '../types/workout';
 import { EngineEvent, PersistPayload } from '../types/engineEvents';
 import { InterruptedSession } from './sessionRecoveryService';
+import { loadPersistedSettings, savePersistedSettings } from './settingsStorageService';
 
 // Terskel (sekunder) for å skille normal tick-drift (fanen synlig) fra en reell
 // oppvåkning etter dvale/lomme – under denne kjøres vanlig enkelt-avansement.
@@ -82,6 +83,7 @@ export class TimerEngine {
   constructor(workout: WorkoutTemplate, now: () => number = () => performance.now()) {
     this.now = now;
     this.propWorkout = workout;
+    const initialSettings = loadPersistedSettings();
     this.state = {
       status: 'idle',
       phase: 'prepare',
@@ -91,10 +93,10 @@ export class TimerEngine {
       phaseRemaining: workout.prepareDurationSeconds,
       totalElapsed: 0,
       isLocked: false,
-      soundEnabled: true,
-      vibrateEnabled: true,
-      wakeLockEnabled: true,
-      speechEnabled: true,
+      soundEnabled: initialSettings.soundEnabled,
+      vibrateEnabled: initialSettings.vibrateEnabled,
+      wakeLockEnabled: initialSettings.wakeLockEnabled,
+      speechEnabled: initialSettings.speechEnabled,
       motionReps: 0,
       activeWorkout: workout,
       phaseStartTime: 0,
@@ -747,11 +749,13 @@ export class TimerEngine {
 
   setSoundEnabled(v: boolean): void {
     this.state.soundEnabled = v;
+    savePersistedSettings({ soundEnabled: v });
     this.notifySnapshotIfChanged();
   }
 
   setVibrateEnabled(v: boolean): void {
     this.state.vibrateEnabled = v;
+    savePersistedSettings({ vibrateEnabled: v });
     this.notifySnapshotIfChanged();
   }
 
@@ -759,12 +763,14 @@ export class TimerEngine {
     // wakeLockService.request/releaseLock eies av hook-bindingen (α5) — motoren
     // er rammeverksfri og holder kun flagget.
     this.state.wakeLockEnabled = v;
+    savePersistedSettings({ wakeLockEnabled: v });
     this.notifySnapshotIfChanged();
   }
 
   setSpeechEnabled(v: boolean): void {
     // speechService.setEnabled eies av hook-bindingen (α5).
     this.state.speechEnabled = v;
+    savePersistedSettings({ speechEnabled: v });
     this.notifySnapshotIfChanged();
   }
 

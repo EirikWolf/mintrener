@@ -14,6 +14,7 @@ import {
   Lock,
   Sparkles,
   BookOpen,
+  GraduationCap,
 } from 'lucide-react';
 
 interface AboutGuideModalProps {
@@ -21,7 +22,7 @@ interface AboutGuideModalProps {
 }
 
 export const AboutGuideModal: React.FC<AboutGuideModalProps> = ({ onClose }) => {
-  const [activeSection, setActiveSection] = useState<'oversikt' | 'funksjoner' | 'tips' | 'om'>('oversikt');
+  const [activeSection, setActiveSection] = useState<'oversikt' | 'funksjoner' | 'tips' | 'basis' | 'om'>('oversikt');
 
   // WCAG: Lukk ved trykk på Escape-tast
   React.useEffect(() => {
@@ -66,7 +67,7 @@ export const AboutGuideModal: React.FC<AboutGuideModalProps> = ({ onClose }) => 
         </div>
 
         {/* Fanevelger */}
-        <div className="grid grid-cols-4 p-1 bg-zinc-950 rounded-2xl border border-zinc-800 shrink-0 text-center text-xs font-bold">
+        <div className="grid grid-cols-5 p-1 bg-zinc-950 rounded-2xl border border-zinc-800 shrink-0 text-center text-[10px] sm:text-xs font-bold gap-0.5">
           <button
             onClick={() => setActiveSection('oversikt')}
             className={`py-1.5 rounded-xl transition-all ${
@@ -90,6 +91,14 @@ export const AboutGuideModal: React.FC<AboutGuideModalProps> = ({ onClose }) => 
             }`}
           >
             Tips
+          </button>
+          <button
+            onClick={() => setActiveSection('basis')}
+            className={`py-1.5 rounded-xl transition-all ${
+              activeSection === 'basis' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            Kunnskap
           </button>
           <button
             onClick={() => setActiveSection('om')}
@@ -238,7 +247,103 @@ export const AboutGuideModal: React.FC<AboutGuideModalProps> = ({ onClose }) => 
             </div>
           )}
 
-          {/* 4. OM APPEN & PERSONVERN */}
+          {/* 4. DOKUMENTERT KUNNSKAPSGRUNNLAG (BASIS) */}
+          {activeSection === 'basis' && (
+            <div className="space-y-3">
+              <div className="p-3.5 bg-gradient-to-br from-indigo-950/40 to-zinc-900 border border-indigo-800/40 rounded-2xl space-y-1.5">
+                <div className="flex items-center gap-1.5 text-indigo-400 font-bold text-xs uppercase tracking-wider">
+                  <GraduationCap className="w-4 h-4" />
+                  Dokumentert kunnskapsgrunnlag (basis)
+                </div>
+                <p className="text-[11px] text-zinc-300">
+                  Alle treningsprogrammer, progresjonsstiger og moduler i <strong>Min Trener</strong> er forankret i fagfellevurdert vitenskapelig litteratur og etablerte kliniske standarder.
+                </p>
+              </div>
+
+              {/* Otago & Fallforebygging */}
+              <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-amber-400 uppercase tracking-wide">
+                    Senior & Fallforebygging (Otago)
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 font-bold">
+                    Sherrington 2019
+                  </span>
+                </div>
+                <p className="text-[11px] font-semibold text-white">
+                  Otago Exercise Programme & Cochrane Systematic Review
+                </p>
+                <p className="text-[10px] text-zinc-400 leading-normal">
+                  <strong>Kilder:</strong> Sherrington, C., et al. (2019). <em>Exercise for preventing falls in older people living in the community</em> (Cochrane Database of Systematic Reviews). Campbell, A. J., & Robertson, M. C. (Otago Exercise Programme).
+                </p>
+                <p className="text-[10px] text-zinc-300">
+                  <strong>Anvendelse i appen:</strong> Senior-programmene våre («Stolen 10», «Stolen 15», «Reis Deg!», «Balanse ved Stolen») implementerer OEP-øvelser for beinstyrke (knestrekk, tåhev, reise seg) og 3D-balanse (tandemstand, ettbeinsstand, sidesteg) som dokumentert reduserer fallrisiko med 34–40 % hos hjemmeboende eldre.
+                </p>
+              </div>
+
+              {/* FIFA 11+ & Idrett */}
+              <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-emerald-400 uppercase tracking-wide">
+                    Idrett & Skadeforebygging (FIFA 11+)
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-bold">
+                    FIFA 11+
+                  </span>
+                </div>
+                <p className="text-[11px] font-semibold text-white">
+                  Nevromuskulær kontroll, lyskestyrke & hamstring
+                </p>
+                <p className="text-[10px] text-zinc-400 leading-normal">
+                  <strong>Kilder:</strong> Bizzini, M., & Dvorak, J. (2015). <em>FIFA 11+: an effective programme to prevent football injuries in various player groups</em> (BJSM). Thorborg, K., et al. (2017).
+                </p>
+                <p className="text-[10px] text-zinc-300">
+                  <strong>Anvendelse i appen:</strong> Idrettslag-modulene («Skadeforebygging Ballspill», «Lagoppvarming 8 min») integrerer eksentrisk hamstringstyrke (Nordic Hamstring), adduktorkraft (Copenhagen-planke), kjerne og kontrollerte ettbeins-landinger for å halvere skaderisikoen for knær (ACL) og lyske.
+                </p>
+              </div>
+
+              {/* Styrke & Hypertrofi (Iversen 2021 & Schoenfeld) */}
+              <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-cyan-400 uppercase tracking-wide">
+                    Styrke & Hypertrofi (2–4 dager)
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 font-bold">
+                    Iversen 2021
+                  </span>
+                </div>
+                <p className="text-[11px] font-semibold text-white">
+                  Tidseffektiv styrketrening, frekvens og dobbel progresjon
+                </p>
+                <p className="text-[10px] text-zinc-400 leading-normal">
+                  <strong>Kilder:</strong> Iversen, V. M., et al. (2021). <em>No Time to Lift? Designing Time-Efficient Training Programs for Strength and Hypertrophy</em> (Sports Med). Schoenfeld, B. J., et al. (2016). <em>Effects of Resistance Training Frequency</em>.
+                </p>
+                <p className="text-[10px] text-zinc-300">
+                  <strong>Anvendelse i appen:</strong> «Sterkere 12 uker» (2-, 3- og 4-dagers ukemaler) og styrkeloggen utnytter flerleddsøvelser og fasestyrt periodisering (Hypertrofi → Styrke → Topping → Deload) med autoregulert RIR/RPE for maksimalt utbytte på minimal tid.
+                </p>
+              </div>
+
+              {/* Kor, Pust & Holdning */}
+              <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-purple-400 uppercase tracking-wide">
+                    Pust, Holdning & Stemmehelse (Kor)
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20 font-bold">
+                    Fysiologisk pust
+                  </span>
+                </div>
+                <p className="text-[11px] font-semibold text-white">
+                  Diafragmakontroll, bokspust og postural muskelavspenning
+                </p>
+                <p className="text-[10px] text-zinc-300">
+                  <strong>Anvendelse i appen:</strong> Kor- og musikerprogrammene («Koroppvarming 3/5 min», «Pusten & Diafragma», «Blåsere & Strykere») kombinerer 4-4-8 bokspust, expiratory resistance og mobilitet for brystkasse og nakke for optimal fonasjon og stressreduksjon.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* 5. OM APPEN & PERSONVERN */}
           {activeSection === 'om' && (
             <div className="space-y-3">
               <div className="p-3.5 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-2">

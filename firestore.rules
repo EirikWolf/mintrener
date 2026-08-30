@@ -32,6 +32,10 @@ service cloud.firestore {
       match /strength_logs/{logId} {
         allow read, write: if isOwner(userId);
       }
+
+      match /personal_records/{recordId} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
     // Felles øvelsesbibliotek: Alle kan lese, kun backend/admin kan endre
@@ -42,8 +46,10 @@ service cloud.firestore {
 
     // Grupperom: Sikret tilgangskontroll
     match /rooms/{roomId} {
-      // Alle med romkoden kan lese rommet
-      allow read: if true;
+      // Alle med romkoden kan lese rommet direkte (get), men samlingen kan IKKE listes (list)
+      // for å forhindre skraping av rom og vertsinformasjon (revisjon 2026-08-30).
+      allow get: if true;
+      allow list: if false;
 
       // Kun innlogget/anonym bruker kan opprette som vert
       allow create: if isAuthenticated() 

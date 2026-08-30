@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { ExerciseItem } from '../../schemas/exerciseSchema';
-import { Dumbbell, Eye, Maximize2, ExternalLink, X } from 'lucide-react';
+import { Dumbbell, Eye, Maximize2, ExternalLink, X, Film, Image as ImageIcon } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface ExerciseIllustrationProps {
   exercise: ExerciseItem;
@@ -16,21 +17,129 @@ export const ExerciseIllustration: React.FC<ExerciseIllustrationProps> = ({
   enableZoom = true,
 }) => {
   const [imageError, setImageError] = useState(false);
+  const [videoError, setVideoError] = useState(false);
+  const [viewMode, setViewMode] = useState<'video' | 'image'>(() => (exercise.videoUrl ? 'video' : 'image'));
   const [isZoomed, setIsZoomed] = useState(false);
+  const lightboxRef = useRef<HTMLDivElement>(null);
 
-  // Filstier (sjekker først om det finnes generert bilde for øvelsen og fasen)
+  useFocusTrap(lightboxRef, { isActive: isZoomed, onClose: () => setIsZoomed(false) });
+
+  // Filstier (sjekker video og generert bilde for øvelsen og fasen)
+  const videoUrl = exercise.videoUrl || `/videos/exercises/${exercise.id}.mp4`;
   const imageUrl = exercise.bildeUrl || `/images/exercises/${exercise.id}-${phaseIndex}.png?v=20260827_2`;
+  const isVideoAvailable = !videoError && (Boolean(exercise.videoUrl) || viewMode === 'video');
   const isImageReady = !imageError;
 
-  // Lukk ved Escape-tast
-  useEffect(() => {
-    if (!isZoomed) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsZoomed(false);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isZoomed]);
+  if (viewMode === 'video' && isVideoAvailable) {
+    return (
+      <>
+        <div
+          className={`relative overflow-hidden rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center group ${className}`}
+        >
+          <video
+            src={videoUrl}
+            poster={imageUrl}
+            autoPlay
+            loop
+            muted
+            playsInline
+            onError={() => {
+              setVideoError(true);
+              setViewMode('image');
+            }}
+            className="w-full h-full object-contain max-h-72 drop-shadow-md"
+          />
+
+          <div className="absolute bottom-2 left-2 px-2.5 py-0.5 rounded-full bg-zinc-950/85 backdrop-blur-md border border-zinc-800 text-[10px] font-bold text-emerald-400 flex items-center gap-1 shadow-sm pointer-events-none">
+            <Film className="w-3 h-3" />
+            <span>Kitor Film ({exercise.bildeVinkel || 'side'})</span>
+          </div>
+
+          <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setViewMode('image');
+              }}
+              title="Bytt til stillbilder"
+              aria-label="Bytt til stillbilder"
+              className="p-1.5 rounded-full bg-zinc-950/80 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 shadow-md transition-all text-xs flex items-center gap-1"
+            >
+              <ImageIcon className="w-3.5 h-3.5" />
+            </button>
+            {enableZoom && (
+              <button
+                type="button"
+                onClick={() => setIsZoomed(true)}
+                title="Forstørr"
+                aria-label="Forstørr"
+                className="p-1.5 rounded-full bg-zinc-950/80 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800 shadow-md transition-all"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Fullskjerm / Zoom modal (Lightbox) */}
+        {isZoomed && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in"
+            onClick={() => setIsZoomed(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Forstørret video av ${exercise.navn.nb}`}
+          >
+            <div
+              ref={lightboxRef}
+              tabIndex={-1}
+              className="relative max-w-2xl w-full max-h-[90vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-4 flex flex-col items-center gap-3 shadow-2xl overflow-hidden focus:outline-none"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Topplinje */}
+              <div className="w-full flex items-center justify-between border-b border-zinc-800 pb-2">
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
+                    <Film className="w-4 h-4 text-emerald-400" />
+                    <span>{exercise.navn.nb}</span>
+                  </h3>
+                  <p className="text-[10px] text-zinc-400 capitalize">
+                    {exercise.kategori} • {exercise.bildeVinkel || 'side'}vinkel
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setIsZoomed(false)}
+                    title="Lukk forstørret visning (Esc)"
+                    aria-label="Lukk forstørret visning"
+                    className="p-2 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-all"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Forstørret video */}
+              <div className="w-full flex-1 min-h-[300px] max-h-[70vh] flex items-center justify-center overflow-hidden rounded-2xl bg-zinc-950 border border-zinc-800/80 p-2">
+                <video
+                  src={videoUrl}
+                  poster={imageUrl}
+                  autoPlay
+                  loop
+                  muted
+                  controls
+                  playsInline
+                  className="max-h-[65vh] w-auto object-contain rounded-xl drop-shadow-2xl select-auto"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
 
   if (isImageReady) {
     return (

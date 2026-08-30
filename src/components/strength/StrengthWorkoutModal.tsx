@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StrengthProgramTemplate, StrengthSetLog } from '../../schemas/strengthSchema';
 import { EXERCISE_LIBRARY } from '../../data/exercises';
 import { ExerciseIllustration } from '../exercises/ExerciseIllustration';
@@ -84,22 +84,41 @@ export const StrengthWorkoutModal: React.FC<StrengthWorkoutModalProps> = ({
   const activeExercise = exercises[activeExerciseIndex];
   const exerciseObj = EXERCISE_LIBRARY.find((e) => e.id === activeExercise?.exerciseId) || EXERCISE_LIBRARY[0];
 
-  // Hviletimer-teller
+  const restTargetTimeRef = useRef<number | null>(null);
+  const lastBeepSecondRef = useRef<number | null>(null);
+
+  // Hviletimer basert på veggklokke (Date.now()) slik at den overlever bakgrunnsmodus
   useEffect(() => {
-    if (restSecondsRemaining === null || restSecondsRemaining <= 0) return;
+    if (restSecondsRemaining === null || restSecondsRemaining <= 0) {
+      restTargetTimeRef.current = null;
+      lastBeepSecondRef.current = null;
+      return;
+    }
+
+    if (!restTargetTimeRef.current) {
+      restTargetTimeRef.current = Date.now() + restSecondsRemaining * 1000;
+    }
 
     const timer = setInterval(() => {
-      setRestSecondsRemaining((prev) => {
-        if (prev === null || prev <= 1) {
-          audioService.playWorkStart(true);
-          return null;
-        }
-        if (prev <= 3) {
-          audioService.playCountdownBeep(true);
-        }
-        return prev - 1;
-      });
-    }, 1000);
+      if (!restTargetTimeRef.current) return;
+      const diffMs = restTargetTimeRef.current - Date.now();
+      const remaining = Math.max(0, Math.ceil(diffMs / 1000));
+
+      if (remaining <= 0) {
+        audioService.playWorkStart(true);
+        restTargetTimeRef.current = null;
+        lastBeepSecondRef.current = null;
+        setRestSecondsRemaining(null);
+        return;
+      }
+
+      if (remaining <= 3 && lastBeepSecondRef.current !== remaining) {
+        lastBeepSecondRef.current = remaining;
+        audioService.playCountdownBeep(true);
+      }
+
+      setRestSecondsRemaining(remaining);
+    }, 250);
 
     return () => clearInterval(timer);
   }, [restSecondsRemaining]);

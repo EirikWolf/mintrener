@@ -270,7 +270,7 @@ describe('WorkoutSummary — milepælsfeiring og konto-prompt (C1/C2 Task 9)', (
 
       // 1 historisk økt + denne = 2 økter; currentWeeks = 2 fra computeWeekStreak
       expect(
-        screen.getByText('2 økter og 2 uker på rad — sikre serien med en konto?')
+        screen.getByText('2 økter og 2 uker på rad — vil du synkronisere fremgangen med en konto?')
       ).toBeInTheDocument();
       expect(screen.queryByText(FIRST_WORKOUT_TEXT)).not.toBeInTheDocument();
       expect(recordEngagementEvent).toHaveBeenCalledWith('accountPrompt_week2_shown');

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Play, Square, Check, Mic } from 'lucide-react';
 import {
   COACH_PERSONAS,
@@ -9,6 +9,7 @@ import {
   playPersonaPreview,
   stopCurrentPersonaAudio
 } from '../../services/coachPersonaService';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface CoachPersonaModalProps {
   onClose: () => void;
@@ -17,6 +18,9 @@ interface CoachPersonaModalProps {
 export const CoachPersonaModal: React.FC<CoachPersonaModalProps> = ({ onClose }) => {
   const [selectedPersona, setSelectedPersona] = useState<CoachPersonaId>(getActiveCoachPersona);
   const [playingId, setPlayingId] = useState<CoachPersonaId | null>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(modalRef, { onClose });
 
   useEffect(() => {
     return () => {
@@ -61,7 +65,11 @@ export const CoachPersonaModal: React.FC<CoachPersonaModalProps> = ({ onClose })
       aria-labelledby="coach-persona-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
     >
-      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4 shadow-2xl flex flex-col max-h-[90vh]">
+      <div
+        ref={modalRef}
+        tabIndex={-1}
+        className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4 shadow-2xl flex flex-col max-h-[90vh] focus:outline-none"
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
           <div className="flex items-center gap-2">
@@ -72,7 +80,7 @@ export const CoachPersonaModal: React.FC<CoachPersonaModalProps> = ({ onClose })
               <h2 id="coach-persona-title" className="text-base font-black text-white">
                 Trenerstemmer & Dialekter
               </h2>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-xs text-zinc-400">
                 Velg personlighet, dialekt og energi under øktene
               </p>
             </div>
@@ -87,7 +95,7 @@ export const CoachPersonaModal: React.FC<CoachPersonaModalProps> = ({ onClose })
         </div>
 
         {/* Personaer Liste */}
-        <div className="space-y-2.5 overflow-y-auto pr-1 flex-1">
+        <div role="radiogroup" aria-label="Velg trenerstemme" className="space-y-2.5 overflow-y-auto pr-1 flex-1">
           {COACH_PERSONAS.map((persona) => {
             const isSelected = selectedPersona === persona.id;
             const isPlaying = playingId === persona.id;
@@ -95,8 +103,17 @@ export const CoachPersonaModal: React.FC<CoachPersonaModalProps> = ({ onClose })
             return (
               <div
                 key={persona.id}
+                role="radio"
+                aria-checked={isSelected}
+                tabIndex={0}
                 onClick={() => handleSelect(persona.id)}
-                className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col gap-2 ${
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleSelect(persona.id);
+                  }
+                }}
+                className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
                   isSelected
                     ? 'bg-amber-950/40 border-amber-500/80 shadow-md ring-1 ring-amber-500/30'
                     : 'bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-800/60 hover:border-zinc-700'
@@ -108,12 +125,12 @@ export const CoachPersonaModal: React.FC<CoachPersonaModalProps> = ({ onClose })
                     <span className="text-2xl shrink-0">{persona.icon}</span>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <p className="text-xs font-black text-white truncate">{persona.name}</p>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-md font-bold bg-zinc-800 text-zinc-300 border border-zinc-700">
+                        <p className="text-sm font-black text-white truncate">{persona.name}</p>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-zinc-800 text-zinc-300 border border-zinc-700">
                           {persona.badge}
                         </span>
                       </div>
-                      <p className="text-[10px] text-zinc-400 truncate">{persona.dialectOrStyle}</p>
+                      <p className="text-xs text-zinc-400 truncate">{persona.dialectOrStyle}</p>
                     </div>
                   </div>
 

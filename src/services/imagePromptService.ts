@@ -2,13 +2,19 @@ import { ExerciseItem } from '../schemas/exerciseSchema';
 
 /**
  * Kanonisk stilmal for Min Trener (Flux.1 Dev + Astrid LoRA)
- * Kombinerer atletisk form, bevegelse og svetteglans med et varmt, motiverende smil og treningsglede!
+ * Kombinerer anatomisk presisjon, atletisk form, bevegelse og svetteglans med et varmt, motiverende smil og treningsglede!
  */
 export const ASTRID_FLUX_BASE_STYLE =
-  'ASTRID, a woman, full body shot from head to feet completely visible within frame, wide angle view, no cropping, dynamic athletic fitness photography of an athletic woman actively exercising with physical exertion, light sweat sheen on sun-tanned skin, golden tan, engaged core, tense flexed muscles, warm confident encouraging smile, radiant positive workout energy, joy of training';
+  'fitness photography, full body shot completely visible within frame, light sweat sheen on sun-tanned skin, golden tan, engaged core, tense flexed muscles, warm confident encouraging smile, radiant workout energy, joy of training';
 
 export const ASTRID_FLUX_OUTFIT_STYLE =
   'in a bright modern gym, wearing a charcoal modern seamless cropped racerback sports bra and matching high-waist ribbed leggings, black training shoes, natural athletic lighting, sharp focus';
+
+/**
+ * Kanonisk stilmal for Wan2.1 I2V (Image-to-Video) animering på Kitor
+ */
+export const ASTRID_WAN_VIDEO_BASE_STYLE =
+  'seamless fluid biomechanical loop of athletic woman exercising with perfect exercise form, smooth dynamic motion, stable camera perspective, high frame rate, photorealistic fitness demonstration';
 
 export interface ComfyPromptJob {
   exerciseId: string;
@@ -21,7 +27,22 @@ export interface ComfyPromptJob {
 }
 
 /**
- * Bygger en fullstendig ComfyUI prompt-jobb for en gitt øvelse og fase
+ * Formaterer kameravinkel for diffusion-prompter
+ */
+export function formatViewAngle(viewAngle?: 'front' | 'side' | 'skrå'): string {
+  if (viewAngle === 'skrå') {
+    return 'three-quarter front-diagonal view';
+  }
+  if (viewAngle === 'front') {
+    return 'front view';
+  }
+  return 'side profile view';
+}
+
+/**
+ * Bygger en fullstendig ComfyUI prompt-jobb for en gitt øvelse og fase.
+ * Viktig: Handling og positur settes FØRST i prompten slik at diffusjonsmodellen
+ * prioriterer den nøyaktige kroppsstillingen (f.eks. sittende på stol).
  */
 export function buildComfyPromptJob(
   exercise: ExerciseItem,
@@ -34,7 +55,8 @@ export function buildComfyPromptJob(
       : `${exercise.navn.en || exercise.navn.nb} execution step ${phaseIndex + 1}`;
 
   const viewAngle = exercise.bildeVinkel || 'side';
-  const positivePrompt = `${ASTRID_FLUX_BASE_STYLE}, ${specificAction}, ${ASTRID_FLUX_OUTFIT_STYLE}, ${viewAngle} view`;
+  const angleStr = formatViewAngle(viewAngle);
+  const positivePrompt = `ASTRID, a woman, ${specificAction}, ${angleStr}, ${ASTRID_FLUX_BASE_STYLE}, ${ASTRID_FLUX_OUTFIT_STYLE}`;
 
   return {
     exerciseId: exercise.id,
@@ -68,4 +90,189 @@ export function exportAllExercisePromptJobs(
   }
 
   return jobs;
+}
+
+/**
+ * Bygger en standard Flux.1 Dev + Astrid LoRA workflow for ComfyUI API
+ */
+export function buildAstridFluxWorkflow(
+  promptText: string,
+  seed: number,
+  filenamePrefix: string,
+  options: { width?: number; height?: number; steps?: number; guidance?: number } = {}
+) {
+  const width = options.width ?? 896;
+  const height = options.height ?? 1152;
+  const steps = options.steps ?? 24;
+  const guidance = options.guidance ?? 3.5;
+
+  return {
+    "1": {
+      "inputs": {
+        "unet_name": "flux1-dev-fp8.safetensors",
+        "weight_dtype": "fp8_e4m3fn"
+      },
+      "class_type": "UNETLoader"
+    },
+    "2": {
+      "inputs": {
+        "clip_name1": "clip_l.safetensors",
+        "clip_name2": "t5xxl_fp8_e4m3fn.safetensors",
+        "type": "flux"
+      },
+      "class_type": "DualCLIPLoader"
+    },
+    "3": {
+      "inputs": {
+        "vae_name": "ae.safetensors"
+      },
+      "class_type": "VAELoader"
+    },
+    "4": {
+      "inputs": {
+        "lora_name": "synthiq/astrid_k.safetensors",
+        "strength_model": 1.0,
+        "model": ["1", 0]
+      },
+      "class_type": "LoraLoaderModelOnly"
+    },
+    "5": {
+      "inputs": {
+        "text": promptText,
+        "clip": ["2", 0]
+      },
+      "class_type": "CLIPTextEncode"
+    },
+    "6": {
+      "inputs": {
+        "width": width,
+        "height": height,
+        "batch_size": 1
+      },
+      "class_type": "EmptyLatentImage"
+    },
+    "7": {
+      "inputs": {
+        "guidance": guidance,
+        "conditioning": ["5", 0]
+      },
+      "class_type": "FluxGuidance"
+    },
+    "8": {
+      "inputs": {
+        "seed": seed,
+        "steps": steps,
+        "cfg": 1.0,
+        "sampler_name": "euler",
+        "scheduler": "simple",
+        "denoise": 1.0,
+        "model": ["4", 0],
+        "positive": ["7", 0],
+        "negative": ["5", 0],
+        "latent_image": ["6", 0]
+      },
+      "class_type": "KSampler"
+    },
+    "9": {
+      "inputs": {
+        "samples": ["8", 0],
+        "vae": ["3", 0]
+      },
+      "class_type": "VAEDecode"
+    },
+    "10": {
+      "inputs": {
+        "filename_prefix": `mintrener/library/${filenamePrefix}`,
+        "images": ["9", 0]
+      },
+      "class_type": "SaveImage"
+    }
+  };
+}
+
+/**
+ * Bygger en Wan2.1 I2V (Image-to-Video) videoanimasjons-workflow for ComfyUI API
+ */
+export function buildAstridWanVideoWorkflow(
+  inputImageFilename: string,
+  motionPromptText: string,
+  seed: number,
+  filenamePrefix: string,
+  options: { numFrames?: number; fps?: number } = {}
+) {
+  const numFrames = options.numFrames ?? 33;
+  const fps = options.fps ?? 16;
+
+  return {
+    "1": {
+      "inputs": {
+        "image": inputImageFilename,
+        "upload": "image"
+      },
+      "class_type": "LoadImage"
+    },
+    "2": {
+      "inputs": {
+        "unet_name": "wan2.1_i2v_480p_14B_fp8.safetensors"
+      },
+      "class_type": "UNETLoader"
+    },
+    "3": {
+      "inputs": {
+        "clip_name": "umt5_xxl_fp8_e4m3fn.safetensors",
+        "type": "wan"
+      },
+      "class_type": "CLIPLoader"
+    },
+    "4": {
+      "inputs": {
+        "vae_name": "wan2.1_vae.safetensors"
+      },
+      "class_type": "VAELoader"
+    },
+    "5": {
+      "inputs": {
+        "text": `${ASTRID_WAN_VIDEO_BASE_STYLE}, ${motionPromptText}`,
+        "clip": ["3", 0]
+      },
+      "class_type": "CLIPTextEncode"
+    },
+    "6": {
+      "inputs": {
+        "pixels": ["1", 0],
+        "vae": ["4", 0]
+      },
+      "class_type": "VAEEncode"
+    },
+    "7": {
+      "inputs": {
+        "seed": seed,
+        "steps": 20,
+        "cfg": 6.0,
+        "sampler_name": "euler",
+        "scheduler": "simple",
+        "denoise": 1.0,
+        "model": ["2", 0],
+        "positive": ["5", 0],
+        "latent_image": ["6", 0],
+        "length": numFrames
+      },
+      "class_type": "KSampler"
+    },
+    "8": {
+      "inputs": {
+        "samples": ["7", 0],
+        "vae": ["4", 0]
+      },
+      "class_type": "VAEDecode"
+    },
+    "9": {
+      "inputs": {
+        "filename_prefix": `mintrener/videos/${filenamePrefix}`,
+        "fps": fps,
+        "images": ["8", 0]
+      },
+      "class_type": "VHS_VideoCombine"
+    }
+  };
 }

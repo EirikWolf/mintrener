@@ -88,7 +88,7 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
   const colors = getPhaseColors();
 
   return (
-    <div className="relative flex items-center justify-center w-full max-w-[240px] xs:max-w-[270px] sm:max-w-[320px] aspect-square mx-auto select-none">
+    <div className="relative flex items-center justify-center w-full max-w-[220px] xs:max-w-[260px] sm:max-w-[300px] md:max-w-[340px] landscape:max-h-[46vh] landscape:max-w-[46vh] aspect-square mx-auto select-none">
       <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
         {/* Bakgrunnsspor */}
         <circle
@@ -134,10 +134,10 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
         aria-label={`${remainingSeconds} sekunder igjen`}
         className="absolute inset-0 flex flex-col items-center justify-center text-center"
       >
-        <span className={`font-mono text-7xl sm:text-8xl md:text-9xl font-black tracking-tight ${colors.text} drop-shadow-lg`}>
+        <span className={`font-mono tabular-nums text-6xl xs:text-7xl sm:text-8xl md:text-9xl font-black tracking-tight ${colors.text} drop-shadow-lg leading-none`}>
           {remainingSeconds}
         </span>
-        <span className="text-xs uppercase tracking-widest text-zinc-400 font-bold mt-1">
+        <span className="text-[10px] xs:text-xs uppercase tracking-widest text-zinc-400 font-bold mt-1">
           sekunder
         </span>
       </div>

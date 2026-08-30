@@ -235,7 +235,7 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
 
   const accountPromptText =
     accountPromptMoment === 'week2' && weekStreak
-      ? `${historyCount} økter og ${weekStreak.currentWeeks} uker på rad — sikre serien med en konto?`
+      ? `${historyCount} økter og ${weekStreak.currentWeeks} uker på rad — vil du synkronisere fremgangen med en konto?`
       : 'Vil du ta vare på fremgangen din på tvers av enheter?';
 
   const handleRate = async (rating: 'for_lett' | 'passe' | 'for_tungt') => {

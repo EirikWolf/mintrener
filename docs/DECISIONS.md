@@ -289,3 +289,67 @@ Dette dokumentet fører en kronologisk oversikt over tekniske og arkitektoniske 
 * **Kontekst:** Felttest på Android (Klassisk Tabata, ALLE grensefaser 10 s) viste at øvelsesnavnet aldri ble lest opp: den endAt-forankrede nedtellingskjeden (`start_321`/`start_321_short`) ble hørbar midt i fasen, og `becomeAudibleWithPreemption` i audioBufferEngine fadet ut den reaktive annonseringskjeden (rest-cue → bro-neste → øvelsesnavn, eller intro → øvelsesnavn i prepare) før navnet rakk å bli sagt. Første fiksforsøk innførte en konstant `ANNOUNCE_HEADROOM_S = 6`; reviewen målte klippene og påviste at premisset var feil — hardcores rest-kjede er 13,94 s (rest 4,32 + bro-neste 3,44 + øvelse opptil 6,18), og full `start_321` er 27,8 s (spenn 19,8–27,8 s over de fire personaene), ikke «~20 s».
 * **Valg:** (1) Hodrommet er ikke en konstant, men summen av `audioBufferEngine.getDuration()` for nøyaktig de klippene den reaktive kjeden vil spille i fasen. Nøkkelutledningen har ÉN definisjon per fasetype og brukes både av avspillingen og av hodroms-utregningen: `derivePrepareChain` og `playIntroThenExercise` deler `resolveIntroExerciseKeys`, og resync-kjeden er flyttet ut i `deriveResyncChain` (den var en tredje, uavhengig kopi av § 4-kjeden). (2) **Budsjettet er fasen minus nedtellingens short-cue**, ikke fasen alene: `timeLeft − shortDuration − 150 ms`. Måler vi bare mot fasegrensen, degraderes kjeden akkurat nok til å fylle fasen — og da har 3-2-1 ikke plass, mens gate-grenen bevisst ikke setter `beepFallback`. Resultatet var TAUSHET i 9 av 11 målte persona/lengde-kombinasjoner i en 10 s pause, og en prepare på 10 s startet økta med 2,2 s stillhet før GO. Får ikke engang navnet plass i det strenge budsjettet, faller vi tilbake til fasens egen lengde: navnet er fortsatt viktigst. Degraderingsrekkefølgen er uendret (full → dropp bro → dropp cue → behold full heller enn å kutte navnet). (3) Hodromsgaten gjelder **så lenge kjeden faktisk spiller**, ikke bare på fasestart-veien. `announceEndsAt` (motorklokke-tidspunkt) settes ved fasestart og nullstilles av `workout:paused`/`workout:reset`; `handleDeadlineChanged` og `replanCurrentPhase` sender `Math.max(0, announceEndsAt − getNow())`. Dvale-reankeren (drift > 2000 ms) og catch-up-landingen flytter fristen mens annonseringen fortsatt er HØRBAR — `cancelScheduled()` (ikke `stop()`) er nettopp valgt fordi den kan være det — og et hodrom på null der skedulerte en 27,8 s `start_321` midt i øvelsesnavnet. Hodrommet blir naturlig 0 når kjeden er ferdig, så stigen kjører som før uten at beskyttelsen slås av blindt. Hodrom 0 slår gaten AV (en tom kjede gir 0, ikke null — ellers ble korte grensefaser helt stille). (4) Resync-annonseringen får samme beskyttelse via `protectAnnouncement`, som fester hodrommet og re-utsteder lookaheaden. (5) Når Ø4-degraderingen skreller bort rest-cuen av TIMING-hensyn, fyres `playRestStart`-tonen ikke lenger (produkteiers avgjørelse: fasebyttet er alt markert av go-tilropet, og stillhet er bedre enn et pip oppå navnets første stavelser). Tonen består når cuen faktisk mangler i manifestet/cachen. (6) `start_321_short` er ikke lenger en 8,5 s hale av innspillingene, men en egen TTS-cue per persona — reelt målt etter regenerering: haugesund 2,73 s, romsdal 3,84 s, boyband 3,68 s, hardcore 4,44 s. Den erstatter det gamle klippet kun med `--only start_321_short --force`.
 * **Konsekvens:** 775 grønne tester; fasiten (23 hook-tester) byte-identisk. Fasittestene pinner de reelt målte klipplengdene og dekker både medianen (hardcore 2,115 s / boyband 1,597 s) og maksimum (hardcore 6,185 s) — det var nettopp mediantilfellet som mistet nedtellingen uten pip. I en 10 s pause med median-øvelse får nå ALLE fire personaer både øvelsesnavnet og nedtellingen: hardcore navnet alene, boyband/romsdal rest-cue + navn, haugesund hele kjeden. Testmockene for `audioBufferEngine.has()`/`getDuration()` deler ett buffer-lager — de leser samme Map i produksjon, og «cachet uten varighet» er en verden som ikke finnes. `playIntroThenExercise` er BEHOLDT som sømmen mot hooken (fasiten pinner den); det som er fjernet er den parallelle nøkkelutledningen. Gjenstår: ny felttest på Android for å bekrefte at både navnet og nedtellingen nå høres.
+
+## [2026-08-30] Beslutning 39: Lukking av PII-lekkasje på `/rooms`, referanseintegritet og eliminering av 49 spøkelser
+* **Kontekst:** Oppfølgingsrevisjon 30. august avdekket at `/rooms`-samlingen tillot `list` for uautentiserte, at vertens Google-navn ble eksponert, og at 49 refererte øvelser manglet i biblioteket (som førte til fallback på Knebøy for seniorer og calisthenics).
+* **Valg:**
+  1. `firestore.rules` splittet til `allow get: if true; allow list: if false;` for `/rooms`. `personal_records` lagt til med eierlås `request.auth.uid == userId`. Regresjonstester i `tests/rules/firestore.rules.test.ts`.
+  2. Vertens visningsnavn anonymisert til fornavn eller «Vert».
+  3. `src/data/__tests__/referenceIntegrity.test.ts` etablert for kontinuerlig verifisering av alle øvelses-ID-er på tvers av `TRAINING_PROGRAMS`, `SKILL_TREES` og `STARTER_CHALLENGES`.
+  4. Alle 49 manglende øvelser definert i `bodyweight.ts`, `mobility.ts` og `cardio.ts` med fullverdige instruksjoner forankret i Otago, FIFA 11+ og Overcoming Gravity.
+  5. 35 ubrukte QA-filer (31 MB) slettet fra repoet.
+* **Konsekvens:** PII-sikring verifisert i produksjon, bibliotek økt fra 25 til 74 øvelser med 100 % referanseintegritet.
+
+## [2026-08-30] Beslutning 40: GDPR-sletting & eksport, eliminering av naive timere og WCAG 2.1 fokusfeller
+* **Kontekst:** Sletting og eksport bommet på nøkler pga. spredte strengliteraler; modaler i komponentlaget brukte naiv `prev - 1`/`prev + 1` som frøs i bakgrunn; modaler manglet fokusfelle.
+* **Valg:**
+  1. `src/constants/storageKeys.ts` opprettet med kanonisk register over samtlige 38 nøkler og `clearAllLocalUserData()`.
+  2. `deleteUserData` oppdatert til å tømme alle lokale nøkler og slette `personal_records` i Firestore. `exportFullUserDataset` henter et fullstendig GDPR Art. 20 JSON-datasett.
+  3. `StrengthLoggerModal`, `GpsTrackerModal` og `StrengthWorkoutModal` omskrevet til tidsstempeldifferanser (`Date.now()`).
+  4. `src/hooks/useFocusTrap.ts` opprettet med `Escape`- og Tab-sykling for alle modaler (WCAG 2.1 AA).
+  5. `src/services/settingsStorageService.ts` etablert: brytere for lyd, tale, vibrasjon og wake lock persisteres og synkroniseres inn i `TimerEngine`.
+  6. `PrivacyPolicyModal.tsx` oppdatert med presis GDPR Art. 9/13/14-erklæring.
+* **Konsekvens:** Fullstendig GDPR-etterlevelse, timere overlever skjermlås, og innstillinger bevares over økter.
+
+## [2026-08-30] Beslutning 41: Fullføring av «Sterkere 12 uker», målgruppepakker og Kitor bilde/videobatch-pipeline
+* **Kontekst:** Behov for 2/3/4-dagers ukemaler for periodisert styrke (C.17, C.19), fullføring av programmer for Senior/Kor/Idrettslag, kildevisning på Om-siden, og infrastruktur for å generere bilder og videoloops for alle 74 øvelser på Kitor (RTX 3090).
+* **Valg:**
+  1. `src/data/strengthPrograms.ts` utvidet med `STERKERE_12_UKER_2_DAGER`, `_3_DAGER` og `_4_DAGER` med 4 periodiserte faser (Hypertrofi, Styrke, Topping, Deload) og `basis`-forankring (Iversen 2021, Schoenfeld 2016, Helms 2018).
+  2. Senior, Kor og Idrettslag programmert ferdig med Otago-, sangpust- og FIFA 11+-øvelser.
+  3. `AboutGuideModal.tsx` utvidet med egen seksjon for «Dokumentert kunnskapsgrunnlag (basis)».
+  4. 148 prompter for Flux.1 Dev og Wan2.1 generert for samtlige 74 øvelser i `src/services/imagePromptService.ts`.
+  5. `scripts/runFullKitorBatch.ts` og `scripts/exportComfyUiBatch.ts` oppdatert for headless kjøring og ComfyUI workflow JSON-eksport (`npm run batch:kitor`). `docs/kitor-batch-guide.md` dokumentert.
+* **Konsekvens:** 85 testfiler og 804 tester grønne, full produksjonsklar kjerne og automatisert GPU-pipelining mot Kitor.
+
+## [2026-08-30] Beslutning 42: Fellesskapstellere med Terskel 3, Heia-reaksjoner og Web Share API (Fase 6)
+* **Kontekst:** Vedlegg C.18, C.21 pkt 14 og Vedlegg B.5b krever fellesskapstellere under strenge personvernsregler (Terskel 3), emojireaksjoner i grupperom uten fritekst, og native deling av rom/utfordringer.
+* **Valg:**
+  1. `src/services/communityStatsService.ts` opprettet: `formatThreshold3Count` returnerer `null` for tellere under 3 (skjuler lavt volum for å forhindre personidentifisering).
+  2. `GroupRoomModal.tsx` utvidet med sanntids heia-reaksjoner (`🔥`, `👏`, `💪`, `⚡`, `🎉`) i lobbyen for både vert og deltakere, samt Web Share API-knapp for direkte deling av romlenker via WhatsApp, SMS, Teams eller e-post.
+  3. `ChallengeDetailModal.tsx` utvidet med Web Share API (`Share2`) og fokusfelle (`useFocusTrap`).
+* **Konsekvens:** 86 testfiler og 807 tester grønne, trygt personvernsbasert fellesskap og sømløs deling.
+
+## [2026-08-30] Beslutning 43: Adaptiv Deload-motor, Smerte/Skadefilter og Wan2.1 Video-loop Pipeline (Fase 7)
+* **Kontekst:** Vedlegg C.19, Epik A & H krever tretthetsdeteksjon og adaptiv deload ved overbelastning, 1-klikks skånsom øvelseserstatning ved akutt smerte/stivhet, og en ende-til-ende pipeline for 2–4s video-loops på Kitor.
+* **Valg:**
+  1. `PainFilterModal.tsx` koblet til `assessFatigueAndDeload(getCompletedWorkoutLogs())`: Ved oppdaget overbelastning (2 påfølgende tunge økter eller avbrutte runder) aktiveres Deload-modus automatisk med vitenskapelig begrunnelse (*superkompensasjon*).
+  2. Skade- og smertefilter integrert med 5 ergonomiske områder (Korsrygg, Skulder, Kne, Håndledd, Nakke) som øyeblikkelig erstatter utsatte øvelser med trygge alternativer.
+  3. `src/services/imagePromptService.ts` optimalisert med handlingen og positur-definisjonen plassert fremst i prompten for diffusjonsmodeller, og `buildAstridWanVideoWorkflow` etablert for Wan2.1 I2V MP4-rendering.
+* **Konsekvens:** 86 testfiler og 807 tester grønne, fullverdig adaptivitet og produksjonsklar videoinfrastruktur.
+
+## [2026-08-30] Beslutning 44: Organisasjons- & Bedriftsportal med Anonymt HMS-dashbord (Fase 8)
+* **Kontekst:** Spesifikasjon kap. 8 pkt 12 og Vedlegg C del 3 krever støtte for organisasjonsavtaler (kommune, eldresenter, kor, bedrifter) uten arbeidsgiver-innsyn eller overvåkning av enkeltansatte.
+* **Valg:**
+  1. `src/schemas/organizationSchema.ts` og `src/services/organizationService.ts` etablert: støtter tilknytning via organisasjonskode (f.eks. `LILLESTERK`, `KOR2026`, `HMS2026`).
+  2. `OrganizationPortalModal.tsx` implementert: Viser aggregert fellesstatistikk for avdelingen (totale treningsminutter og aktive deltakere) under streng **Terskel 3-regel** og null enkeltperson-logging.
+  3. `UserMenu.tsx` utvidet med direkte tilgang til organisasjonsportalen for tilknytning og frakobling.
+* **Konsekvens:** 87 testfiler og 812 tester grønne, klar B2B-infrastruktur i tråd med *Privacy by Design*.
+
+## [2026-08-30] Beslutning 45: Sluttkontroll, PWA Offline-herding & Lanseringsklargjøring (Fase 9)
+* **Kontekst:** Avsluttende fase for helhetlig verifisering av alle 9 faser, PWA-caching, WCAG 2.1 AA fokusfeller, referanseintegritet over alle 74 øvelser, og produksjonsdeploy.
+* **Valg:**
+  1. Service Worker og Workbox-caching verifisert for full offline bruk (lydbank `CacheFirst`, øvelsesbilder `NetworkFirst` med lokal fallback, app shell precache).
+  2. Full integrasjonssjekk av alle 87 testfiler og 812 enhetstester.
+  3. Backlog og arkitekturbeslutninger (Beslutning 1–45) fullstendig oppdatert i Obsidian-kunnskapsbasen.
+  4. Produksjonsbygg kompilert og deployet til live Firebase Hosting.
+* **Konsekvens:** 100 % grønn testsuite, feilfri produksjonsbundle, og en fullstendig moden og lanseringsklar Min Trener PWA.

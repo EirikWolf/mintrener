@@ -12,7 +12,10 @@
     "test:watch": "vitest",
     "test:rules": "firebase emulators:exec --only firestore --project demo-mintrener \"vitest run --config vitest.rules.config.ts\"",
     "build:e2e": "node scripts/generate-audio-manifest.mjs && tsc -b && vite build --mode e2e",
-    "test:e2e": "npm run build:e2e && firebase emulators:exec --only firestore --project demo-mintrener \"npx playwright test\""
+    "test:e2e": "npm run build:e2e && firebase emulators:exec --only firestore --project demo-mintrener \"npx playwright test\"",
+    "batch:export": "npx tsx scripts/exportComfyUiBatch.ts",
+    "batch:kitor": "npx tsx scripts/runFullKitorBatch.ts",
+    "batch:kitor:dry": "npx tsx scripts/runFullKitorBatch.ts --dry-run"
   },
   "dependencies": {
     "clsx": "^2.1.1",

@@ -30,16 +30,27 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
   const watchIdRef = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);
   const lastPointRef = useRef<GpsPoint | null>(null);
-  const startTimeRef = useRef<number>(Date.now());
   const stationaryTickRef = useRef<number>(0);
+  const accumulatedMsRef = useRef<number>(0);
+  const segmentStartMsRef = useRef<number | null>(null);
 
-  // Sekundteller med støtte for auto-pause ved stillstand
+  // Sekundteller basert på veggklokke-tidsdifferanser (overlever bakgrunnsmodus og låst skjerm)
   useEffect(() => {
     if (status === 'tracking' && !isAutoPaused) {
+      if (!segmentStartMsRef.current) {
+        segmentStartMsRef.current = Date.now();
+      }
       timerRef.current = window.setInterval(() => {
-        setElapsedSeconds((prev) => prev + 1);
-      }, 1000);
+        if (!segmentStartMsRef.current) return;
+        const currentSegmentMs = Date.now() - segmentStartMsRef.current;
+        const totalActiveMs = accumulatedMsRef.current + currentSegmentMs;
+        setElapsedSeconds(Math.floor(totalActiveMs / 1000));
+      }, 500);
     } else {
+      if (segmentStartMsRef.current) {
+        accumulatedMsRef.current += Date.now() - segmentStartMsRef.current;
+        segmentStartMsRef.current = null;
+      }
       if (timerRef.current) clearInterval(timerRef.current);
     }
     return () => {
@@ -57,7 +68,7 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
     setStatus('tracking');
     setIsAutoPaused(false);
     stationaryTickRef.current = 0;
-    startTimeRef.current = Date.now();
+    segmentStartMsRef.current = Date.now();
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
@@ -132,6 +143,13 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
       watchIdRef.current = null;
     }
 
+    if (segmentStartMsRef.current) {
+      accumulatedMsRef.current += Date.now() - segmentStartMsRef.current;
+      segmentStartMsRef.current = null;
+    }
+    const finalSeconds = Math.floor(accumulatedMsRef.current / 1000);
+    setElapsedSeconds(finalSeconds);
+
     const distKm = (distanceMeters / 1000).toFixed(2);
     const actName = activityType === 'lop' ? 'Løpetur (GPS)' : activityType === 'sykkel' ? 'Sykkeltur (GPS)' : 'Gåtur (GPS)';
 
@@ -139,7 +157,7 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
       workoutId: `gps-${Date.now()}`,
       workoutName: `${actName} • ${distKm} km`,
       workoutType: 'gps',
-      durationSeconds: elapsedSeconds,
+      durationSeconds: finalSeconds,
       roundsCompleted: 1,
       totalRounds: 1,
     });
@@ -148,10 +166,10 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
   const completedSession: GpsWorkoutSession = {
     id: `gps-session-${Date.now()}`,
     activityType,
-    startTime: startTimeRef.current,
+    startTime: Date.now() - accumulatedMsRef.current,
     endTime: Date.now(),
     totalDistanceMeters: distanceMeters,
-    elapsedSeconds,
+    elapsedSeconds: Math.floor(accumulatedMsRef.current / 1000),
     averageSpeedKmh: elapsedSeconds > 0 ? (distanceMeters / elapsedSeconds) * 3.6 : 0,
     currentPaceMinKm: formatPace(currentSpeed),
     points,

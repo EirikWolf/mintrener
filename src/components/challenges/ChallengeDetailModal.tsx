@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ChallengeItem, ChallengeUserProgress } from '../../schemas/challengeSchema';
 import { WorkoutTemplate } from '../../types/workout';
 import {
@@ -16,7 +16,9 @@ import {
   Trophy,
   Star,
   Calendar,
+  Share2,
 } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface ChallengeDetailModalProps {
   challenge: ChallengeItem;
@@ -36,6 +38,32 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
     () => getActiveChallengeId() === challenge.id
   );
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState<boolean>(false);
+  const [isShared, setIsShared] = useState<boolean>(false);
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, { onClose });
+
+  const handleShareChallenge = async () => {
+    const shareData = {
+      title: `${challenge.title} – Min Trener`,
+      text: `Bli med på ${challenge.durationDays}-dagers utfordringen "${challenge.title}" i Min Trener!`,
+      url: `https://mintrener.web.app/?c=${challenge.id}`,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        setIsShared(true);
+        setTimeout(() => setIsShared(false), 2000);
+      } catch {
+        // Bruker avbrøt
+      }
+    } else {
+      navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`);
+      setIsShared(true);
+      setTimeout(() => setIsShared(false), 2000);
+    }
+  };
 
   useEffect(() => {
     const handler = () => {
@@ -91,10 +119,12 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="challenge-detail-title"
-        className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden text-white space-y-4"
+        className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden text-white space-y-4 focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-start justify-between border-b border-zinc-850 pb-3 shrink-0">
@@ -121,7 +151,7 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
 
         {/* Aktiv toggle & Fremdriftsbar */}
         <div className="p-3 bg-zinc-900/80 border border-zinc-800 rounded-2xl space-y-2 shrink-0">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <div className="text-xl">{challenge.badgeReward.icon}</div>
               <div>
@@ -134,6 +164,14 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
               </div>
             </div>
             <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleShareChallenge}
+                title="Del utfordring med venner eller kollegaer"
+                className="py-1.5 px-2.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 border border-purple-500/40 text-xs font-bold transition-all flex items-center gap-1"
+              >
+                {isShared ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
+                <span>{isShared ? 'Delt!' : 'Del'}</span>
+              </button>
               <button
                 onClick={() => setIsCalendarModalOpen(true)}
                 title="Legg i kalender (Google / Apple / Outlook)"

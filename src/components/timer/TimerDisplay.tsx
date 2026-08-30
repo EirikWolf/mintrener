@@ -283,8 +283,8 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
     switch (phase) {
       case 'prepare':
         return {
-          bg: 'bg-zinc-950',
-          badgeBg: 'bg-amber-950/80 text-amber-300 border border-amber-800/80',
+          bg: 'bg-blue-950/30',
+          badgeBg: 'bg-blue-950/90 text-blue-300 border border-blue-700/80',
           badgeText: 'Klargjøring',
         };
       case 'work':
@@ -817,7 +817,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
       </header>
 
       {/* 2. HOVEDSEKSJON: Fase, Øvelsesnavn, Sirkulær indikator */}
-      <main className="flex flex-col items-center justify-center flex-1 my-auto space-y-1.5 text-center z-10 min-h-0">
+      <main className="flex flex-col items-center justify-center flex-1 my-auto space-y-1.5 landscape:space-y-0.5 text-center z-10 min-h-0">
         {/* Rundenummer / Intervall & Fase-badge — forstørres i fokusmodus for lesbarhet
             på 1,5 m avstand under aktiv økt (revisjon §3.1) */}
         <div className="flex flex-col items-center gap-1">
@@ -924,7 +924,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
       </main>
 
       {/* 3. BUNNBAR: Tommelknapper («Én hånd, ett blikk») */}
-      <footer className="pt-1 pb-[calc(env(safe-area-inset-bottom,0px)+8px)] shrink-0 z-10">
+      <footer className="pt-1 landscape:pt-0.5 pb-[calc(env(safe-area-inset-bottom,0px)+8px)] landscape:pb-[calc(env(safe-area-inset-bottom,0px)+4px)] shrink-0 z-10">
         <div className="flex items-center justify-between gap-2.5 max-w-sm mx-auto">
           {/* Forrige-knapp */}
           <button

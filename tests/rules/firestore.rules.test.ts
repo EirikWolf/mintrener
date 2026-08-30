@@ -387,16 +387,19 @@ describe('rooms', () => {
     );
   });
 
-  it('NEGATIV: uautentisert kan IKKE opprette rom', async () => {
+  it('NEGATIV: uautentisert kan IKKE liste /rooms-samlingen (forhindrer PII-skraping)', async () => {
     const db = testEnv.unauthenticatedContext().firestore();
-    await assertFails(
-      setDoc(doc(db, 'rooms', 'NYROM1'), {
-        roomId: 'NYROM1',
-        hostUid: 'ingen',
-        status: 'waiting',
-        participantCount: 1,
-      })
-    );
+    await assertFails(getDocs(collection(db, 'rooms')));
+  });
+
+  it('NEGATIV: autentisert deltaker kan IKKE liste /rooms-samlingen', async () => {
+    const db = testEnv.authenticatedContext(GUEST_UID).firestore();
+    await assertFails(getDocs(collection(db, 'rooms')));
+  });
+
+  it('POSITIV: uautentisert KAN lese et spesifikt rom ved eksakt ID (getDoc)', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertSucceeds(getDoc(doc(db, 'rooms', ROOM_ID)));
   });
 });
 
@@ -409,6 +412,17 @@ describe('users (eier-lås, regresjonsvern)', () => {
   it('POSITIV: kan lese sitt eget dokument', async () => {
     const db = testEnv.authenticatedContext('alice').firestore();
     await assertSucceeds(getDoc(doc(db, 'users', 'alice')));
+  });
+
+  it('POSITIV: kan lese og skrive egne personal_records', async () => {
+    const db = testEnv.authenticatedContext('alice').firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'users', 'alice', 'personal_records', 'kneboy'), {
+        exerciseId: 'kneboy',
+        maxReps: 50,
+      })
+    );
+    await assertSucceeds(getDoc(doc(db, 'users', 'alice', 'personal_records', 'kneboy')));
   });
 });
 
