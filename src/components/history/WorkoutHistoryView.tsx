@@ -3,8 +3,9 @@ import { CompletedWorkoutLog } from '../../types/models';
 import { getUserWorkoutHistory } from '../../services/firestoreService';
 import { WorkoutCalendarHeatmap } from './WorkoutCalendarHeatmap';
 import { exportAllDataAsJson, exportHistoryAsCsv } from '../../services/exportDataService';
-import { getWeeklyGoal } from '../../services/weeklyGoalService';
 import { computeStreakDays } from '../../services/streakService';
+import { toLocalDateString } from '../../services/weekUtils';
+import { getWeeklyGoal } from '../../services/weeklyGoalService';
 import { useAuth } from '../../contexts/AuthContext';
 import { BadgeShowcaseModal } from './BadgeShowcaseModal';
 import { getAllUserBadges } from '../../services/badgeService';
@@ -52,7 +53,7 @@ export const WorkoutHistoryView: React.FC<WorkoutHistoryViewProps> = ({
     const totalSeconds = history.reduce((acc, log) => acc + log.durationSeconds, 0);
     const totalMinutes = Math.round(totalSeconds / 60);
 
-    const dates = history.map((log) => new Date(log.completedAt).toISOString().split('T')[0]);
+    const dates = history.map((log) => toLocalDateString(new Date(log.completedAt)));
     const streak = computeStreakDays(dates);
 
     return { totalWorkouts, totalMinutes, streak };

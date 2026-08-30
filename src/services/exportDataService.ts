@@ -52,10 +52,13 @@ export function exportAllDataAsJson(
   URL.revokeObjectURL(url);
 }
 
+import { getUserWorkoutHistory } from './firestoreService';
+
 /**
- * Henter alle data fra lokal lagring (og eventuelt Firestore) og eksporterer som JSON (GDPR Art. 20)
+ * Henter alle data fra lokal lagring (og eventuelt Firestore) og eksporterer som JSON (GDPR Art. 20).
+ * Hvis userId er oppgitt, synkes historikk fra Firestore først slik at en ny enhet ikke får tom fil.
  */
-export async function exportFullUserDataset(_userId?: string | null): Promise<void> {
+export async function exportFullUserDataset(userId?: string | null): Promise<void> {
   let history: CompletedWorkoutLog[] = [];
   let customExercises: CustomExerciseItem[] = [];
   let customWorkouts: WorkoutTemplate[] = [];
@@ -67,8 +70,12 @@ export async function exportFullUserDataset(_userId?: string | null): Promise<vo
   let coachPersona: any = null;
 
   try {
-    const rawHist = localStorage.getItem(STORAGE_KEYS.WORKOUT_HISTORY);
-    if (rawHist) history = JSON.parse(rawHist);
+    if (userId) {
+      history = await getUserWorkoutHistory(userId);
+    } else {
+      const rawHist = localStorage.getItem(STORAGE_KEYS.WORKOUT_HISTORY);
+      if (rawHist) history = JSON.parse(rawHist);
+    }
 
     const rawEx = localStorage.getItem(STORAGE_KEYS.CUSTOM_EXERCISES) || localStorage.getItem(STORAGE_KEYS.LEGACY_CUSTOM_EXERCISES);
     if (rawEx) customExercises = JSON.parse(rawEx);
@@ -93,7 +100,7 @@ export async function exportFullUserDataset(_userId?: string | null): Promise<vo
 
     coachPersona = localStorage.getItem(STORAGE_KEYS.COACH_PERSONA) || 'standard';
   } catch (e) {
-    console.warn('Feil ved lesing av lokaldata for eksport:', e);
+    console.warn('Feil ved lesing av data for eksport:', e);
   }
 
   exportAllDataAsJson(history, customExercises, customWorkouts, strengthLogs, {

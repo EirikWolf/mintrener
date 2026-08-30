@@ -88,7 +88,7 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
   const colors = getPhaseColors();
 
   return (
-    <div className="relative flex items-center justify-center w-full max-w-[220px] xs:max-w-[260px] sm:max-w-[300px] md:max-w-[340px] landscape:max-h-[46vh] landscape:max-w-[46vh] aspect-square mx-auto select-none">
+    <div className="relative flex items-center justify-center w-full max-w-[280px] xs:max-w-[320px] sm:max-w-[360px] md:max-w-[400px] h-[28vh] max-h-[360px] landscape:max-h-[46vh] landscape:max-w-[46vh] aspect-square mx-auto select-none">
       <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
         {/* Bakgrunnsspor */}
         <circle

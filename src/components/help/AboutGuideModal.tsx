@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   HelpCircle,
@@ -16,6 +16,7 @@ import {
   BookOpen,
   GraduationCap,
 } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface AboutGuideModalProps {
   onClose: () => void;
@@ -23,15 +24,8 @@ interface AboutGuideModalProps {
 
 export const AboutGuideModal: React.FC<AboutGuideModalProps> = ({ onClose }) => {
   const [activeSection, setActiveSection] = useState<'oversikt' | 'funksjoner' | 'tips' | 'basis' | 'om'>('oversikt');
-
-  // WCAG: Lukk ved trykk på Escape-tast
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, { onClose });
 
   const modal = (
     <div
@@ -41,10 +35,12 @@ export const AboutGuideModal: React.FC<AboutGuideModalProps> = ({ onClose }) => 
       className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="about-modal-title"
-        className="w-full max-w-md max-h-[88vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-3.5 relative z-[101]"
+        className="w-full max-w-md max-h-[88vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-3.5 relative z-[101] focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5 shrink-0">

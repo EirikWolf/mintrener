@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SKILL_TREES } from '../../data/skillTrees';
 import { SkillCategory, SkillLevel, UserSkillProgress } from '../../schemas/skillTreeSchema';
 import {
@@ -18,6 +18,7 @@ import {
   Target,
   Award,
 } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface SkillTreeModalProps {
   onClose: () => void;
@@ -38,6 +39,9 @@ export const SkillTreeModal: React.FC<SkillTreeModalProps> = ({
     mastered: boolean;
     nextUnlocked: boolean;
   } | null>(null);
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, { onClose });
 
   useEffect(() => {
     const updated = getUserSkillProgress(selectedTreeId);
@@ -116,10 +120,12 @@ export const SkillTreeModal: React.FC<SkillTreeModalProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 text-white"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="skills-modal-title"
-        className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4"
+        className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4 focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-850 pb-3 shrink-0">

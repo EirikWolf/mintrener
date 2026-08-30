@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { STARTER_CHALLENGES } from '../../data/challenges';
 import { ChallengeCategory, ChallengeItem } from '../../schemas/challengeSchema';
 import { ChallengeDetailModal } from './ChallengeDetailModal';
 import { getActiveChallengeId, getChallengeProgress } from '../../services/challengeService';
 import { WorkoutTemplate } from '../../types/workout';
 import { Trophy, X, ChevronRight } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface ChallengeCatalogModalProps {
   onClose: () => void;
@@ -28,19 +29,13 @@ export const ChallengeCatalogModal: React.FC<ChallengeCatalogModalProps> = ({
   const [selectedChallenge, setSelectedChallenge] = useState<ChallengeItem | null>(null);
   const activeChallengeId = getActiveChallengeId();
 
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, { onClose });
+
   const filtered = STARTER_CHALLENGES.filter((c) => {
     if (selectedCategory === 'alle') return true;
     return c.category === selectedCategory;
   });
-
-  // WCAG: Lukk ved trykk på Escape-tast
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
 
   return (
     <div
@@ -50,10 +45,12 @@ export const ChallengeCatalogModal: React.FC<ChallengeCatalogModalProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="challenges-modal-title"
-        className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden text-white space-y-4"
+        className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden text-white space-y-4 focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-850 pb-3 shrink-0">

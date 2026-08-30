@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Download, X, Share, PlusSquare, Smartphone } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -12,6 +13,12 @@ export const PwaInstallPromptModal: React.FC = () => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isIos, setIsIos] = useState<boolean>(false);
   const [isStandalone, setIsStandalone] = useState<boolean>(false);
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, {
+    isActive: isOpen,
+    onClose: () => setIsOpen(false),
+  });
 
   useEffect(() => {
     // Sjekk om appen allerede kjører som standalone PWA
@@ -48,16 +55,6 @@ export const PwaInstallPromptModal: React.FC = () => {
     }
   };
 
-  // WCAG: Lukk ved trykk på Escape-tast
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsOpen(false);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen]);
-
   // Hvis allerede installert og åpnet som app, trenger vi ikke vise knappen
   if (isStandalone) {
     return null;
@@ -71,10 +68,12 @@ export const PwaInstallPromptModal: React.FC = () => {
       className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="pwa-modal-title"
-        className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl space-y-4 relative z-[101]"
+        className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl space-y-4 relative z-[101] focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">

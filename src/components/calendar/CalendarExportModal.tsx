@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { ChallengeItem } from '../../schemas/challengeSchema';
 import {
   createChallengeIcs,
@@ -6,6 +6,7 @@ import {
   generateGoogleCalendarUrl,
 } from '../../services/calendarExportService';
 import { Calendar, Download, ExternalLink, X, Clock, Check } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface CalendarExportModalProps {
   challenge: ChallengeItem;
@@ -18,6 +19,9 @@ export const CalendarExportModal: React.FC<CalendarExportModalProps> = ({
 }) => {
   const [selectedTime, setSelectedTime] = useState<string>('11:30');
   const [copied, setCopied] = useState<boolean>(false);
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, { onClose });
 
   const [hour, minute] = selectedTime.split(':').map((v) => parseInt(v, 10));
 
@@ -61,10 +65,12 @@ export const CalendarExportModal: React.FC<CalendarExportModalProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 text-white"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="calendar-export-title"
-        className="w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl space-y-4"
+        className="w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl space-y-4 focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-850 pb-3">

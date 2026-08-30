@@ -20,6 +20,7 @@ import {
   Info,
   Clock,
 } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface StrengthWorkoutModalProps {
   program?: StrengthProgramTemplate;
@@ -48,6 +49,8 @@ export const StrengthWorkoutModal: React.FC<StrengthWorkoutModalProps> = ({
   onClose,
   onCompleteWorkout,
 }) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, { onClose });
   const [exercises, setExercises] = useState<ActiveExerciseState[]>(() => {
     return DEFAULT_STRENGTH_SESSION_EXERCISES.map((ex) => {
       const prev = getLatestExerciseLog(ex.id);
@@ -266,10 +269,12 @@ export const StrengthWorkoutModal: React.FC<StrengthWorkoutModalProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 text-white"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="strength-program-title"
-        className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4"
+        className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4 focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-850 pb-3 shrink-0">

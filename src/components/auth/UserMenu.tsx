@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { PrivacyPolicyModal } from '../legal/PrivacyPolicyModal';
@@ -6,6 +6,7 @@ import { AboutGuideModal } from '../help/AboutGuideModal';
 import { OrganizationPortalModal } from '../organization/OrganizationPortalModal';
 import { User as UserIcon, LogOut, Trash2, X, Shield, HelpCircle, Building2 } from 'lucide-react';
 import { showErrorToast } from '../../services/errorToastService';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface UserMenuProps {
   onOpenCurator?: () => void;
@@ -20,18 +21,14 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // WCAG: Lukk ved trykk på Escape-tast (Må ligge før tidlige returer jf. Rules of Hooks)
-  React.useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setIsOpen(false);
-        setIsConfirmingDelete(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen]);
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, {
+    isActive: isOpen,
+    onClose: () => {
+      setIsOpen(false);
+      setIsConfirmingDelete(false);
+    },
+  });
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -82,10 +79,12 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="user-profile-title"
-        className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-5"
+        className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-5 focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-800 pb-4">

@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { X, Flame, Trophy, Shield, Target, Milestone } from 'lucide-react';
 import { WEEK_STREAK_MILESTONES, WeekStreakResult } from '../../services/streakService';
 import { getWeeklyGoal, setWeeklyGoal } from '../../services/weeklyGoalService';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface StreakDetailSheetProps {
   streak: WeekStreakResult;
@@ -26,24 +27,8 @@ export const StreakDetailSheet: React.FC<StreakDetailSheetProps> = ({ streak, on
   const [weeklyGoal, setWeeklyGoalState] = useState<number>(() => getWeeklyGoal());
   const [goalChanged, setGoalChanged] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-
-  // WCAG (B5b): flytt fokus inn i dialogen ved åpning og tilbake til
-  // utløseren (pillen) ved lukking — skjermleser/tastatur mister ellers plassen.
-  React.useEffect(() => {
-    const previouslyFocused =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    closeButtonRef.current?.focus();
-    return () => previouslyFocused?.focus();
-  }, []);
-
-  // WCAG: Lukk ved trykk på Escape-tast (samme mønster som ProfileOnboardingModal)
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, { onClose });
 
   const handleUpdateWeeklyGoal = (val: number) => {
     const clamped = Math.max(1, Math.min(14, val));
@@ -57,12 +42,19 @@ export const StreakDetailSheet: React.FC<StreakDetailSheetProps> = ({ streak, on
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Din streak"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
     >
-      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto">
+      <div
+        ref={modalRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Din streak"
+        className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto focus:outline-none"
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
           <div className="flex items-center gap-2">

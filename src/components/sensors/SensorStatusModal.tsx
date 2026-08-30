@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { sensorDiagnosticsService, SensorStatus } from '../../services/sensorDiagnosticsService';
 import { audioService } from '../../services/audioService';
@@ -12,6 +12,7 @@ import {
   Volume2,
   Smartphone,
 } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface SensorStatusModalProps {
   onClose: () => void;
@@ -21,6 +22,9 @@ export const SensorStatusModal: React.FC<SensorStatusModalProps> = ({ onClose })
   const [statuses, setStatuses] = useState<SensorStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [testedAudio, setTestedAudio] = useState(false);
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, { onClose });
 
   useEffect(() => {
     sensorDiagnosticsService.getSensorStatuses().then((list) => {
@@ -44,15 +48,6 @@ export const SensorStatusModal: React.FC<SensorStatusModalProps> = ({ onClose })
     setTimeout(() => setTestedAudio(false), 1500);
   };
 
-  // WCAG: Lukk ved trykk på Escape-tast
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
-
   const modal = (
     <div
       onClick={(e) => {
@@ -61,10 +56,12 @@ export const SensorStatusModal: React.FC<SensorStatusModalProps> = ({ onClose })
       className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="sensor-modal-title"
-        className="w-full max-w-md max-h-[85vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-3 relative z-[101]"
+        className="w-full max-w-md max-h-[85vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-3 relative z-[101] focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-800 pb-2">

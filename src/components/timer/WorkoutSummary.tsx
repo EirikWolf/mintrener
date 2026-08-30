@@ -6,6 +6,7 @@ import { updateWorkoutRating } from '../../services/firestoreService';
 import { savePersonalRecord } from '../../services/personalRecordService';
 import { recordWorkoutTelemetry, recordEngagementEvent } from '../../services/telemetryService';
 import { calculateWeeklyProgress, makeGoalForWeek, WeeklyGoalProgress } from '../../services/weeklyGoalService';
+import { toLocalDateString } from '../../services/weekUtils';
 import { computeStreakDays, computeWeekStreak, WEEK_STREAK_MILESTONES, WeekStreakResult } from '../../services/streakService';
 import {
   getUncelebratedMilestones,
@@ -137,7 +138,7 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
 
       setWeeklyGoal(calculateWeeklyProgress(effectiveHistory));
 
-      const dates = effectiveHistory.map((log) => new Date(log.completedAt).toISOString().split('T')[0]);
+      const dates = effectiveHistory.map((log) => toLocalDateString(new Date(log.completedAt)));
       setStreakDays(computeStreakDays(dates));
 
       // Uke-streak (C1): avledet fra samme effektive historikk. Feiringstekster

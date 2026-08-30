@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { EXERCISE_LIBRARY, filterExercises } from '../../data/exercises';
 import { ExerciseItem } from '../../schemas/exerciseSchema';
@@ -8,6 +8,7 @@ import {
   CustomExerciseItem,
 } from '../../services/customExercisesService';
 import { Search, X, Plus, Dumbbell, Clock } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface ExercisePickerModalProps {
   onSelect: (exercise: ExerciseItem & { defaultDurationSeconds?: number }) => void;
@@ -33,6 +34,9 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('alle');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [customExercises, setCustomExercises] = useState<CustomExerciseItem[]>([]);
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, { onClose });
 
   useEffect(() => {
     fetchCustomExercises(user?.uid).then(setCustomExercises);
@@ -71,10 +75,12 @@ export const ExercisePickerModal: React.FC<ExercisePickerModalProps> = ({
       className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="picker-modal-title"
-        className="w-full max-w-md max-h-[85vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-3 relative z-[101]"
+        className="w-full max-w-md max-h-[85vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-3 relative z-[101] focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5 shrink-0">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ShareCardData, generateShareCardBlob, shareOrDownloadCard } from '../../services/shareCardService';
 import {
   Share2,
@@ -7,6 +7,7 @@ import {
   Check,
   Loader2,
 } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface ShareCardModalProps {
   cardData: ShareCardData;
@@ -20,6 +21,9 @@ export const ShareCardModal: React.FC<ShareCardModalProps> = ({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState<boolean>(false);
   const [shareSuccess, setShareSuccess] = useState<string | null>(null);
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, { onClose });
 
   useEffect(() => {
     let active = true;
@@ -57,15 +61,6 @@ export const ShareCardModal: React.FC<ShareCardModalProps> = ({
     }
   };
 
-  // WCAG: Lukk ved trykk på Escape-tast
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
-
   return (
     <div
       onClick={(e) => {
@@ -74,10 +69,12 @@ export const ShareCardModal: React.FC<ShareCardModalProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 text-white"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="share-card-title"
-        className="w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl space-y-4 text-center"
+        className="w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl space-y-4 text-center focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-850 pb-3">
