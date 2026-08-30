@@ -15,7 +15,8 @@
     "test:e2e": "npm run build:e2e && firebase emulators:exec --only firestore --project demo-mintrener \"npx playwright test\"",
     "batch:export": "npx tsx scripts/exportComfyUiBatch.ts",
     "batch:kitor": "npx tsx scripts/runFullKitorBatch.ts",
-    "batch:kitor:dry": "npx tsx scripts/runFullKitorBatch.ts --dry-run"
+    "batch:kitor:dry": "npx tsx scripts/runFullKitorBatch.ts --dry-run",
+    "sjekk": "node scripts/foermerge-sjekk.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",
