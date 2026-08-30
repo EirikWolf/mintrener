@@ -19,7 +19,10 @@
  * ffmpeg er en ekstern avhengighet. Mangler den, skippes måleblokken
  * EKSPLISITT — vitest rapporterer den som skipped, den skal aldri stilltiende
  * passere. CI installerer ffmpeg (.github/workflows/ci.yml) nettopp for at den
- * skal kjøre der.
+ * skal kjøre der. Fordi CI-runneren kjører en ANNEN ffmpeg-versjon enn fasiten
+ * ble satt med, har fila to slags assertions med bevisst ulik strenghet —
+ * klassifiseringen er streng, de eksakte dB-tallene har en toleranse. Se
+ * MAALING_TOLERANSE_DB for hvorfor.
  */
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
@@ -69,8 +72,11 @@ function measure(fileName: string): { overallMeanDb: number; tailMeanDb: number 
 type Status = 'avkuttet' | 'frisk' | 'uavklart';
 
 interface Maaling {
-  readonly fil: string;
-  /** Fall i halen (hale minus samlet mean_volume), målt 2026-08-30. */
+  /**
+   * Fall i halen (hale minus samlet mean_volume), målt 2026-08-30 med
+   * ffmpeg 8.1.1. Tallet er KALIBRERINGSDOKUMENTASJON, ikke en eksakt
+   * kontrakt — se MAALING_TOLERANSE_DB.
+   */
   readonly fall: number;
   readonly status: Status;
 }
@@ -125,17 +131,64 @@ describe('halevakt — bevismaterialet er fullstendig', () => {
   });
 });
 
+/**
+ * Toleranse for de EKSAKTE måltallene i MAALINGER — bevisst løsere enn
+ * klassifiseringstestene under.
+ *
+ * De to slagene assertions i denne fila har ulik strenghet med vilje:
+ *
+ * 1. KLASSIFISERINGEN (`isTailSuspect`: det avkuttede flagges, de åtte friske
+ *    flagges ikke, inversjons-regresjonsvakten) er det vakten FAKTISK gjør, og
+ *    den hviler på marginer på 11,6–13,9 dB ned til terskelen. Den skal være
+ *    streng — den tåler enhver rimelig versjonsdrift, og et brudd der er et
+ *    ekte brudd.
+ *
+ * 2. DE EKSAKTE dB-TALLENE er kalibreringsdokumentasjon: de skal fange at
+ *    måleoppsettet har drevet reelt (noen flytter målingen til etterbehandlet
+ *    output, endrer vinduet eller bytter ffmpeg-argumenter — da endrer tallene
+ *    seg med titalls dB), IKKE at ffmpeg-versjoner søker litt ulikt.
+ *
+ * Driftskilden er identifisert: det er `-sseof` sin søkepresisjon. Én mp3-ramme
+ * er ~26 ms — over halve 50 ms-vinduet — så seeker en annen ffmpeg-versjon til
+ * en annen rammegrense, forskyves vinduet og måltallet endrer seg langt mer enn
+ * en toleranse på 0,05 dB. Fasiten er satt med ffmpeg 8.1.1 på Windows; CI
+ * kjører ubuntu-latest med typisk ffmpeg 6.x, to hovedversjoner eldre.
+ * DEKODINGEN er derimot verifisert deterministisk: `-c:a mp3` og `-c:a mp3float`
+ * gir identiske tall på det avkuttede klippet (hele −17,7 / hale −42,1), så
+ * dekodervalg er ikke risikoen.
+ *
+ * ±1,0 dB er valgt framfor `toBeCloseTo`-presisjon: `toBeCloseTo(fall, 1)` er
+ * ±0,05 (for stramt) og `toBeCloseTo(fall, 0)` er ±0,5 (tett på rammestøyen),
+ * og et navngitt tall sier tydeligere hva som faktisk tolereres enn en
+ * presisjonsparameter gjør.
+ */
+const MAALING_TOLERANSE_DB = 1.0;
+
+/**
+ * Krever at måltallet ligger innenfor MAALING_TOLERANSE_DB av fasiten.
+ *
+ * To-sidig framfor `Math.abs(malt - fasit) <= TOLERANSE`: assertionen er den
+ * samme, men feilmeldingen viser da det faktisk målte tallet og grensen det
+ * brøt, ikke bare «expected false to be true».
+ */
+function forventInnenforToleranse(malt: number, fasit: number): void {
+  expect(malt).toBeGreaterThanOrEqual(fasit - MAALING_TOLERANSE_DB);
+  expect(malt).toBeLessThanOrEqual(fasit + MAALING_TOLERANSE_DB);
+}
+
 describe.skipIf(!FFMPEG_AVAILABLE)('halevakt — integrasjon med ekte ffmpeg', () => {
-  it.each(MAALINGER)('måler $fil til $fall dB', ({ fil, fall }) => {
+  it.each(MAALINGER)('måler $fil til $fall dB (±1,0)', ({ fil, fall }) => {
     // Hele tabellen er etterprøvbar fra repoet — det var nettopp mangelen på
     // det som ga NO-GO i forrige runde.
-    expect(tailFalloffDb(measure(fil))).toBeCloseTo(fall, 1);
+    forventInnenforToleranse(tailFalloffDb(measure(fil)), fall);
   });
 
   it('flagger det avkuttede «burpii»-take-et', () => {
     const m = measure(AVKUTTET);
-    // Fasitmålingen 2026-08-30: samlet −17,7 dB, hale −42,1 dB → fall −24,4 dB.
-    expect(tailFalloffDb(m)).toBeCloseTo(-24.4, 1);
+    // Fasitmålingen 2026-08-30 (ffmpeg 8.1.1): samlet −17,7 dB, hale −42,1 dB
+    // → fall −24,4 dB. Måltallet er dokumentasjon (±1,0); det testen VOKTER er
+    // flagget på linja under, som har 11,6 dB margin til terskelen.
+    forventInnenforToleranse(tailFalloffDb(m), -24.4);
     expect(isTailSuspect(m)).toBe(true);
   });
 
@@ -172,11 +225,17 @@ describe.skipIf(!FFMPEG_AVAILABLE)('halevakt — integrasjon med ekte ffmpeg', (
   it('to av de uavklarte ville blitt flagget — de er kandidater, ikke bevis', () => {
     // De ligger over terskelen og telles derfor blant dagens 19 flaggede take.
     expect(isTailSuspect(measure('komiker_start_321_short.mp3'))).toBe(true);
-    // Den tredje ligger under, men er dårligere enn dagens dårligste
+    // Den tredje ligger under terskelen, men er dårligere enn dagens dårligste
     // verifisert friske (−49,9) og ville dermed krympet gapet til 25,0 dB.
     const befalShort = tailFalloffDb(measure('befal_start_321_short.mp3'));
+    // Dette er vakt-assertionen: 13,4 dB margin ned til terskelen.
     expect(befalShort).toBeLessThan(TAIL_FALLOFF_THRESHOLD_DB);
-    expect(befalShort).toBeGreaterThan(-49.9);
+    // Rangeringen mot −49,9 pinnes IKKE som en ordning. Avstanden er 0,5 dB —
+    // mindre enn måletoleransen over — så en `toBeGreaterThan(-49.9)` ville
+    // vært et myntkast ved rammegrense-drift, ikke en påstand vi kan innestå
+    // for. Fasitverdien pinnes derfor som dokumentert måling (±1,0), og
+    // konsekvensen for gapet står i DECISIONS.md Beslutning 39.
+    forventInnenforToleranse(befalShort, -49.4);
   });
 
   it('den etterbehandlede fila ville gitt MOTSATT svar — derfor måles råfila', () => {
