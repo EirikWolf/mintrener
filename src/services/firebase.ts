@@ -6,6 +6,7 @@ import {
   persistentMultipleTabManager,
   connectFirestoreEmulator,
 } from 'firebase/firestore';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider, CustomProvider } from 'firebase/app-check';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
@@ -18,6 +19,31 @@ const firebaseConfig = {
 
 // Initialiser Firebase App som singleton
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+
+// Firebase App Check (beskytter Firestore & Storage mot uautentiserte forespørsler og telemetriforgiftning)
+const isE2eOrTest = import.meta.env.MODE === 'e2e' || import.meta.env.MODE === 'test' || Boolean(import.meta.env.VITE_FIREBASE_EMULATOR_HOST);
+const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY;
+
+if (typeof window !== 'undefined' && !isE2eOrTest) {
+  // Støtt debug token i utvikling / localhost / CI
+  if (import.meta.env.DEV || import.meta.env.VITE_APPCHECK_DEBUG_TOKEN) {
+    (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN =
+      import.meta.env.VITE_APPCHECK_DEBUG_TOKEN === 'true' || !import.meta.env.VITE_APPCHECK_DEBUG_TOKEN
+        ? true
+        : import.meta.env.VITE_APPCHECK_DEBUG_TOKEN;
+  }
+
+  if (recaptchaSiteKey) {
+    try {
+      initializeAppCheck(app, {
+        provider: new ReCaptchaEnterpriseProvider(recaptchaSiteKey),
+        isTokenAutoRefreshEnabled: true,
+      });
+    } catch (err) {
+      console.warn('App Check kunne ikke initialiseres:', err);
+    }
+  }
+}
 
 // Auth med Google Provider
 export const auth = getAuth(app);
@@ -40,3 +66,4 @@ if (emulatorHost) {
   // Port 8080 = firestore-emulatorporten i firebase.json
   connectFirestoreEmulator(db, emulatorHost, 8080);
 }
+

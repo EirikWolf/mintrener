@@ -126,18 +126,24 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
         />
       </svg>
 
-      {/* Stor tallvisning i midten – lesbar på 1-2 meters avstand */}
+      {/* Stor tallvisning i midten – skalerer med viewport (minst 20-25% vh) for lesbarhet på 1-2 meters avstand. 3-sifrede tall (f.eks. 120s, 300s) justeres proporsjonalt for å passe trygt inne i sirkelen */}
       <div
         role="timer"
         aria-live="polite"
         aria-atomic="true"
         aria-label={`${remainingSeconds} sekunder igjen`}
-        className="absolute inset-0 flex flex-col items-center justify-center text-center"
+        className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-4"
       >
-        <span className={`font-mono tabular-nums text-6xl xs:text-7xl sm:text-8xl md:text-9xl font-black tracking-tight ${colors.text} drop-shadow-lg leading-none`}>
+        <span
+          className={`font-mono tabular-nums font-black tracking-tight ${colors.text} drop-shadow-lg leading-none ${
+            remainingSeconds >= 100
+              ? 'text-[clamp(3.5rem,15vh,7.5rem)]'
+              : 'text-[clamp(4.5rem,22vh,10.5rem)]'
+          }`}
+        >
           {remainingSeconds}
         </span>
-        <span className="text-[10px] xs:text-xs uppercase tracking-widest text-zinc-400 font-bold mt-1">
+        <span className="text-[10px] xs:text-xs uppercase tracking-widest text-zinc-400 font-bold mt-0.5">
           sekunder
         </span>
       </div>

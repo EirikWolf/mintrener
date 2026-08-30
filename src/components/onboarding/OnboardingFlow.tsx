@@ -12,6 +12,7 @@ import { setWeeklyGoal } from '../../services/weeklyGoalService';
 import { recordEngagementEvent } from '../../services/telemetryService';
 import { markOnboardingDone } from '../../services/onboardingService';
 import { TABATA_WORKOUT } from '../../data/mockWorkouts';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface OnboardingFlowProps {
   /** Kalles når flyten er ferdig (fullført ELLER hoppet over) — App skjuler gaten. */
@@ -37,6 +38,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) =>
   const [playingId, setPlayingId] = useState<CoachPersonaId | null>(null);
   const [goal, setGoal] = useState(3);
   const [customGoalOpen, setCustomGoalOpen] = useState(false);
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef);
 
   // UU (fix-løkke B4): fokus flyttes til stegets overskrift ved mount og hvert
   // steg-bytte, slik at skjermleser annonserer konteksten og tastaturbrukeren
@@ -111,10 +115,12 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ onComplete }) =>
 
   return (
     <div
+      ref={modalRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-labelledby="onboarding-flow-title"
-      className="fixed inset-0 z-[60] bg-zinc-950 text-zinc-100 overflow-y-auto animate-in fade-in duration-200"
+      className="fixed inset-0 z-[60] bg-zinc-950 text-zinc-100 overflow-y-auto animate-in fade-in duration-200 focus:outline-none"
     >
       <div className="min-h-full w-full max-w-md mx-auto p-5 flex flex-col gap-5">
         {/* Topplinje: stegindikator + Hopp over (på alle steg, spec § 3) */}

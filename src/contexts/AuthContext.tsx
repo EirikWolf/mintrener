@@ -7,6 +7,7 @@ import {
   signOut as fbSignOut,
   onAuthStateChanged,
   deleteUser,
+  reauthenticateWithPopup,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../services/firebase';
 import { syncUserProfile, deleteUserData } from '../services/firestoreService';
@@ -93,22 +94,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteAccount = async () => {
     if (!user) return;
     const uid = user.uid;
+
+    // 1. Re-autentiser først for å sikre at sesjonen er fersk (hindrer auth/requires-recent-login
+    // ETTER at data er slettet, som ville etterlatt en halv-slettet tilstand)
     try {
-      // 1. Slett data fra Firestore og localStorage
-      await deleteUserData(uid);
-      // 2. Slett selve auth-kontoen
-      await deleteUser(user);
-    } catch (err: any) {
-      if (err.code === 'auth/requires-recent-login') {
-        // Bruker må logge inn på nytt for å bekrefte sletting
-        await signInWithPopup(auth, googleProvider);
-        if (auth.currentUser) {
-          await deleteUserData(uid);
-          await deleteUser(auth.currentUser);
-        }
-      } else {
-        throw err;
+      await reauthenticateWithPopup(user, googleProvider);
+    } catch (authErr: any) {
+      console.warn('Re-autentisering feilet:', authErr);
+      // Hvis brukeren avbryter popupen, avbryt hele slettingen uten å røre data
+      if (authErr.code === 'auth/popup-closed-by-user' || authErr.code === 'auth/cancelled-popup-request') {
+        throw new Error('Sletting avbrutt: re-autentisering ble ikke fullført.');
       }
+      // For andre feil (f.eks. popup blokkert), prøv likevel sletting direkte
+    }
+
+    try {
+      // 2. Slett selve auth-kontoen først eller parallelt
+      const currentUser = auth.currentUser || user;
+      await deleteUser(currentUser);
+
+      // 3. Slett brukerdata fra Firestore og lokal lagring (GDPR Art. 17)
+      await deleteUserData(uid);
     } finally {
       setUser(null);
       setProfile(null);
