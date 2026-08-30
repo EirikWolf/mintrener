@@ -21,6 +21,14 @@ import {
   updateConsecutiveFailures,
   MAX_CONSECUTIVE_FAILURES,
   NonRetryableError,
+  TAIL_FALLOFF_THRESHOLD_DB,
+  TAIL_WINDOW_SECONDS,
+  buildVolumeDetectArgs,
+  formatTailSummary,
+  formatTailWarning,
+  isTailSuspect,
+  parseMeanVolumeDb,
+  tailFalloffDb,
   type VoicebankManifest,
   type VoicebankTask,
   type TtsTask,
@@ -609,5 +617,127 @@ describe('fetchTtsWithRetries — retry-klassifisering (mock fetch)', () => {
     const buffer = await fetchTtsWithRetries(task, 'tok', 0);
     expect(buffer.length).toBe(4096);
     expect(mock).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Halevakt (QA-4): automatisk deteksjon av avkuttede klipp.
+// ---------------------------------------------------------------------------
+
+describe('halevakt — tailFalloffDb / isTailSuspect', () => {
+  it('falloff er hale minus samlet (negativ når klippet dør ut)', () => {
+    expect(tailFalloffDb({ overallMeanDb: -18.3, tailMeanDb: -67.0 })).toBeCloseTo(-48.7, 5);
+    expect(tailFalloffDb({ overallMeanDb: -22.5, tailMeanDb: -24.2 })).toBeCloseTo(-1.7, 5);
+  });
+
+  it('normale klipp (målt fasit fra lydbanken) flagges ikke', () => {
+    // hardcore/exercise-burpees og romsdal/exercise-burpees, sveip 2026-08-30.
+    expect(isTailSuspect({ overallMeanDb: -18.3, tailMeanDb: -67.0 })).toBe(false);
+    expect(isTailSuspect({ overallMeanDb: -19.2, tailMeanDb: -91.0 })).toBe(false);
+    expect(isTailSuspect({ overallMeanDb: -20.6, tailMeanDb: -39.4 })).toBe(false);
+  });
+
+  it('hale med uendret energi (avkuttet) flagges', () => {
+    expect(isTailSuspect({ overallMeanDb: -18.0, tailMeanDb: -18.0 })).toBe(true);
+    expect(isTailSuspect({ overallMeanDb: -22.5, tailMeanDb: -24.2 })).toBe(true);
+  });
+
+  it('grensetilfellet nøyaktig −15 dB er IKKE mistenkt (strengt over terskelen flagger)', () => {
+    expect(TAIL_FALLOFF_THRESHOLD_DB).toBe(-15);
+    expect(isTailSuspect({ overallMeanDb: -20, tailMeanDb: -35 })).toBe(false);
+    // Et hår over terskelen vipper den andre veien.
+    expect(isTailSuspect({ overallMeanDb: -20, tailMeanDb: -34.9 })).toBe(true);
+  });
+
+  it('ikke-endelige måltall (stille klipp → -inf) gir ingen advarsel', () => {
+    expect(isTailSuspect({ overallMeanDb: -20, tailMeanDb: -Infinity })).toBe(false);
+    expect(isTailSuspect({ overallMeanDb: -Infinity, tailMeanDb: -Infinity })).toBe(false);
+    expect(isTailSuspect({ overallMeanDb: NaN, tailMeanDb: -20 })).toBe(false);
+  });
+});
+
+describe('halevakt — parseMeanVolumeDb', () => {
+  it('plukker mean_volume ut av volumedetect-utskriften', () => {
+    const stderr = [
+      '[Parsed_volumedetect_0 @ 000001c7] n_samples: 132300',
+      '[Parsed_volumedetect_0 @ 000001c7] mean_volume: -22.5 dB',
+      '[Parsed_volumedetect_0 @ 000001c7] max_volume: -1.2 dB',
+    ].join('\n');
+    expect(parseMeanVolumeDb(stderr)).toBe(-22.5);
+  });
+
+  it('tolker -inf (digital stillhet) som -Infinity', () => {
+    expect(parseMeanVolumeDb('mean_volume: -inf dB')).toBe(-Infinity);
+  });
+
+  it('gir null når utskriften ikke inneholder mean_volume', () => {
+    expect(parseMeanVolumeDb('')).toBeNull();
+    expect(parseMeanVolumeDb('ffmpeg: No such file or directory')).toBeNull();
+  });
+});
+
+describe('halevakt — buildVolumeDetectArgs', () => {
+  it('måler hele klippet uten seek', () => {
+    const args = buildVolumeDetectArgs('klipp.mp3', 'whole');
+    expect(args).toContain('volumedetect');
+    expect(args).not.toContain('-sseof');
+    expect(args[args.length - 1]).toBe('-');
+    expect(args).toContain('null');
+  });
+
+  it('måler halen med -sseof på TAIL_WINDOW_SECONDS', () => {
+    const args = buildVolumeDetectArgs('klipp.mp3', 'tail');
+    const idx = args.indexOf('-sseof');
+    expect(idx).toBeGreaterThanOrEqual(0);
+    expect(args[idx + 1]).toBe(`-${TAIL_WINDOW_SECONDS}`);
+    // -sseof må stå FØR -i for å virke som input-seek.
+    expect(idx).toBeLessThan(args.indexOf('-i'));
+  });
+
+  it('leser aldri stdin (batchen er ikke-interaktiv)', () => {
+    expect(buildVolumeDetectArgs('k.mp3', 'whole')).toContain('-nostdin');
+  });
+});
+
+describe('halevakt — rapportering', () => {
+  const ttsFlag = {
+    personaId: 'hardcore',
+    id: 'burpees',
+    outputRelPath: 'public/audio/personas/hardcore/exercise-burpees.mp3',
+    kind: 'tts' as const,
+    falloffDb: -2.4,
+  };
+
+  it('advarselen navngir fila, måltallene og foreslår et nytt take', () => {
+    const lines = formatTailWarning(ttsFlag).join('\n');
+    expect(lines).toContain('public/audio/personas/hardcore/exercise-burpees.mp3');
+    expect(lines).toContain('-2.4');
+    expect(lines).toContain('--refetch --only burpees --persona hardcore');
+  });
+
+  it('innspilte spor får ingen refetch-oppskrift (de hentes ikke fra TTS)', () => {
+    const lines = formatTailWarning({
+      personaId: 'romsdal',
+      id: 'start_321',
+      outputRelPath: 'public/audio/personas/romsdal/start_321.mp3',
+      kind: 'recorded',
+      falloffDb: -3.1,
+    }).join('\n');
+    expect(lines).not.toContain('--refetch');
+    expect(lines).toContain('start_321.mp3');
+  });
+
+  it('sluttrapporten teller og lister alle flaggede klipp', () => {
+    const lines = formatTailSummary([ttsFlag, { ...ttsFlag, personaId: 'boyband', falloffDb: -9.4 }]);
+    const text = lines.join('\n');
+    expect(text).toContain('2');
+    expect(text).toContain('hardcore/burpees');
+    expect(text).toContain('boyband/burpees');
+  });
+
+  it('sluttrapporten sier eksplisitt fra når ingenting ble flagget', () => {
+    const text = formatTailSummary([]).join('\n');
+    expect(text).toMatch(/ingen/i);
+    expect(text).not.toContain('--refetch');
   });
 });
