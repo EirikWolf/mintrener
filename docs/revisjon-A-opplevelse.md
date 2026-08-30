@@ -4,6 +4,8 @@
 
 Denne revisjonen handler om alt brukeren møter. Medieproduksjon, stemme og lisens dekkes i **Revisjon B1**; plattform, forvaltning og læringssløyfer i **Revisjon B2** — hold deg unna dem her.
 
+> **Les [`revisjon-00-slik-jobber-du.md`](revisjon-00-slik-jobber-du.md) først.** Den forklarer metode, leserekkefølge, kildehierarki og hvordan besvarelsen leveres. Dette dokumentet sier *hva* du skal vurdere; det andre sier *hvordan*.
+
 ---
 
 ## Metodekrav

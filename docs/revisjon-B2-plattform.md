@@ -8,6 +8,8 @@ Dette er en kode- og beslutningsrevisjon, ikke en opplevelsesrevisjon. Les kilde
 
 Medieproduksjon, stemme og lisens dekkes i **Revisjon B1**. Grensesnitt og brukeropplevelse i **Revisjon A**.
 
+> **Les [`revisjon-00-slik-jobber-du.md`](revisjon-00-slik-jobber-du.md) først.** Den forklarer metode, leserekkefølge, kildehierarki og hvordan besvarelsen leveres. Dette dokumentet sier *hva* du skal vurdere; det andre sier *hvordan*.
+
 ---
 
 ## Fagperspektiver
