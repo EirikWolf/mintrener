@@ -392,6 +392,143 @@ export const TTS_POST = {
   LOUDNORM: 'loudnorm=I=-16:TP=-1.5:LRA=11',
 } as const;
 
+// ---------------------------------------------------------------------------
+// Halevakt (QA-4, 2026-08-30): automatisk vakt mot avkuttede klipp.
+//
+// Chatterbox er stokastisk og kutter av og til halen av et take — produkteier
+// fanget «burpees» som ble til «burpii». Samme klasse som QA-1, bare i motsatt
+// ende av klippet (amputerte ANSATSER, løst med pre-roll i TRIM_START). Vi vil
+// ikke være avhengige av at et menneske hører slikt.
+//
+// Målemetoden: sammenlign mean_volume for klippets siste 50 ms mot klippets
+// samlede mean_volume. Et normalt klipp dør ut — differansen (hale minus
+// samlet) er tydelig negativ. Et avkuttet klipp har fortsatt full energi i
+// siste vindu, og differansen ligger nær null.
+// ---------------------------------------------------------------------------
+
+/** Halevinduet som måles, i sekunder (siste 50 ms av klippet). */
+export const TAIL_WINDOW_SECONDS = 0.05;
+
+/**
+ * Terskel for differansen hale minus samlet mean_volume: STRENGT over denne
+ * er klippet mistenkt avkuttet. Nøyaktig −15 dB er altså ikke mistenkt.
+ *
+ * Kalibrert mot et fullt sveip av lydbanken 2026-08-30 (152 klipp, målt med
+ * -sseof −0.05): typisk normalklipp faller −25 dB eller mer, spennet går ned
+ * mot −70 dB. Terskelen ligger bevisst et godt stykke over det typiske slik at
+ * bare haler med tilnærmet uendret energi plukkes opp.
+ *
+ * KJENT BEGRENSNING (bevisst akseptert): en absolutt terskel alene skiller
+ * ikke alle tilfeller. Sveipet viser at legitimt BRÅ take-avslutninger legger
+ * seg over terskelen (verst: hardcore/exercise-hulekroppshold på −1,7 dB), og
+ * motsatt at et avkuttet klipp kan lande under den — det opprinnelige
+ * «burpii»-klippet målte −24,4 dB mot søskenklipp på −50 til −72 dB, altså
+ * avslørt av SAMMENLIGNINGEN med søsknene, ikke av en absolutt grense.
+ * Derfor er dette en ADVARSEL som aldri avbryter kjøringen.
+ */
+export const TAIL_FALLOFF_THRESHOLD_DB = -15;
+
+export interface TailMeasurement {
+  /** mean_volume for hele klippet, i dB. */
+  readonly overallMeanDb: number;
+  /** mean_volume for de siste TAIL_WINDOW_SECONDS, i dB. */
+  readonly tailMeanDb: number;
+}
+
+/** Hvor mye halen har falt i forhold til klippet som helhet (negativt = dør ut). */
+export function tailFalloffDb(m: TailMeasurement): number {
+  return m.tailMeanDb - m.overallMeanDb;
+}
+
+/**
+ * Er klippet mistenkt avkuttet? Ikke-endelige måltall (digital stillhet gir
+ * -inf fra volumedetect) kan ikke vurderes — da tier vakten heller enn å
+ * fyre av en advarsel vi ikke kan begrunne.
+ */
+export function isTailSuspect(m: TailMeasurement): boolean {
+  const falloff = tailFalloffDb(m);
+  if (!Number.isFinite(falloff)) return false;
+  return falloff > TAIL_FALLOFF_THRESHOLD_DB;
+}
+
+/** Plukker `mean_volume: -22.5 dB` ut av volumedetect sin stderr-utskrift. */
+export function parseMeanVolumeDb(ffmpegStderr: string): number | null {
+  const match = /mean_volume:\s*(-?(?:inf|\d+(?:\.\d+)?))\s*dB/i.exec(ffmpegStderr);
+  if (!match?.[1]) return null;
+  const raw = match[1];
+  if (raw.endsWith('inf')) return raw.startsWith('-') ? -Infinity : Infinity;
+  return Number.parseFloat(raw);
+}
+
+/**
+ * ffmpeg-argumenter for én volumedetect-måling. 'tail' seeker med -sseof
+ * (input-seek relativt til slutten) — det er nettopp den varianten
+ * terskelen over er kalibrert mot.
+ */
+export function buildVolumeDetectArgs(
+  inputPath: string,
+  window: 'whole' | 'tail',
+): string[] {
+  return [
+    '-hide_banner',
+    '-nostdin',
+    '-nostats',
+    ...(window === 'tail' ? ['-sseof', `-${TAIL_WINDOW_SECONDS}`] : []),
+    '-i', inputPath,
+    '-af', 'volumedetect',
+    '-f', 'null',
+    '-',
+  ];
+}
+
+/** Ett flagget klipp fra halevakten. */
+export interface TailFlag {
+  readonly personaId: string;
+  readonly id: string;
+  readonly outputRelPath: string;
+  readonly kind: 'tts' | 'recorded';
+  readonly falloffDb: number;
+}
+
+/** `--refetch`-oppskriften som gir et nytt stokastisk take av ett klipp. */
+export function refetchCommand(personaId: string, id: string): string {
+  return `--refetch --only ${id} --persona ${personaId}`;
+}
+
+/**
+ * Advarselslinjene for ett flagget klipp. Innspilte spor får ingen
+ * refetch-oppskrift: de kommer fra en fast lokal kilde, ikke fra TTS.
+ */
+export function formatTailWarning(flag: TailFlag): readonly string[] {
+  const falloff = flag.falloffDb.toFixed(1);
+  const lines = [
+    `   ⚠️ HALEVAKT: ${flag.outputRelPath} kan være avkuttet.`,
+    `      Fall i halen (siste ${TAIL_WINDOW_SECONDS * 1000} ms mot klippets snitt):` +
+      ` ${falloff} dB, terskel ${TAIL_FALLOFF_THRESHOLD_DB} dB — halen dør ikke ut.`,
+  ];
+  if (flag.kind === 'tts') {
+    lines.push(
+      `      Lytt på klippet; er halen borte, kjør \`${refetchCommand(flag.personaId, flag.id)}\` for et nytt take.`,
+    );
+  } else {
+    lines.push('      Innspilt spor — sjekk kildefila, den hentes ikke fra TTS.');
+  }
+  return lines;
+}
+
+/** Halevaktens del av sluttrapporten: antall flaggede klipp, og hvilke. */
+export function formatTailSummary(flags: readonly TailFlag[]): readonly string[] {
+  if (flags.length === 0) {
+    return ['   Halevakt: ingen klipp flagget som mulig avkuttet.'];
+  }
+  return [
+    `   Halevakt: ${flags.length} klipp flagget som mulig avkuttet (advarsel, ikke feil):`,
+    ...flags.map(
+      (f) => `     ${f.personaId}/${f.id} — fall i halen: ${f.falloffDb.toFixed(1)} dB`,
+    ),
+  ];
+}
+
 function ffmpegArgs(inputPath: string, filter: string, outputPath: string): string[] {
   // -ar 44100 fordi loudnorm ellers leverer 192 kHz internt samplerate.
   return [
