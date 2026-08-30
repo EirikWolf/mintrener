@@ -1,50 +1,80 @@
 /**
  * Kanonisk register over alle localStorage-nøkler i Min Trener.
  *
- * Forhindrer PII/GDPR-lekkasjer der sletting eller eksport bommer på grunn av feilstavede strengliteraler.
+ * Registeret har to jobber, og bare den ene tåler feil:
+ *
+ *  - **Sletting** (GDPR art. 17) tåler at registeret er ufullstendig, fordi
+ *    `clearAllLocalUserData` også prefiks-skanner alt som begynner med
+ *    `mintrener_`. Registeret er sikkerhetsnettet, ikke mekanismen.
+ *  - **Dataeksport** (GDPR art. 15/20) leser nøkler ved navn. Står en nøkkel
+ *    feil her, blir feltet tomt i brukerens kopi uten at noe feiler.
+ *
+ * Registeret ble skrevet fra hukommelsen ved opprettelsen, og drev fra
+ * virkeligheten: 15 nøkler i bruk manglet, og 18 sto oppført uten å finnes.
+ * Verst var WORKOUT_HISTORY, som pekte på `mintrener_history_v1` mens
+ * historikken faktisk lå i `mintrener_local_workout_history` — eksporten
+ * leverte tom historikk til anonyme brukere.
+ *
+ * `storageKeys.test.ts` sammenligner nå registeret mot faktisk bruk i
+ * kildekoden og feiler ved drift. Legger du til en nøkkel, hører den hjemme her.
  */
 export const STORAGE_KEYS = {
-  // Treningshistorikk
-  WORKOUT_HISTORY: 'mintrener_history_v1',
-  LEGACY_WORKOUT_HISTORY: ['mintrener_history', 'mintrener_workout_history'],
+  // ── Treningshistorikk ──────────────────────────────────────────────────
+  /** Kanonisk historikk. Speiler WORKOUT_HISTORY_KEY i workoutHistoryStorage. */
+  WORKOUT_HISTORY: 'mintrener_local_workout_history',
+  /** Leses ved migrering, skrives aldri. */
+  LEGACY_WORKOUT_HISTORY: ['mintrener_local_history', 'mintrener_workout_history'],
 
-  // Egendefinerte økter, øvelser og styrkelogg
-  CUSTOM_WORKOUTS: 'mintrener_local_custom_workouts',
-  LEGACY_CUSTOM_WORKOUTS: 'mintrener_custom_workouts',
+  // ── Egendefinert innhold ───────────────────────────────────────────────
+  CUSTOM_WORKOUTS: 'mintrener_custom_workouts',
+  LEGACY_CUSTOM_WORKOUTS: 'mintrener_local_custom_workouts',
   CUSTOM_EXERCISES: 'mintrener_local_custom_exercises',
   LEGACY_CUSTOM_EXERCISES: 'mintrener_custom_exercises',
   STRENGTH_LOGS: 'mintrener_local_strength_logs',
   LEGACY_STRENGTH_LOGS: 'mintrener_strength_logs',
-
-  // Brukerprofil, mål og innstillinger
-  USER_PROFILE: 'mintrener_user_profile',
-  USER_SETTINGS: 'mintrener_user_settings',
-  FAVORITE_PROGRAM_IDS: 'mintrener_favorite_program_ids',
-  LEGACY_FAVORITES: 'mintrener_favorites',
-  COACH_PERSONA: 'mintrener_coach_persona',
-  COACH_VOLUME: 'mintrener_coach_volume',
-  ONBOARDING: 'mintrener_onboarding_v1',
-  WEEKLY_GOAL: 'mintrener_weekly_goal',
-  STREAK_CELEBRATED: 'mintrener_streak_celebrated_v1',
-  ACCOUNT_PROMPT: 'mintrener_account_prompt_v1',
-  BADGES: 'mintrener_badges',
+  /** Sett/reps/kg per øvelse for progresjonsberegning. */
+  STRENGTH_EXERCISE_LOGS: 'mintrener_strength_exercise_logs_v1',
   PERSONAL_RECORDS: 'mintrener_personal_records',
 
-  // Tilstand og gjenoppretting
+  // ── Profil, mål og preferanser ─────────────────────────────────────────
+  /** Fødselsår — grunnlag for makspuls. Personopplysning. */
+  USER_BIRTH_YEAR: 'mintrener_user_birth_year',
+  USER_PROFILE: 'mintrener_user_profile',
+  USER_PROFILES: 'mintrener_user_profiles_v1',
+  USER_SETTINGS: 'mintrener_user_settings',
+  FAVORITE_PROGRAM_IDS: 'mintrener_favorite_program_ids',
+  COACH_PERSONA: 'mintrener_coach_persona',
+  ONBOARDING: 'mintrener_onboarding_v1',
+  PREFERRED_LANGUAGE: 'mintrener_preferred_language_v1',
+  TELEMETRY_ENABLED: 'mintrener_telemetry_enabled',
+
+  // ── Mål, streak og feiring ─────────────────────────────────────────────
+  WEEKLY_GOAL: 'mintrener_weekly_goal',
+  /** Målhistorikk: et hevet ukesmål skal ikke kollapse tidligere uker. */
+  WEEKLY_GOAL_LOG: 'mintrener_weekly_goal_log_v1',
+  STREAK_CELEBRATED: 'mintrener_streak_celebrated_v1',
+  STREAK_REPORTED: 'mintrener_streak_reported_v1',
+  ACCOUNT_PROMPT: 'mintrener_account_prompt_v1',
+  BADGES: 'mintrener_badges',
+
+  // ── Programmer, ferdigheter og utfordringer ────────────────────────────
+  PROGRAM_OVERRIDES: 'mintrener_program_overrides_v1',
+  SKILL_TREE_PROGRESS: 'mintrener_skill_tree_progress_v1',
+  ACTIVE_CHALLENGE_ID: 'mintrener_active_challenge_id_v1',
+  /** Prefiks — én nøkkel per utfordring. Fanges av prefiks-skannet ved sletting. */
+  CHALLENGE_PROGRESS_PREFIX: 'mintrener_challenge_progress_',
+
+  // ── Tilstand og verktøy ────────────────────────────────────────────────
   INTERRUPTED_SESSION: 'mintrener_interrupted_session',
-  CURATOR_OVERRIDES: 'mintrener_curator_overrides',
-  MOTION_TRACKER_SETTINGS: 'mintrener_motion_tracker_settings',
-  ADAPTIVE_PROGRESSION: 'mintrener_adaptive_progression',
-  FATIGUE_STATE: 'mintrener_fatigue_state',
-  VOICE_COMMAND_SETTINGS: 'mintrener_voice_command_settings',
-  SKILL_TREE_PROGRESS: 'mintrener_skill_tree_progress',
-  CHALLENGES_PROGRESS: 'mintrener_challenges_progress',
   ORGANIZATION: 'mintrener_organization',
+  /** Internt QA-verktøy, ikke brukerdata. Med i registeret for slettingens skyld. */
+  CURATOR_FEEDBACK: 'mintrener_image_curator_feedback',
 } as const;
 
 /**
- * Tømmer absolutt alle lokale Min Trener-nøkler (GDPR Art. 17 - Retten til sletting).
- * Fjerner både faste kanoniske nøkler og eventuelle dynamiske nøkler med prefiks 'mintrener_'.
+ * Tømmer absolutt alle lokale Min Trener-nøkler (GDPR art. 17).
+ * Fjerner både registerets nøkler og eventuelle dynamiske nøkler med
+ * prefiks 'mintrener_'.
  */
 export function clearAllLocalUserData(): void {
   if (typeof window === 'undefined' || !window.localStorage) return;
@@ -70,7 +100,7 @@ export function clearAllLocalUserData(): void {
         val.forEach((k) => localStorage.removeItem(k));
       }
     });
-  } catch (err) {
-    console.warn('Kunne ikke tømme localStorage under sletting av brukerdata:', err);
+  } catch {
+    // localStorage utilgjengelig (privat modus / blokkert) — ingenting å tømme.
   }
 }
