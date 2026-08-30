@@ -943,7 +943,9 @@ describe('halevakt — checkTailWith (injisert måler)', () => {
       },
       measure: (p: string, window: 'whole' | 'tail') => {
         seen.push(p);
-        return window === 'whole' ? (opts.whole ?? -20) : (opts.tail ?? -91);
+        // NB: `??` duger ikke — null er et gyldig svar (mislykket måling).
+        if (window === 'whole') return 'whole' in opts ? (opts.whole as number | null) : -20;
+        return 'tail' in opts ? (opts.tail as number | null) : -91;
       },
     };
   }

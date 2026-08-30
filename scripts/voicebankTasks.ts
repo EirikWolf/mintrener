@@ -518,8 +518,8 @@ export function buildVolumeDetectArgs(
   ];
 }
 
-/** Én ferdig hale-måling fra runneren. */
-export interface TailMeasurementRecord {
+/** Ett flagget take fra halevakten — én ferdig hale-måling over terskel. */
+export interface TailFlag {
   readonly personaId: string;
   readonly id: string;
   /** Råfila måltallet faktisk gjelder — ikke den etterbehandlede output-fila. */
@@ -528,9 +528,30 @@ export interface TailMeasurementRecord {
   readonly falloffDb: number;
 }
 
-/** Ett flagget take fra halevakten. */
-export type TailFlag = TailMeasurementRecord;
+/** Hvorfor vakten ikke fikk et måltall for et TTS-klipp. */
+export type TailUnmeasuredReason =
+  | 'missing-raw'
+  | 'stale-cache'
+  | 'measure-failed'
+  | 'task-failed';
 
+/** Ett TTS-klipp halevakten IKKE fikk vurdert, og grunnen til det. */
+export interface TailUnmeasured {
+  /** `<persona>/<id>`, samme form som de feilede oppgavene i sluttrapporten. */
+  readonly id: string;
+  readonly reason: TailUnmeasuredReason;
+}
+
+/**
+ * Halevaktens dekning over én kjøring. Nevneren er TTS-klippene: innspilte
+ * spor er utenfor vaktens mandat (se tailSourceRelPath) og telles ikke.
+ */
+export interface TailCoverage {
+  /** Antall TTS-klipp vakten faktisk fikk et måltall for. */
+  readonly measured: number;
+  /** TTS-klippene den ikke fikk måltall for, med grunn. */
+  readonly unmeasured: readonly TailUnmeasured[];
+}
 
 /** `--refetch`-oppskriften som gir et nytt stokastisk take av ett klipp. */
 export function refetchCommand(personaId: string, id: string): string {
@@ -560,23 +581,101 @@ function flagLine(flag: TailFlag): string {
   return `       ${flag.personaId}/${flag.id} — fall i halen: ${flag.falloffDb.toFixed(1)} dB`;
 }
 
+/** Menneskelesbar grunn per dekningshull, brukt i sluttrapporten. */
+const UNMEASURED_REASON_TEXT: Readonly<Record<TailUnmeasuredReason, string>> = {
+  'missing-raw':
+    'råfila mangler i audio/raw-cache/ (aldri hentet, eller frisk klone — mappa er gitignorert)',
+  'stale-cache':
+    'rå-cachen er utdatert (manuskriptteksten er endret) — råfila svarer verken til dagens tekst eller til klippet i public/',
+  'measure-failed': 'ffmpeg-målingen mislyktes',
+  'task-failed': 'oppgaven feilet før vakten rakk å måle',
+};
+
+/** Rapporten skal være lesbar; en full id-liste kan være 148 linjer lang. */
+const MAX_LISTED_UNMEASURED = 6;
+
+const REASON_ORDER: readonly TailUnmeasuredReason[] = [
+  'missing-raw',
+  'stale-cache',
+  'measure-failed',
+  'task-failed',
+];
+
+/** Én gruppe per grunn, med en avkortet id-liste under. */
+function formatUnmeasuredGroups(gaps: readonly TailUnmeasured[]): readonly string[] {
+  return REASON_ORDER.flatMap((reason) => {
+    const ids = gaps.filter((g) => g.reason === reason).map((g) => g.id);
+    if (ids.length === 0) return [];
+    const shown = ids.slice(0, MAX_LISTED_UNMEASURED).join(', ');
+    const rest =
+      ids.length > MAX_LISTED_UNMEASURED
+        ? ` … og ${ids.length - MAX_LISTED_UNMEASURED} til`
+        : '';
+    return [
+      `        ${ids.length} × ${UNMEASURED_REASON_TEXT[reason]}:`,
+      `           ${shown}${rest}`,
+    ];
+  });
+}
+
 /**
- * Halevaktens del av sluttrapporten.
+ * Halevaktens del av sluttrapporten — flagg OG dekning.
  *
- * Ingen dekningsstatistikk her, i motsetning til før: vakten dømmer hvert take
- * for seg mot en absolutt terskel, så «ingen flagg» betyr faktisk «ingen funn»
- * også i en delvis kjøring (--persona/--only). Det var den søsken-relative
- * vakten som trengte et forbehold, og den er fjernet.
+ * Dekningstallene er ikke pynt (reviewer B1): vakten kan bare uttale seg om
+ * take den faktisk har målt, og den måler ingenting når råfila i
+ * audio/raw-cache/ ikke finnes. Det er ikke et hypotetisk tilfelle — mappa er
+ * gitignorert mens public/audio/personas/ er committet, så på en frisk klone
+ * hoppes hvert eneste TTS-klipp over uten måleunderlag. En rapport som bare
+ * skrev «ingen take flagget» friskmeldte da 148 uvurderte klipp.
+ *
+ * Derfor: antall MÅLTE og antall IKKE-MÅLTE står alltid side om side, og
+ * «ingen flagg» får aldri stå alene når dekningen er delvis eller null.
  */
-export function formatTailSummary(flags: readonly TailFlag[]): readonly string[] {
-  if (flags.length === 0) {
-    return ['   Halevakt: ingen take flagget som mulig avkuttet.'];
+export function formatTailSummary(
+  flags: readonly TailFlag[],
+  coverage: TailCoverage,
+): readonly string[] {
+  const gaps = coverage.unmeasured;
+  const total = coverage.measured + gaps.length;
+
+  // Ingen TTS-oppgaver i kjøringen (f.eks. `--only start_321`): vakten har
+  // ingenting å vokte, og det er noe helt annet enn manglende dekning.
+  if (total === 0) {
+    return ['   Halevakt: ingen TTS-klipp i denne kjøringen — ingenting å vurdere.'];
   }
-  return [
-    `   Halevakt: ${flags.length} take flagget som mulig avkuttet` +
-      ` (advarsel, ikke feil — terskel ${TAIL_FALLOFF_THRESHOLD_DB} dB):`,
-    ...flags.map(flagLine),
-  ];
+
+  const lines: string[] = [];
+  if (coverage.measured === 0) {
+    lines.push(
+      `   ⚠️ Halevakt: INGEN DEKNING — 0 av ${total} TTS-klipp ble målt.`,
+      '      Vakten har ikke vurdert et eneste take og sier derfor ingenting om',
+      '      hvorvidt noen av dem er avkuttet.',
+    );
+  } else if (flags.length === 0) {
+    lines.push(
+      `   Halevakt: ingen av de ${coverage.measured} målte take-ene er flagget som mulig avkuttet.`,
+    );
+  } else {
+    lines.push(
+      `   Halevakt: ${flags.length} av ${coverage.measured} målte take flagget som mulig` +
+        ` avkuttet (advarsel, ikke feil — terskel ${TAIL_FALLOFF_THRESHOLD_DB} dB):`,
+      ...flags.map(flagLine),
+    );
+  }
+
+  if (gaps.length === 0) {
+    lines.push(`      Dekning: alle ${total} TTS-klipp ble målt.`);
+    return lines;
+  }
+  if (coverage.measured > 0) {
+    lines.push(
+      `      ⚠️ DELVIS DEKNING: ${gaps.length} av ${total} TTS-klipp kunne ikke måles.`,
+      '      Fravær av flagg er derfor IKKE en friskmelding — de umålte klippene',
+      '      er uvurderte, ikke friske.',
+    );
+  }
+  lines.push(...formatUnmeasuredGroups(gaps));
+  return lines;
 }
 
 function ffmpegArgs(inputPath: string, filter: string, outputPath: string): string[] {

@@ -23,6 +23,12 @@
  * Mistanke gir en ADVARSEL med et `--refetch`-forslag og telles i
  * sluttrapporten — kjøringen fortsetter og exit-koden er urørt, for et take
  * kan legitimt være brått.
+ * DEKNING: sluttrapporten oppgir alltid både antall MÅLTE og antall
+ * IKKE-MÅLTE TTS-klipp. Vakten kan bare uttale seg om take den har målt, og
+ * den måler ingenting når råfila mangler — audio/raw-cache/ er gitignorert
+ * mens public/audio/personas/ er committet, så på en frisk klone hoppes hvert
+ * klipp over uten måleunderlag. «Ingen flagg» betyr derfor «ingen funn» BARE
+ * når rapporten samtidig sier at dekningen var full.
  *
  * Bruk:
  *   npx tsx scripts/generatePersonaVoicebank.ts [--dry-run] [--persona <id>]
@@ -74,7 +80,9 @@ import {
   updateConsecutiveFailures,
   type CliOptions,
   type RecordedTask,
+  type TailCoverage,
   type TailFlag,
+  type TailUnmeasured,
   type TaskOutcome,
   type TtsTask,
   type VoicebankTask,
@@ -136,44 +144,96 @@ function measureMeanVolumeDb(filePath: string, window: 'whole' | 'tail'): number
 }
 
 /**
+ * Målesømmen halevakten bruker. I produksjon er dette fs + ffmpeg; i test
+ * injiseres en teller som registrerer HVILKEN fil som ble målt — samme mønster
+ * som `persistRawCache` sin injiserte `io`. Sømmen finnes fordi bytter man
+ * råfila mot output-fila her, er hele Beslutning 39 ugyldig, og det må en test
+ * kunne se.
+ */
+export interface TailProbe {
+  readonly exists: (absPath: string) => boolean;
+  readonly measure: (absPath: string, window: 'whole' | 'tail') => number | null;
+}
+
+/**
+ * Utfallet av halevaktens pass over ett klipp. Skillet mellom «målt og frisk»
+ * og «ikke målt» er hele poenget: bare det første er en uttalelse om take-et.
+ */
+export type TailCheckResult =
+  /** Innspilt spor — utenfor vaktens mandat, ikke et dekningshull. */
+  | { readonly kind: 'not-applicable' }
+  /** Råfila finnes ikke (aldri hentet, eller frisk klone). */
+  | { readonly kind: 'missing-raw'; readonly rawRelPath: string }
+  /** Råfila er fra en eldre manuskripttekst — den kan ikke tilskrives noe klipp. */
+  | { readonly kind: 'stale-cache'; readonly rawRelPath: string }
+  /** Fila finnes, men ffmpeg ga ingen brukbare måltall. */
+  | { readonly kind: 'measure-failed'; readonly rawRelPath: string }
+  /** Målt: `flag` er satt bare når take-et er mistenkt avkuttet. */
+  | { readonly kind: 'ok'; readonly flag: TailFlag | null };
+
+/**
  * Halevaktens per-klipp-pass: måler RÅFILA fra Chatterbox (ikke den
  * etterbehandlede output-fila — se kommentaren over TAIL_FALLOFF_THRESHOLD_DB)
- * og advarer hvis take-et fortsatt har tale-energi i halen. Selve målingen er
- * I/O og bor derfor her; terskel og tekst er rene funksjoner i voicebankTasks.
+ * og flagger take som fortsatt har tale-energi i halen. Terskel og tekst er
+ * rene funksjoner i voicebankTasks; her er bare I/O-en, gjennom `probe`.
  *
  * Kjøres også når klippet HOPPES OVER: cachefila ER råfila, så en inkrementell
  * kjøring der alt ligger ferdig fra før får den samme sjekken som en full
  * kjøring. Uten det ville vakten vært inert nettopp i den vanligste kjøringen.
  *
- * Returnerer flagget hvis take-et er mistenkt, ellers null. En advarsel
+ * Ren funksjon av `probe` — ingen utskrift, ingen exit-kode. Et umålt klipp
+ * returneres som umålt og telles i dekningen; det er ALDRI det samme som et
+ * friskt klipp.
+ */
+export function checkTailWith(task: VoicebankTask, probe: TailProbe): TailCheckResult {
+  const rawRelPath = tailSourceRelPath(task);
+  // Innspilte spor har ingen råfil fra Chatterbox og måles ikke.
+  if (rawRelPath === null) return { kind: 'not-applicable' };
+  const rawPath = toAbsolute(rawRelPath);
+  if (!probe.exists(rawPath)) return { kind: 'missing-raw', rawRelPath };
+  const overallMeanDb = probe.measure(rawPath, 'whole');
+  const tailMeanDb = probe.measure(rawPath, 'tail');
+  if (overallMeanDb === null || tailMeanDb === null) {
+    return { kind: 'measure-failed', rawRelPath };
+  }
+  const measurement = { overallMeanDb, tailMeanDb };
+  if (!isTailSuspect(measurement)) return { kind: 'ok', flag: null };
+  return {
+    kind: 'ok',
+    flag: {
+      personaId: task.personaId,
+      id: task.id,
+      rawRelPath,
+      outputRelPath: task.outputRelPath,
+      falloffDb: tailFalloffDb(measurement),
+    },
+  };
+}
+
+/** Produksjonsmåleren: ekte filsystem + ekte ffmpeg. */
+const REAL_TAIL_PROBE: TailProbe = {
+  exists: (absPath) => fs.existsSync(absPath),
+  measure: measureMeanVolumeDb,
+};
+
+/**
+ * checkTailWith mot ekte fs/ffmpeg, med utskriften på plass. En advarsel
  * avbryter ALDRI kjøringen: et take kan legitimt være brått, og en mislykket
  * måling skal ikke stoppe en batch som ellers går fint.
  */
-function checkTail(task: VoicebankTask): TailFlag | null {
-  const rawRelPath = tailSourceRelPath(task);
-  // Innspilte spor har ingen råfil fra Chatterbox og måles ikke.
-  if (rawRelPath === null) return null;
-  const rawPath = toAbsolute(rawRelPath);
-  if (!fs.existsSync(rawPath)) return null;
-  const overallMeanDb = measureMeanVolumeDb(rawPath, 'whole');
-  const tailMeanDb = measureMeanVolumeDb(rawPath, 'tail');
-  if (overallMeanDb === null || tailMeanDb === null) {
-    console.warn(`   ⚠️ Halevakt: klarte ikke måle ${rawRelPath} — hopper over sjekken.`);
-    return null;
+function checkTail(task: VoicebankTask): TailCheckResult {
+  const result = checkTailWith(task, REAL_TAIL_PROBE);
+  if (result.kind === 'measure-failed') {
+    console.warn(`   ⚠️ Halevakt: klarte ikke måle ${result.rawRelPath} — klippet er UMÅLT.`);
   }
-  const measurement = { overallMeanDb, tailMeanDb };
-  if (!isTailSuspect(measurement)) return null;
-  const flag: TailFlag = {
-    personaId: task.personaId,
-    id: task.id,
-    rawRelPath,
-    outputRelPath: task.outputRelPath,
-    falloffDb: tailFalloffDb(measurement),
-  };
-  for (const line of formatTailWarning(flag)) {
-    console.warn(line);
+  // Manglende råfil logges ikke per klipp: på en frisk klone er det 148 linjer
+  // uten informasjon. Sluttrapportens dekningstall sier det én gang, presist.
+  if (result.kind === 'ok' && result.flag) {
+    for (const line of formatTailWarning(result.flag)) {
+      console.warn(line);
+    }
   }
-  return flag;
+  return result;
 }
 
 /** Rydder etterlatte tempfiler fra en tidligere hardt drept kjøring. */
@@ -248,14 +308,18 @@ function readSidecar(sidecarPath: string): string | null {
   return fs.existsSync(sidecarPath) ? fs.readFileSync(sidecarPath, 'utf-8') : null;
 }
 
-/** Utfallet av én oppgave, pluss halevaktens måling/flagg for klippet. */
+/** Utfallet av én oppgave, pluss halevaktens utfall for klippet. */
 interface TaskResult {
   readonly outcome: TaskOutcome;
-  /** Halevaktens flagg for take-et, eller null når det ikke er mistenkt. */
-  readonly tail: TailFlag | null;
+  /** Halevaktens utfall: målt (med/uten flagg), eller hvorfor den ikke målte. */
+  readonly tail: TailCheckResult;
 }
 
-const plain = (outcome: TaskOutcome): TaskResult => ({ outcome, tail: null });
+/** Oppgaver uten et halevakt-pass (innspilte spor, og oppgaver som feilet). */
+const plain = (outcome: TaskOutcome): TaskResult => ({
+  outcome,
+  tail: { kind: 'not-applicable' },
+});
 
 async function runTtsTask(task: TtsTask, token: string, opts: CliOptions): Promise<TaskResult> {
   const outputPath = toAbsolute(task.outputRelPath);
@@ -278,8 +342,25 @@ async function runTtsTask(task: TtsTask, token: string, opts: CliOptions): Promi
 
   if (action === 'skip-existing') {
     console.log(`⏩ Hopper over eksisterende: ${task.personaId}/${task.id}`);
-    // Halevakten måler råfila, og den ligger der uansett om vi behandlet
-    // klippet på nytt — så et hopp gir ingen grunn til å la sjekken utebli.
+    // BØR 3: er cachen utdatert, MÅLER vi ikke. Råfila er da fra forrige
+    // manuskripttekst og svarer verken til dagens tekst eller til output-fila
+    // som allerede ligger der — et måltall herfra kan ikke tilskrives noen av
+    // filene advarselen ville navngitt. Å erklære et dekningshull er mindre
+    // villedende enn å rapportere en måling om en fil som ikke finnes lenger;
+    // hullet er dessuten synlig i sluttrapporten, så ingenting skjules.
+    if (rawExists && !cacheExists) {
+      console.warn(
+        `   ⚠️ Halevakt: står over ${task.personaId}/${task.id} — rå-cachen er utdatert,` +
+          ' så råfila hører verken til dagens tekst eller til klippet i public/.',
+      );
+      return {
+        outcome: 'skipped',
+        tail: { kind: 'stale-cache', rawRelPath: task.cacheRelPath },
+      };
+    }
+    // Ellers: halevakten måler råfila, og den ligger der uansett om vi
+    // behandlet klippet på nytt — et hopp gir ingen grunn til å la sjekken
+    // utebli.
     return { outcome: 'skipped', tail: checkTail(task) };
   }
   if (action === 'missing-cache') {
@@ -329,7 +410,7 @@ function runRecordedTask(task: RecordedTask, opts: CliOptions): TaskResult {
     console.log(`🎛️ [${task.personaId}/${task.id}] etterbehandler innspilt spor (skånsom kjede)`);
     postProcess(sourcePath, outputPath, buildRecordedFfmpegArgs);
     console.log(`   ✅ ${task.outputRelPath}`);
-    return { outcome: 'generated', tail: null };
+    return plain('generated');
   } catch (err) {
     console.error(`   ❌ Feilet: ${err instanceof Error ? err.message : String(err)}`);
     return plain('failed');
@@ -372,6 +453,8 @@ async function runAll(tasks: readonly VoicebankTask[], opts: CliOptions): Promis
   const counts: Record<TaskOutcome, number> = { generated: 0, skipped: 0, failed: 0 };
   const failedIds: string[] = [];
   const tailFlags: TailFlag[] = [];
+  let tailMeasured = 0;
+  const tailUnmeasured: TailUnmeasured[] = [];
   let consecutiveFailures = 0;
   // Sekvensielt med vilje — én GPU på Kitor.
   for (const task of tasks) {
@@ -380,7 +463,20 @@ async function runAll(tasks: readonly VoicebankTask[], opts: CliOptions): Promis
         ? await runTtsTask(task, token, opts)
         : runRecordedTask(task, opts);
     counts[outcome]++;
-    if (tail) tailFlags.push(tail);
+    // Dekningsregnskapet gjelder TTS-klipp: innspilte spor er utenfor vaktens
+    // mandat og hører hverken i teller eller nevner. For et TTS-klipp er ALT
+    // som ikke er en fullført måling et dekningshull — også en feilet oppgave.
+    if (task.kind === 'tts') {
+      if (tail.kind === 'ok') {
+        tailMeasured++;
+        if (tail.flag) tailFlags.push(tail.flag);
+      } else {
+        tailUnmeasured.push({
+          id: `${task.personaId}/${task.id}`,
+          reason: tail.kind === 'not-applicable' ? 'task-failed' : tail.kind,
+        });
+      }
+    }
     if (outcome === 'failed') failedIds.push(`${task.personaId}/${task.id}`);
     consecutiveFailures = updateConsecutiveFailures(consecutiveFailures, outcome);
     if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
@@ -395,8 +491,11 @@ async function runAll(tasks: readonly VoicebankTask[], opts: CliOptions): Promis
   console.log('\n🏁 Sluttrapport:');
   console.log(`   Generert: ${counts.generated}, hoppet over: ${counts.skipped}, feilet: ${counts.failed}`);
   // Halevakten påvirker ikke exit-koden: flaggede klipp skal lyttes på, ikke
-  // behandles som byggfeil.
-  for (const line of formatTailSummary(tailFlags)) {
+  // behandles som byggfeil. Dekningen rapporteres alltid ved siden av flaggene,
+  // slik at «ingen flagg» aldri kan leses som «ingen funn» i en kjøring der
+  // vakten ikke fikk målt alt.
+  const coverage: TailCoverage = { measured: tailMeasured, unmeasured: tailUnmeasured };
+  for (const line of formatTailSummary(tailFlags, coverage)) {
     console.log(line);
   }
   if (failedIds.length > 0) {
