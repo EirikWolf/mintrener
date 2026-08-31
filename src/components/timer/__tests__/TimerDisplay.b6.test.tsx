@@ -351,7 +351,7 @@ describe('TimerDisplay – dimme-modus (B6.3)', () => {
   it('suspenderer dimmingen mens TV-modus er åpen (fixed-overlay må ikke re-scopes av filter)', () => {
     // Åpnes fra idle (TV-knappen finnes ikke i fokusmodus), deretter startes økten
     const utils = renderDisplay(makeState({ status: 'idle' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Storskjerm og TV-visning' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Storskjerm- og TV-visning' }));
     rerenderDisplay(utils, makeState({ status: 'running', phase: 'work' }));
 
     const surface = screen.getByTestId('workout-surface') as HTMLElement;

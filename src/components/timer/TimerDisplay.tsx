@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { TimerState, WorkoutTemplate, IntervalPhase } from '../../types/workout';
 import { CircularProgress } from './CircularProgress';
 import { UserMenu } from '../auth/UserMenu';
@@ -55,11 +55,124 @@ import {
   TrendingUp,
   ShieldAlert,
   Tv,
+  Wand2,
+  ChevronDown,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { shareWorkout } from '../../services/shareWorkoutService';
 import { calculateWeeklyProgress, makeGoalForWeek, WeeklyGoalProgress } from '../../services/weeklyGoalService';
 import { computeWeekStreak, WeekStreakResult } from '../../services/streakService';
 import { StreakDetailSheet } from '../streak/StreakDetailSheet';
+
+/**
+ * Verktøyene på startskjermen, i prioritert rekkefølge.
+ *
+ * `primary` avgjør hva som står framme når raden er kollapset. Rangeringen er
+ * revisjon As: de fire første hører til planleggingen av en treningsøkt, de
+ * øvrige er egne moduser man oppsøker bevisst.
+ *
+ * Storskjermvisningen står bevisst IKKE her. Den hadde tidligere én inngang i
+ * toppbaren OG én i matrisen, med hver sin ordlyd i aria-label, slik at
+ * skjermlesere leste dem som to ulike funksjoner (revisjon A, spørsmål B).
+ * Toppbaren eier den nå alene.
+ */
+type StartScreenToolId =
+  | 'utfordring'
+  | 'styrke'
+  | 'skaansom'
+  | 'coach'
+  | 'generator'
+  | 'micro'
+  | 'ferdighet'
+  | 'gruppe'
+  | 'gps';
+
+interface StartScreenTool {
+  id: StartScreenToolId;
+  label: string;
+  ariaLabel: string;
+  icon: LucideIcon;
+  iconClass: string;
+  primary: boolean;
+}
+
+const START_SCREEN_TOOLS: StartScreenTool[] = [
+  {
+    id: 'utfordring',
+    label: 'Utfordring',
+    ariaLabel: '28 og 30 dagers treningsutfordringer',
+    icon: Trophy,
+    iconClass: 'text-amber-400',
+    primary: true,
+  },
+  {
+    id: 'styrke',
+    label: 'Styrke',
+    ariaLabel: 'Styrketrening med dobbel progresjon',
+    icon: Dumbbell,
+    iconClass: 'text-emerald-400',
+    primary: true,
+  },
+  {
+    id: 'skaansom',
+    label: 'Skånsom',
+    ariaLabel: 'Skade- og smertefilter for trygg trening',
+    icon: ShieldAlert,
+    iconClass: 'text-rose-400',
+    primary: true,
+  },
+  // De to AI-inngangene hadde samme Sparkles-ikon, begge navn på «AI», og lå
+  // som naboer i matrisen (revisjon A, tilleggsfunn 3). De skilles nå på både
+  // navn og ikon: Astrid svarer på spørsmål, generatoren lager en økt.
+  {
+    id: 'coach',
+    label: 'Astrid',
+    ariaLabel: 'Astrid AI-trener',
+    icon: Sparkles,
+    iconClass: 'text-emerald-400',
+    primary: true,
+  },
+  {
+    id: 'generator',
+    label: 'Lag økt',
+    ariaLabel: 'Lag økt med AI-generator',
+    icon: Wand2,
+    iconClass: 'text-indigo-400',
+    primary: false,
+  },
+  {
+    id: 'micro',
+    label: 'Micro',
+    ariaLabel: 'Microtrening',
+    icon: Zap,
+    iconClass: 'text-amber-400',
+    primary: false,
+  },
+  {
+    id: 'ferdighet',
+    label: 'Ferdighet',
+    ariaLabel: 'Ferdighetstrær og mestringsstige',
+    icon: TrendingUp,
+    iconClass: 'text-purple-400',
+    primary: false,
+  },
+  {
+    id: 'gruppe',
+    label: 'Gruppe',
+    ariaLabel: 'Grupperom',
+    icon: Users,
+    iconClass: 'text-purple-400',
+    primary: false,
+  },
+  {
+    id: 'gps',
+    label: 'GPS',
+    ariaLabel: 'GPS utendørsøkt',
+    icon: Navigation,
+    iconClass: 'text-emerald-400',
+    primary: false,
+  },
+];
 
 interface FocusModeQuickControlsProps {
   soundEnabled: boolean;
@@ -184,6 +297,40 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   const [isSkillTreeModalOpen, setIsSkillTreeModalOpen] = useState(false);
   const [isAiWorkoutModalOpen, setIsAiWorkoutModalOpen] = useState(false);
   const [isPainFilterOpen, setIsPainFilterOpen] = useState(false);
+
+  // Verktøyraden åpner kollapset ved hvert besøk. Tilstanden lagres bevisst
+  // ikke: en utvidet rad er den gamle matrisen på nytt, og ett trykk er
+  // billigere enn en startskjerm som sakte fylles opp igjen.
+  const [showAllTools, setShowAllTools] = useState(false);
+  const toolRowRef = useRef<HTMLDivElement>(null);
+
+  // Utvidelsen legger to nye rader under skjermkanten, bak bunnmenyen. Uten
+  // dette ser trykket ut som om ingenting skjedde. Instant scroll (ingen
+  // 'smooth') respekterer prefers-reduced-motion uten egen sjekk.
+  const handleToggleTools = () => {
+    setShowAllTools((v) => {
+      if (!v) {
+        // scrollIntoView finnes ikke i jsdom — valgfritt kall holder testene grønne
+        requestAnimationFrame(() => toolRowRef.current?.scrollIntoView?.({ block: 'end' }));
+      }
+      return !v;
+    });
+  };
+
+  // Én åpner per verktøy. Record-typen er poenget: legges det til en id i
+  // START_SCREEN_TOOLS uten en åpner her, feiler typesjekken i stedet for at
+  // knappen blir stum.
+  const toolOpeners: Record<StartScreenToolId, () => void> = {
+    utfordring: () => setIsChallengesModalOpen(true),
+    styrke: () => setIsStrengthModalOpen(true),
+    skaansom: () => setIsPainFilterOpen(true),
+    coach: () => setIsAiCoachOpen(true),
+    generator: () => setIsAiWorkoutModalOpen(true),
+    micro: () => setIsMicroModalOpen(true),
+    ferdighet: () => setIsSkillTreeModalOpen(true),
+    gruppe: () => setIsGroupModalOpen(true),
+    gps: () => setIsGpsModalOpen(true),
+  };
   const [isVoiceControlActive, setIsVoiceControlActive] = useState<boolean>(() => voiceCommandService.getIsListening());
   const [activeMicroExercise, setActiveMicroExercise] = useState<ExerciseItem | null>(null);
   const [activeChallengeId, setActiveChallengeIdState] = useState<string | null>(() => getActiveChallengeId());
@@ -650,91 +797,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                 );
               })()}
 
-              {/* 1. VERKTØY- OG MODUS-MATRISE (Alltid synlige på 2 linjer) */}
-              <div className="grid grid-cols-5 gap-1 sm:gap-1.5 py-0.5">
-                <button
-                  onClick={() => setIsChallengesModalOpen(true)}
-                  aria-label="28 og 30 dagers treningsutfordringer"
-                  className="py-1.5 px-1 rounded-xl bg-amber-950/80 border border-amber-500/50 text-[10px] sm:text-[11px] font-bold text-amber-300 hover:bg-amber-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 ring-1 ring-amber-400/20 text-center"
-                >
-                  <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                  <span className="truncate">Utfordring</span>
-                </button>
-                <button
-                  onClick={() => setIsPainFilterOpen(true)}
-                  aria-label="Skade- og smertefilter for trygg trening"
-                  className="py-1.5 px-1 rounded-xl bg-rose-950/80 border border-rose-500/50 text-[10px] sm:text-[11px] font-bold text-rose-300 hover:bg-rose-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 ring-1 ring-rose-400/20 text-center"
-                >
-                  <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                  <span className="truncate">Skånsom</span>
-                </button>
-                <button
-                  onClick={() => setIsAiCoachOpen(true)}
-                  aria-label="Astrid AI-Trener"
-                  className="py-1.5 px-1 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-[10px] sm:text-[11px] font-bold text-emerald-300 hover:bg-emerald-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  <span className="truncate">Astrid AI</span>
-                </button>
-                <button
-                  onClick={() => setIsAiWorkoutModalOpen(true)}
-                  aria-label="AI Treningsgenerator"
-                  className="py-1.5 px-1 rounded-xl bg-indigo-950/80 border border-indigo-800/80 text-[10px] sm:text-[11px] font-bold text-indigo-300 hover:bg-indigo-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
-                >
-                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">AI Økt</span>
-                </button>
-                <button
-                  onClick={() => setIsSkillTreeModalOpen(true)}
-                  aria-label="Ferdighetstrær & Mestringsstige"
-                  className="py-1.5 px-1 rounded-xl bg-purple-950/80 border border-purple-800/80 text-[10px] sm:text-[11px] font-bold text-purple-400 hover:bg-purple-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
-                >
-                  <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">Ferdighet</span>
-                </button>
-                <button
-                  onClick={() => setIsStrengthModalOpen(true)}
-                  aria-label="Styrketrening med Dobbel Progresjon"
-                  className="py-1.5 px-1 rounded-xl bg-emerald-950/80 border border-emerald-800/80 text-[10px] sm:text-[11px] font-bold text-emerald-400 hover:bg-emerald-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
-                >
-                  <Dumbbell className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">Styrke</span>
-                </button>
-                <button
-                  onClick={() => setIsMicroModalOpen(true)}
-                  aria-label="Microtrening"
-                  className="py-1.5 px-1 rounded-xl bg-amber-950/80 border border-amber-800/80 text-[10px] sm:text-[11px] font-bold text-amber-400 hover:bg-amber-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
-                >
-                  <Zap className="w-3.5 h-3.5 fill-current shrink-0" />
-                  <span className="truncate">Micro</span>
-                </button>
-                <button
-                  onClick={() => setIsGpsModalOpen(true)}
-                  aria-label="GPS Utendørsøkt"
-                  className="py-1.5 px-1 rounded-xl bg-emerald-950/80 border border-emerald-800/80 text-[10px] sm:text-[11px] font-bold text-emerald-400 hover:bg-emerald-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
-                >
-                  <Navigation className="w-3.5 h-3.5 fill-current shrink-0" />
-                  <span className="truncate">GPS</span>
-                </button>
-                <button
-                  onClick={() => setIsGroupModalOpen(true)}
-                  aria-label="Grupperom"
-                  className="py-1.5 px-1 rounded-xl bg-purple-950/80 border border-purple-800/80 text-[10px] sm:text-[11px] font-bold text-purple-400 hover:bg-purple-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
-                >
-                  <Users className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">Gruppe</span>
-                </button>
-                <button
-                  onClick={() => setIsTvModeOpen(true)}
-                  aria-label="Storskjerm og TV-visning"
-                  className="py-1.5 px-1 rounded-xl bg-blue-950/80 border border-blue-800/80 text-[10px] sm:text-[11px] font-bold text-blue-400 hover:bg-blue-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 ring-1 ring-blue-400/20 text-center"
-                >
-                  <Tv className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">TV</span>
-                </button>
-              </div>
-
-              {/* 2. FAVORITT-PROGRAMMER OVERSKRIFT & LENKE */}
+              {/* FAVORITT-PROGRAMMER OVERSKRIFT & LENKE */}
               <div className="flex items-center justify-between px-1 pt-1.5 pb-0.5">
                 <span className="text-[11px] uppercase font-black text-zinc-300 tracking-wider flex items-center gap-1.5">
                   <Star className="w-3.5 h-3.5 text-amber-400 fill-current" />
@@ -1003,6 +1066,55 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           </div>
         )}
       </footer>
+
+      {/* 4. UTFORSK OG VERKTØY — sist på siden, kollapset til fire.
+          Matrisen sto tidligere over favorittlisten og dominerte skjermen med ti
+          alltid-synlige knapper (revisjon A, spørsmål D). Nå ligger den etter
+          primærhandlingen, og bare de fire som hører til en treningsøkt står
+          framme. Resten er ett trykk unna, ikke borte. */}
+      {state.status === 'idle' && (
+        <section className="shrink-0 z-10 pt-1 space-y-1 pb-[calc(env(safe-area-inset-bottom,0px)+8px)]">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[11px] uppercase font-black text-zinc-400 tracking-wider">
+              Utforsk og verktøy
+            </span>
+            <button
+              type="button"
+              onClick={handleToggleTools}
+              aria-expanded={showAllTools}
+              aria-controls="verktoy-rad"
+              className="flex items-center gap-0.5 px-2 py-1.5 -mr-1 rounded-lg text-xs font-bold text-emerald-400 hover:text-emerald-300 hover:bg-zinc-900/60 transition-colors"
+            >
+              {/* Navnet står stille i begge tilstander (WCAG 2.5.3); aria-expanded
+                  og pilretningen bærer tilstanden. */}
+              <span>Flere verktøy</span>
+              <ChevronDown
+                aria-hidden="true"
+                className={`w-3.5 h-3.5 transition-transform ${showAllTools ? 'rotate-180' : ''}`}
+              />
+            </button>
+          </div>
+
+          <div ref={toolRowRef} id="verktoy-rad" data-testid="verktoy-rad" className="grid grid-cols-4 gap-1.5">
+            {START_SCREEN_TOOLS.filter((t) => showAllTools || t.primary).map((tool) => {
+              const Ikon = tool.icon;
+              return (
+                <button
+                  key={tool.id}
+                  onClick={() => toolOpeners[tool.id]()}
+                  aria-label={tool.ariaLabel}
+                  className="min-h-[44px] px-1 py-1.5 rounded-xl bg-zinc-900/80 border border-zinc-800 hover:bg-zinc-800 hover:border-zinc-700 transition-all active:scale-95 flex flex-col items-center justify-center gap-0.5 text-center shadow-sm"
+                >
+                  <Ikon aria-hidden="true" className={`w-4 h-4 shrink-0 ${tool.iconClass}`} />
+                  <span className="text-[10px] sm:text-[11px] font-bold text-zinc-300 truncate max-w-full">
+                    {tool.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* LÅST SKJERM OVERLAY (Beskytter mot utilsiktede trykk) */}
       {state.isLocked && (
