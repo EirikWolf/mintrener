@@ -10,7 +10,10 @@ import personaAudioManifestJson from '../data/personaAudioManifest.json';
 const AUDIO_MANIFEST: Readonly<Record<string, Readonly<Record<string, string>>>> =
   personaAudioManifestJson;
 
-export type CoachPersonaId = 'standard' | 'haugesund' | 'romsdal' | 'hardcore' | 'boyband';
+// Jossa (haugalandsk) og Ola (romsdalsk) er fjernet 2026-08-31. Lagrede valg
+// migreres av seg selv: getActiveCoachPersona validerer mot COACH_PERSONAS og
+// faller til 'standard' for en id som ikke finnes lenger.
+export type CoachPersonaId = 'standard' | 'hardcore' | 'boyband';
 
 export type PersonaCueName = 'intro' | 'start_321' | 'halfway' | 'last5' | 'finish';
 
@@ -30,30 +33,6 @@ export interface CoachPersona {
 }
 
 export const COACH_PERSONAS: CoachPersona[] = [
-  {
-    id: 'haugesund',
-    name: 'Jossa',
-    dialectOrStyle: 'Haugalandet (haugalandsk)',
-    tagline: '«Gje gass nå! Trø te!»',
-    description: 'Rått tempo, jovial vestlandsenergi og ingen vits å spare på kreftene.',
-    icon: '⚓',
-    color: 'emerald',
-    badge: 'Vestlandsk',
-    previewUrl: '/audio/personas/haugesund_preview.mp3',
-    cuesPath: '/audio/personas/haugesund',
-  },
-  {
-    id: 'romsdal',
-    name: 'Ola',
-    dialectOrStyle: 'Romsdalen (romsdalsk)',
-    tagline: '«No e det bære å gønne på!»',
-    description: 'Fjellstø romsdalsk treningsglede som holder trykket og humøret oppe.',
-    icon: '🏔️',
-    color: 'blue',
-    badge: 'Møredialekt',
-    previewUrl: '/audio/personas/romsdal_preview.mp3',
-    cuesPath: '/audio/personas/romsdal',
-  },
   {
     id: 'hardcore',
     name: 'Axel',
@@ -80,10 +59,15 @@ export const COACH_PERSONAS: CoachPersona[] = [
   },
   {
     id: 'standard',
-    name: 'Astrid (Standard)',
-    dialectOrStyle: 'Standard Norsk (Syntetisk)',
+    // Het «Astrid (Standard)». Navnet lovte en kvinnestemme, men stemmen kommer
+    // fra operativsystemet: på en vanlig Windows-maskin er «Microsoft Jon» den
+    // eneste norske som finnes, og den er mannlig. Vi eier ikke stemmene og kan
+    // derfor ikke gi dem navn eller kjønn — UI-et viser den faktiske stemmen.
+    name: 'Enhetens stemme',
+    dialectOrStyle: 'Talesyntese fra operativsystemet',
     tagline: '«Klar, ferdig, gå!»',
-    description: 'Klassisk rolig og tydelig stemmeveiledning rett i nettleseren.',
+    description:
+      'Bruker den norske stemmen enheten din har. Hvilken det er, varierer mellom telefon og PC.',
     icon: '🧘',
     color: 'zinc',
     badge: 'Klassisk',

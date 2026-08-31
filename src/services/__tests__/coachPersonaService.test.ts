@@ -20,14 +20,13 @@ describe('coachPersonaService', () => {
     vi.restoreAllMocks();
   });
 
-  it('contains the 5 defined personas', () => {
-    expect(COACH_PERSONAS.length).toBe(5);
-    const ids = COACH_PERSONAS.map(p => p.id);
-    expect(ids).toContain('haugesund');
-    expect(ids).toContain('romsdal');
-    expect(ids).toContain('hardcore');
-    expect(ids).toContain('boyband');
-    expect(ids).toContain('standard');
+  it('tilbyr nøyaktig de stemmene appen har lyd for', () => {
+    // Settet, ikke antallet: en test som teller kan passere med feil stemmer.
+    expect(COACH_PERSONAS.map((p) => p.id).sort()).toEqual([
+      'boyband',
+      'hardcore',
+      'standard',
+    ]);
   });
 
   it('defaults to standard if nothing is saved', () => {
@@ -38,8 +37,8 @@ describe('coachPersonaService', () => {
     setActiveCoachPersona('hardcore');
     expect(getActiveCoachPersona()).toBe('hardcore');
 
-    setActiveCoachPersona('romsdal');
-    expect(getActiveCoachPersona()).toBe('romsdal');
+    setActiveCoachPersona('hardcore');
+    expect(getActiveCoachPersona()).toBe('hardcore');
   });
 
   it('returns false for standard persona cue without crashing', async () => {
@@ -53,7 +52,7 @@ describe('coachPersonaService', () => {
 
   it('bygger cue-URL fra personaens cuesPath, og null for standard (uten cuesPath)', () => {
     expect(getPersonaCueUrl('intro', 'hardcore')).toBe('/audio/personas/hardcore/intro.mp3');
-    expect(getPersonaCueUrl('start_321', 'romsdal')).toBe('/audio/personas/romsdal/start_321.mp3');
+    expect(getPersonaCueUrl('start_321', 'hardcore')).toBe('/audio/personas/hardcore/start_321.mp3');
     expect(getPersonaCueUrl('intro', 'standard')).toBeNull();
   });
 
@@ -76,7 +75,7 @@ describe('coachPersonaService', () => {
     expect(getPersonaClipKey('bro-neste')).toBe('/audio/personas/hardcore/bro-neste.mp3');
     expect(getPersonaClipKey('go-2')).toBe('/audio/personas/hardcore/go-2.mp3');
     expect(getPersonaClipKey('exercise-kneboy')).toBe('/audio/personas/hardcore/exercise-kneboy.mp3');
-    expect(getPersonaClipKey('start_321', 'romsdal')).toBe('/audio/personas/romsdal/start_321.mp3');
+    expect(getPersonaClipKey('start_321', 'hardcore')).toBe('/audio/personas/hardcore/start_321.mp3');
   });
 
   it('getPersonaClipKey returnerer null for standard (ingen cuesPath)', () => {
@@ -202,5 +201,30 @@ describe('coachPersonaService – Planrettelse 3 (audible-only stopp for reaktiv
     // Opprydding: fullt stopp løser den skedulerte kjeden
     audioBufferEngine.stop();
     await expect(last5).resolves.toBe(true);
+  });
+});
+
+describe('Fjernede trenerstemmer', () => {
+  it('tilbyr ikke lenger de norske dialektstemmene', () => {
+    const ider = COACH_PERSONAS.map((p) => p.id);
+    expect(ider).not.toContain('haugesund');
+    expect(ider).not.toContain('romsdal');
+  });
+
+  it('flytter en bruker som hadde valgt en fjernet stemme til standard', () => {
+    // Validering mot COACH_PERSONAS gjør migreringen av seg selv. Testen
+    // finnes fordi det er en stilltiende garanti: forsvinner valideringen,
+    // ville appen forsøkt å spille klipp som ikke er der lenger.
+    localStorage.setItem('mintrener_coach_persona', 'haugesund');
+    expect(getActiveCoachPersona()).toBe('standard');
+
+    localStorage.setItem('mintrener_coach_persona', 'romsdal');
+    expect(getActiveCoachPersona()).toBe('standard');
+  });
+
+  it('beholder stemmene vi fortsatt har', () => {
+    const ider = COACH_PERSONAS.map((p) => p.id);
+    expect(ider).toContain('hardcore');
+    expect(ider).toContain('boyband');
   });
 });

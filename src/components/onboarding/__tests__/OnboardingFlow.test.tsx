@@ -36,9 +36,9 @@ vi.mock('../../../services/telemetryService', async (importOriginal) => {
   return { ...actual, recordEngagementEvent: vi.fn() };
 });
 
-/** Steg 1 → steg 2 med Jossa valgt (gjenbrukt av steg 2/3-testene). */
+/** Steg 1 → steg 2 med Axel valgt (gjenbrukt av steg 2/3-testene). */
 function completeStep1() {
-  fireEvent.click(screen.getByRole('button', { name: 'Velg Jossa' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Velg Axel' }));
   fireEvent.click(screen.getByRole('button', { name: 'Videre' }));
 }
 
@@ -64,40 +64,40 @@ describe('OnboardingFlow', () => {
     expect(startedCalls).toHaveLength(1);
   });
 
-  it('steg 1 viser alle fire personaer + nedtonet Astrid (Standard) sist', () => {
+  it('steg 1 viser stemmene vi har + nedtonet Enhetens stemme sist', () => {
     render(<OnboardingFlow onComplete={() => {}} />);
     expect(
       screen.getByRole('heading', { name: 'Hvem skal trene deg?' })
     ).toBeInTheDocument();
-    for (const name of ['Jossa', 'Ola', 'Axel', 'Robin', 'Astrid (Standard)']) {
+    for (const name of ['Axel', 'Robin', 'Enhetens stemme']) {
       expect(screen.getByText(name)).toBeInTheDocument();
     }
     // Standard er nedtonet og har ingen stemmeprøve
     expect(
-      screen.queryByRole('button', { name: 'Forhåndshør Astrid (Standard)' })
+      screen.queryByRole('button', { name: 'Forhåndshør Enhetens stemme' })
     ).not.toBeInTheDocument();
     // Videre er låst til et valg er tatt
     expect(screen.getByRole('button', { name: 'Videre' })).toBeDisabled();
   });
 
-  it('▶-trykk på Jossa spiller stemmeprøven via playPersonaPreview', async () => {
+  it('▶-trykk på Axel spiller stemmeprøven via playPersonaPreview', async () => {
     render(<OnboardingFlow onComplete={() => {}} />);
     // async: playPersonaPreview-mocken resolver etter klikket — act venter den ut
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Forhåndshør Jossa' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Forhåndshør Axel' }));
     });
-    expect(playPersonaPreview).toHaveBeenCalledWith('haugesund');
+    expect(playPersonaPreview).toHaveBeenCalledWith('hardcore');
     // Forhåndshøring er ikke et valg
     expect(setActiveCoachPersona).not.toHaveBeenCalled();
   });
 
-  it('valg av Jossa + Videre setter aktiv persona, preloader og teller telemetri', () => {
+  it('valg av Axel + Videre setter aktiv persona, preloader og teller telemetri', () => {
     render(<OnboardingFlow onComplete={() => {}} />);
     completeStep1();
-    expect(setActiveCoachPersona).toHaveBeenCalledWith('haugesund');
-    expect(preloadPersonaAudio).toHaveBeenCalledWith('haugesund');
+    expect(setActiveCoachPersona).toHaveBeenCalledWith('hardcore');
+    expect(preloadPersonaAudio).toHaveBeenCalledWith('hardcore');
     expect(recordEngagementEvent).toHaveBeenCalledWith(
-      'onboarding_personaChosen_haugesund'
+      'onboarding_personaChosen_hardcore'
     );
     expect(
       screen.getByRole('heading', { name: 'Hvor ofte vil du trene?' })
@@ -175,7 +175,7 @@ describe('OnboardingFlow', () => {
     // Et «ekte» audio-objekt holder spilletilstanden til onended fyrer
     vi.mocked(playPersonaPreview).mockResolvedValueOnce({} as HTMLAudioElement);
     render(<OnboardingFlow onComplete={() => {}} />);
-    const btn = screen.getByRole('button', { name: 'Forhåndshør Jossa' });
+    const btn = screen.getByRole('button', { name: 'Forhåndshør Axel' });
     expect(btn).toHaveAttribute('aria-pressed', 'false');
     await act(async () => {
       fireEvent.click(btn);

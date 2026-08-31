@@ -79,7 +79,7 @@ export async function recordShareLinkOpen(): Promise<void> {
  */
 export type EngagementCounter =
   | 'onboarding_started' | 'onboarding_goalSet' | 'onboarding_firstWorkoutStarted' | 'onboarding_skipped'
-  | `onboarding_personaChosen_${'haugesund' | 'romsdal' | 'hardcore' | 'boyband' | 'standard'}`
+  | `onboarding_personaChosen_${'hardcore' | 'boyband' | 'standard'}`
   | 'streak_weekCompleted' | 'streak_insuranceUsed' | 'streak_broken'
   | `streak_milestone_w${2 | 4 | 8 | 12 | 26 | 52}`
   | `accountPrompt_${'first_workout' | 'week2'}_${'shown' | 'accepted' | 'dismissed'}`;

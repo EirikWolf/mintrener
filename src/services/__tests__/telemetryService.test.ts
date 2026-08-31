@@ -76,14 +76,14 @@ describe('Telemetry Service (Privacy-Friendly)', () => {
 
   describe('recordEngagementEvent (C1/C2)', () => {
     it('skriver flatt increment-felt + lastUpdated til global_stats/engagement', async () => {
-      await recordEngagementEvent('onboarding_personaChosen_haugesund');
+      await recordEngagementEvent('onboarding_personaChosen_boyband');
 
       expect(mockDoc).toHaveBeenCalledWith(expect.anything(), 'global_stats', 'engagement');
       expect(mockSetDoc).toHaveBeenCalledTimes(1);
       expect(mockSetDoc).toHaveBeenCalledWith(
         { collection: 'global_stats', id: 'engagement' },
         {
-          onboarding_personaChosen_haugesund: { __increment: 1 },
+          onboarding_personaChosen_boyband: { __increment: 1 },
           lastUpdated: 'SERVER_TIMESTAMP_SENTINEL',
         },
         { merge: true }

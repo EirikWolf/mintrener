@@ -82,7 +82,7 @@ describe('generate-audio-manifest – generateManifest', () => {
     const files = completeFileSet(EXERCISE_IDS_FIXTURE).filter(
       (f) => f !== 'exercise-burpees.mp3'
     );
-    makePersonaDir(root, 'romsdal', files);
+    makePersonaDir(root, 'testpersona', files);
 
     const { warnings } = generateManifest({
       audioDir: root,
@@ -90,7 +90,7 @@ describe('generate-audio-manifest – generateManifest', () => {
     });
 
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain('romsdal');
+    expect(warnings[0]).toContain('testpersona');
     expect(warnings[0]).toContain('1');
     expect(warnings[0]).toContain('burpees');
   });
@@ -130,16 +130,16 @@ describe('generate-audio-manifest – generateManifest', () => {
 
   it('flere personas skannes uavhengig', () => {
     makePersonaDir(root, 'hardcore', completeFileSet(EXERCISE_IDS_FIXTURE));
-    makePersonaDir(root, 'romsdal', ['intro.mp3']);
+    makePersonaDir(root, 'testpersona', ['intro.mp3']);
 
     const { manifest, warnings } = generateManifest({
       audioDir: root,
       exerciseIds: EXERCISE_IDS_FIXTURE,
     });
 
-    expect(Object.keys(manifest).sort()).toEqual(['hardcore', 'romsdal']);
-    // hardcore komplett → alle advarslene gjelder romsdal
-    expect(warnings.every((w) => w.includes('romsdal'))).toBe(true);
+    expect(Object.keys(manifest).sort()).toEqual(['hardcore', 'testpersona']);
+    // hardcore komplett → alle advarslene gjelder testpersona
+    expect(warnings.every((w) => w.includes('testpersona'))).toBe(true);
     expect(warnings.length).toBeGreaterThan(0);
   });
 });

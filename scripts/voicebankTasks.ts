@@ -69,8 +69,6 @@ export interface TaskFilters {
 
 /** Innspilte Tre-To-En-spor i repoet, per persona-id (repo-relative stier). */
 export const RECORDED_SOURCES: Readonly<Record<string, string>> = {
-  haugesund: 'audio/Tre-To-En- Haugesund (Lead Vocal).mp3',
-  romsdal: 'audio/Tre-To-En- Romsdalen (Lead Vocal).mp3',
   hardcore: 'audio/Tre-To-En- Hardcore (Lead Vocal).mp3',
   boyband: 'audio/Tre-To-En- Boyband (Lead Vocal).mp3',
 };

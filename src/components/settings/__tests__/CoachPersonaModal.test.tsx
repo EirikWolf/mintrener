@@ -30,16 +30,16 @@ describe('CoachPersonaModal – preload ved persona-valg (β6)', () => {
   it('valg av persona setter aktiv persona OG fyrer fire-and-forget preload', () => {
     render(<CoachPersonaModal onClose={() => {}} />);
 
-    fireEvent.click(screen.getByText('Jossa'));
+    fireEvent.click(screen.getByText('Axel'));
 
-    expect(setActiveCoachPersona).toHaveBeenCalledWith('haugesund');
-    expect(preloadPersonaAudio).toHaveBeenCalledWith('haugesund');
+    expect(setActiveCoachPersona).toHaveBeenCalledWith('hardcore');
+    expect(preloadPersonaAudio).toHaveBeenCalledWith('hardcore');
   });
 
   it('preloader også ved valg av standard (no-op i tjenesten, men kallet er uniformt)', () => {
     render(<CoachPersonaModal onClose={() => {}} />);
 
-    fireEvent.click(screen.getByText('Astrid (Standard)'));
+    fireEvent.click(screen.getByText('Enhetens stemme'));
 
     expect(setActiveCoachPersona).toHaveBeenCalledWith('standard');
     expect(preloadPersonaAudio).toHaveBeenCalledWith('standard');
