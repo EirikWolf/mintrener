@@ -255,11 +255,20 @@ export function buildAstridFluxPoseWorkflow(
   seed: number,
   filenamePrefix: string,
   poseImageName: string,
-  options: { steps?: number; guidance?: number; controlStrength?: number } = {}
+  options: {
+    steps?: number;
+    guidance?: number;
+    controlStrength?: number;
+    controlEnd?: number;
+  } = {}
 ) {
   const steps = options.steps ?? 24;
   const guidance = options.guidance ?? 3.5;
   const controlStrength = options.controlStrength ?? 0.9;
+  // Vedleggets 0,65 er kalibrert på en stor oppreist figur og holder ikke for
+  // liggende positurer — se runPoseTestBatch. Derfor et argument, ikke en
+  // konstant.
+  const controlEnd = options.controlEnd ?? 0.65;
 
   return {
     "1": {
@@ -319,7 +328,7 @@ export function buildAstridFluxPoseWorkflow(
       "inputs": {
         "strength": controlStrength,
         "start_percent": 0.0,
-        "end_percent": 0.65,
+        "end_percent": controlEnd,
         "positive": ["7", 0],
         // Ved cfg 1,0 er negativ betingelse inaktiv (vedlegg A § A.4), men
         // noden krever inngangen. Samme betingelse inn som positiv.

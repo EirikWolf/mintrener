@@ -43,10 +43,15 @@ export const POSES = {
       }),
       S({
         navn: 'Bunn — brystet like over gulvet, albuene bak',
-        nese: [0.745, 0.600], øye: [0.730, 0.592], øre: [0.692, 0.598],
-        nakke: [0.690, 0.625], skulder: [0.670, 0.638],
-        albue: [0.598, 0.688], håndledd: [0.665, 0.712],
-        hofte: [0.420, 0.648], kne: [0.290, 0.674], ankel: [0.155, 0.705],
+        // Albuen lå først 28 px over gulvet — altså praktisk talt PÅ det. Da
+        // fulgte ControlNet skjelettet helt riktig og tegnet en underarmsplanke.
+        // I en armhevings bunnposisjon peker overarmen BAKOVER og litt OPP fra
+        // skulderen; bare hånden er i gulvet. A/B-testen på kontrollvinduet
+        // (0,65 mot 0,9) ga ingen forskjell og utelukket den forklaringen.
+        nese: [0.748, 0.620], øye: [0.734, 0.612], øre: [0.696, 0.618],
+        nakke: [0.694, 0.643], skulder: [0.674, 0.658],
+        albue: [0.588, 0.636], håndledd: [0.666, 0.712],
+        hofte: [0.424, 0.662], kne: [0.292, 0.682], ankel: [0.156, 0.706],
       }),
     ],
   },

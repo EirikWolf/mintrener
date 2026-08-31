@@ -44,8 +44,19 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const POSE_DIR = path.join(ROOT, 'pipeline', 'poses');
 const UT_DIR = path.join(ROOT, 'pipeline', 'candidates');
 
-const UTVALG = ['push-ups', 'rygghev-superman', 'planke', 'sprellmenn'];
-const SEEDS_PER_POSISJON = 3;
+const UTVALG = (process.env.POSE_UTVALG ?? 'push-ups,rygghev-superman,planke,sprellmenn').split(',');
+const SEEDS_PER_POSISJON = Number(process.env.POSE_SEEDS ?? 3);
+
+/**
+ * Hvor lenge ControlNet holder posituren.
+ *
+ * Vedlegg A oppgir 0,65. Den verdien ble kalibrert på et kettlebell-sving — en
+ * stor, oppreist figur. Målt på armhevinger 2026-08-31 overføres den ikke:
+ * modellen fulgte kroppslinja og kameravinkelen, men rettet den bøyde armen opp
+ * til en planke i de siste 35 % av stegene. Derfor er den styrbar.
+ */
+const CONTROL_END = Number(process.env.POSE_CONTROL_END ?? 0.65);
+const CONTROL_STRENGTH = Number(process.env.POSE_CONTROL_STRENGTH ?? 0.9);
 
 /**
  * Legger skjelettet i ComfyUIs input-mappe.
@@ -123,7 +134,7 @@ async function main() {
           seed: seedForExercise(id) + v,
           prompt: byggPrompt(id, fase),
           poseRef: '',
-          filnavn: `${id}_f${fase}_v${v}`,
+          filnavn: `${id}_f${fase}_v${v}${CONTROL_END !== 0.65 ? `_e${Math.round(CONTROL_END * 100)}` : ''}`,
         });
       }
       console.log(`  ${id} fase ${fase}: ${navn}`);
@@ -169,14 +180,18 @@ async function main() {
       const mål = path.join(mappe, `${j.filnavn}.png`);
 
       try {
-        const wf = buildAstridFluxPoseWorkflow(j.prompt, j.seed, j.filnavn, j.poseRef);
+        const wf = buildAstridFluxPoseWorkflow(j.prompt, j.seed, j.filnavn, j.poseRef, {
+          controlStrength: CONTROL_STRENGTH,
+          controlEnd: CONTROL_END,
+        });
         const promptId = await submitPrompt(token, wf);
-        const hist = await waitForCompletion(token, promptId, 240);
-        const bilder = Object.values(hist.outputs || {}).flatMap(
-          (o: any) => o.images || []
-        );
-        if (bilder.length === 0) throw new Error('ComfyUI returnerte ingen bilder');
-        await downloadImage(token, bilder[0], mål);
+        // waitForCompletion returnerer SELVE bildeobjektet ({filename, subfolder,
+        // type}), ikke historikken. Første utkast behandlet det som en historikk
+        // og fant naturlig nok ingen bilder — og feilmeldingen la skylden på
+        // ComfyUI for en feil i denne fila.
+        const bilde = await waitForCompletion(token, promptId, 240);
+        if (!bilde?.filename) throw new Error('Fikk ingen filreferanse tilbake');
+        await downloadImage(token, bilde, mål);
         ok++;
         console.log(`[${i + 1}/${jobber.length}] ✓ ${j.filnavn}`);
       } catch (err) {
