@@ -73,57 +73,79 @@ function createCanvas(width, height) {
   return { width, height, data: new Uint8Array(width * height * 3) };
 }
 
-function blend(canvas, x, y, color, alpha) {
+function setPixel(canvas, x, y, color) {
   if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return;
   const i = (y * canvas.width + x) * 3;
-  for (let c = 0; c < 3; c++) {
-    canvas.data[i + c] = Math.round(canvas.data[i + c] * (1 - alpha) + color[c] * alpha);
-  }
+  canvas.data[i] = color[0];
+  canvas.data[i + 1] = color[1];
+  canvas.data[i + 2] = color[2];
 }
 
 /**
- * Fylt sirkel med myk kant.
+ * Kanonisk lemme: en ROTERT ELLIPSE, ikke en kapsel med runde ender.
  *
- * Antialiasing er ikke pynt her: harde trappetrinn i skjelettet gir ControlNet
- * et signal som ikke finnes i treningsdataene, og posituren blir mindre stabil.
+ * `draw_bodypose` i comfyui_controlnet_aux bygger den med
+ * `cv2.ellipse2Poly(midtpunkt, (lengde/2, stickwidth), vinkel, …)` og fyller
+ * den med `fillConvexPoly` på 60 % av leddfargen. Forskjellen fra en kapsel er
+ * ikke kosmetisk: ellipsen SMALNER mot endene, og et sterkt forkortet lem
+ * degenererer nesten helt. ControlNet er trent på det, inkludert degenerasjonen.
  */
-function fillCircle(canvas, cx, cy, radius, color) {
-  const r0 = Math.floor(cx - radius - 1);
-  const r1 = Math.ceil(cx + radius + 1);
-  const c0 = Math.floor(cy - radius - 1);
-  const c1 = Math.ceil(cy + radius + 1);
-  for (let y = c0; y <= c1; y++) {
-    for (let x = r0; x <= r1; x++) {
-      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
-      const alpha = Math.min(1, Math.max(0, radius + 0.5 - d));
-      if (alpha > 0) blend(canvas, x, y, color, alpha);
+function fillLimbEllipse(canvas, x0, y0, x1, y1, stickwidth, color) {
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  const a = Math.hypot(x1 - x0, y1 - y0) / 2;
+  const b = stickwidth;
+  if (a <= 0) return;
+
+  const vinkel = Math.atan2(y1 - y0, x1 - x0);
+  const cos = Math.cos(vinkel);
+  const sin = Math.sin(vinkel);
+  const r = Math.ceil(Math.max(a, b)) + 1;
+
+  // 60 % lysstyrke, som int(float(c) * 0.6) i kilden
+  const dempet = color.map((c) => Math.trunc(c * 0.6));
+
+  for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++) {
+    for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
+      const dx = x + 0.5 - cx;
+      const dy = y + 0.5 - cy;
+      // Roter inn i ellipsens eget koordinatsystem
+      const u = dx * cos + dy * sin;
+      const v = -dx * sin + dy * cos;
+      // Hard kant, ingen kantutjevning: treningsdataene er aliaserte
+      if ((u * u) / (a * a) + (v * v) / (b * b) <= 1) setPixel(canvas, x, y, dempet);
     }
   }
 }
 
-/** Tykk strek med runde ender — stempler sirkler langs segmentet. */
-function drawThickLine(canvas, x0, y0, x1, y1, halfWidth, color) {
-  const len = Math.hypot(x1 - x0, y1 - y0);
-  const steps = Math.max(1, Math.ceil(len));
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    fillCircle(canvas, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, halfWidth, color);
+/** Kanonisk ledd: fylt sirkel, radius 4, full farge, hard kant. */
+function fillJoint(canvas, cx, cy, radius, color) {
+  for (let y = Math.floor(cy - radius); y <= Math.ceil(cy + radius); y++) {
+    for (let x = Math.floor(cx - radius); x <= Math.ceil(cx + radius); x++) {
+      const dx = x + 0.5 - cx;
+      const dy = y + 0.5 - cy;
+      if (dx * dx + dy * dy <= radius * radius) setPixel(canvas, x, y, color);
+    }
   }
 }
 
 /**
- * Tegner ett skjelett.
+ * Tegner ett skjelett, tro mot `draw_bodypose` i comfyui_controlnet_aux.
+ *
+ * Standardverdiene er kildens egne: stickwidth 4 (stick_scale 1), leddradius 4,
+ * lemmer på 60 % lysstyrke, harde kanter. Første utkast brukte 7, 9, full
+ * lysstyrke og kantutjevning — verdier jeg fant på fordi de så ryddige ut. Da
+ * er det uvisst om en test måler ControlNet eller vår egen renderer.
  *
  * `joints` er 18 punkter som [x, y] i 0–1, eller null for et ledd som ikke er
- * synlig i denne posituren. Et utelatt ledd tegnes ikke, og lemmene til det
- * tegnes heller ikke — det er slik OpenPose markerer okklusjon, og ControlNet
- * tolker fraværet riktig.
+ * synlig. Et utelatt ledd tegnes ikke, og lemmene til det heller ikke — det er
+ * slik OpenPose markerer okklusjon.
  */
 export function drawSkeleton(joints, opts = {}) {
   const width = opts.width ?? POSE_CANVAS.width;
   const height = opts.height ?? POSE_CANVAS.height;
-  const limbHalfWidth = opts.limbHalfWidth ?? 7;
-  const jointRadius = opts.jointRadius ?? 9;
+  const stickwidth = opts.stickwidth ?? 4;
+  const jointRadius = opts.jointRadius ?? 4;
 
   if (joints.length !== 18) {
     throw new Error(`Skjelettet må ha 18 ledd (COCO-18), fikk ${joints.length}`);
@@ -132,20 +154,20 @@ export function drawSkeleton(joints, opts = {}) {
   const canvas = createCanvas(width, height);
   const px = (p) => [p[0] * width, p[1] * height];
 
-  // Lemmer først, ledd over: knutepunktene skal være synlige der lemmer møtes
+  // Lemmer først, ledd over — samme rekkefølge som kilden
   LIMBS.forEach(([a, b], i) => {
     const pa = joints[a];
     const pb = joints[b];
     if (!pa || !pb) return;
     const [x0, y0] = px(pa);
     const [x1, y1] = px(pb);
-    drawThickLine(canvas, x0, y0, x1, y1, limbHalfWidth, COLORS[i]);
+    fillLimbEllipse(canvas, x0, y0, x1, y1, stickwidth, COLORS[i]);
   });
 
   joints.forEach((p, i) => {
     if (!p) return;
     const [x, y] = px(p);
-    fillCircle(canvas, x, y, jointRadius, COLORS[i]);
+    fillJoint(canvas, x, y, jointRadius, COLORS[i]);
   });
 
   return canvas;

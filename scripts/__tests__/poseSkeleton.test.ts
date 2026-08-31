@@ -117,3 +117,71 @@ describe('encodePng', () => {
     expect(a.equals(b)).toBe(true);
   });
 });
+
+describe('Renderen er tro mot draw_bodypose', () => {
+  // Verifisert mot kilden på kitor:
+  // comfyui_controlnet_aux/src/custom_controlnet_aux/dwpose/util.py
+  //   stickwidth = 4, stick_scale = 1
+  //   fillConvexPoly(..., [int(float(c) * 0.6) for c in color])
+  //   cv2.circle(..., 4, color, thickness=-1)
+  //
+  // Første utkast brukte 7, 9, full lysstyrke og kantutjevning — tall jeg fant
+  // på. Da måler en test vår egen renderer, ikke ControlNet.
+
+  it('tegner lemmer på 60 prosent av leddfargen', () => {
+    const j: ([number, number] | null)[] = new Array(18).fill(null);
+    j[1] = [0.5, 0.30]; // nakke
+    j[2] = [0.5, 0.60]; // høyre skulder — lemme 0 mellom dem, farge [255,0,0]
+    const c = drawSkeleton(j);
+
+    // Midt på lemmet, godt unna leddsirklene i endene
+    const x = Math.round(0.5 * c.width);
+    const y = Math.round(0.45 * c.height);
+    const i = (y * c.width + x) * 3;
+    expect(c.data[i]).toBe(Math.trunc(255 * 0.6)); // 153, ikke 255
+  });
+
+  it('tegner ledd i full farge over lemmene', () => {
+    const j: ([number, number] | null)[] = new Array(18).fill(null);
+    j[1] = [0.5, 0.30];
+    j[2] = [0.5, 0.60];
+    const c = drawSkeleton(j);
+
+    const x = Math.round(0.5 * c.width);
+    const y = Math.round(0.3 * c.height);
+    const i = (y * c.width + x) * 3;
+    // Nakkens leddfarge er COLORS[1] = [255, 85, 0]. Poenget er at den er FULL:
+    // ved 60 % ville den vært [153, 51, 0].
+    expect([c.data[i], c.data[i + 1], c.data[i + 2]]).toEqual(COLORS[1]);
+  });
+
+  it('har harde kanter — ingen kantutjevning', () => {
+    // Treningsdataene er aliaserte (fillConvexPoly/circle uten AA). Myke kanter
+    // gir ControlNet et signal den ikke har sett.
+    const j: ([number, number] | null)[] = new Array(18).fill(null);
+    j[1] = [0.5, 0.30];
+    j[2] = [0.5, 0.60];
+    const c = drawSkeleton(j);
+
+    const nivåer = new Set<number>();
+    for (let k = 0; k < c.data.length; k += 3) nivåer.add(c.data[k]);
+    // Kun 0 (bakgrunn) og de diskrete fargeverdiene — ingen glidende overgang
+    expect(nivåer.size).toBeLessThan(12);
+  });
+
+  it('lar et sterkt forkortet lem degenerere, som ellipsen i kilden', () => {
+    // cv2.ellipse2Poly med halvakse length/2 kollapser når lemmet er kort.
+    // Vi gjengir det bevisst: ControlNet er trent på DWPose-utdata som har
+    // samme egenskap.
+    const kort: ([number, number] | null)[] = new Array(18).fill(null);
+    kort[1] = [0.5, 0.5];
+    kort[2] = [0.503, 0.5];
+    const lang: ([number, number] | null)[] = new Array(18).fill(null);
+    lang[1] = [0.5, 0.5];
+    lang[2] = [0.5, 0.75];
+
+    const tent = (c: { data: Uint8Array }) =>
+      c.data.reduce((n, v) => n + (v > 0 ? 1 : 0), 0);
+    expect(tent(drawSkeleton(kort))).toBeLessThan(tent(drawSkeleton(lang)));
+  });
+});
