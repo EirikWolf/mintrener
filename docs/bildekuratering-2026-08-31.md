@@ -17,6 +17,8 @@
 
 Venstre bilde i hvert par er fase 0 (start), høyre er fase 1 (slutt). Det er slik appen viser dem.
 
+> **Rettet etter første utkast.** Jeg konkluderte først fra koden alene og skrev at free-exercise-db ikke finnes i repoet, og at den tomme negative prompten var en rotårsak. Begge deler var feil: datasettet står fem steder i dokumentasjonen, og vedlegg A spesifiserer allerede hele løsningen på posisjonsproblemet. Negativ prompt er dessuten inaktiv ved cfg 1,0. Seksjon 6, 7 og 9 er skrevet om.
+
 ---
 
 ## 2. Den ene innsikten
@@ -118,30 +120,46 @@ Det betyr at nybegynner-progresjonene — vegg → pult → kne → gulv — er 
 
 ## 6. Rotårsakene, i koden
 
-Fire mekaniske årsaker forklarer nesten alle funnene over.
+**Den viktigste først: den dokumenterte pipelinen ble aldri bygget.**
+
+[`vedlegg-a-bildepipeline.md`](vedlegg-a-bildepipeline.md) § A.6 sier det rett ut:
+
+> «Positurstyring med ControlNet er det som gjorde at hip-hinge-svingen ble riktig etter å ha feilet i **begge prompt-baserte batcher**. Uten skjelett er posisjonen upålitelig.»
+
+Vedlegget spesifiserer ControlNet Union Pro 2.0 med OpenPose, `DWPreprocessor`, skjelett i 896×1152, styrke 0,9, og to kilder til skjeletter: referansefoto (der free-exercise-db er nevnt) eller programmatisk tegnede COCO-18-skjeletter.
+
+Workflowen vi faktisk kjører — `buildAstridFluxWorkflow` — inneholder **ingen ControlNet-node og ingen preprosessor**:
+
+```
+UNETLoader → DualCLIPLoader → VAELoader → LoraLoaderModelOnly
+→ CLIPTextEncode → EmptyLatentImage → FluxGuidance → KSampler → VAEDecode → SaveImage
+```
+
+Null treff på `ControlNet`, `DWPreprocessor` og `openpose` i både `imagePromptService.ts` og `runFullKitorBatch.ts`.
+
+Alle 28 parene er altså generert med nøyaktig den prompt-baserte metoden vedlegget hadde konkludert med at ikke virker. Det forklarer hvorfor feilene er *posisjonsfeil* og ikke stilfeil.
+
+**Tre mekaniske årsaker i tillegg:**
 
 **1. Hver fase får sin egen seed.**
-[`runFullKitorBatch.ts:239`](../scripts/runFullKitorBatch.ts): `const seed = 200 + total * 888;` — `total` er en løpende teller. Fase 0 og fase 1 av samme øvelse får derfor helt ulike seeds, og genereres uavhengig. Det er den mekaniske grunnen til at start og slutt viser **ulik person, ulikt rom og ulik kameravinkel**.
+[`runFullKitorBatch.ts:239`](../scripts/runFullKitorBatch.ts): `const seed = 200 + total * 888;` — `total` er en løpende teller. Fase 0 og fase 1 av samme øvelse genereres uavhengig, med ulik seed. Det er den mekaniske grunnen til ulik person, ulikt rom og ulik kameravinkel.
 
-**2. Negativ prompt er tom.**
-[`imagePromptService.ts:66`](../src/services/imagePromptService.ts): `negativePrompt: ''`. Ingenting hindrer feil utstyr (vektstang der det skal være manualer), ekstra lemmer, eller at modellen finner på en annen øvelse.
+**2. Stilen overstyrer posisjonen.** Se § 2. Smilet mot kamera vinner over sideprofilen.
 
-**3. Stilen overstyrer posisjonen.** Se § 2. Smilet mot kamera vinner over sideprofilen.
-
-**4. «full body shot completely visible within frame» håndheves ikke.**
+**3. «full body shot completely visible within frame» håndheves ikke.**
 Kravet står i stilprompten, men flere startbilder er beskåret over knærne. Ingenting verifiserer resultatet etter generering — og for et utfall eller sprellmenn er beina hele poenget.
 
----
+**En ting som IKKE er en årsak:** den tomme negative prompten (`negativePrompt: ''`). Workflowen kjører KSampler med `cfg: 1.0`, og vedlegg A § A.4 slår fast at negativ prompt da er fullstendig inaktiv — alt må sies positivt. Feltet er dødt uansett hva vi skriver i det.
 
 ## 7. Om free-exercise-db
 
 Du spurte om vi bruker den, og om vi har husket at sluttposisjonen ligger bak et klikk på startbildet.
 
-**Vi bruker den ikke.** Null referanser i repoet. Alle 56 bildene er generert lokalt med Flux.1 Dev + Astrid-LoRA gjennom ComfyUI på kitor.
+**Ingen av bildene kommer derfra.** Alle 56 er generert lokalt med Flux.1 Dev + Astrid-LoRA gjennom ComfyUI på kitor. Ingen kode henter fra datasettet.
 
-Forvekslingen er likevel forståelig, for symptomet er identisk: to bilder som ser ut som samme posisjon. Her er årsaken bare en annen — vi ba om en bunnposisjon og fikk et smil.
+**Men den står i planen vår.** Fem steder i dokumentasjonen: spesifikasjonen kapittel 3 foreslår den som kryssjekk for øvelseskatalogen, og vedlegg A § A.6 navngir den som kilde til **referansefoto for ControlNet-skjeletter** — altså nøyaktig det som mangler i § 6.
 
----
+Poenget ditt om klikket er derfor fortsatt viktig, bare på et annet sted i kjeden enn du trodde: når vi henter referansefoto derfra for å lage skjeletter, må vi faktisk hente *begge* posisjonene. Gjør vi ikke det, får vi skjelett for startposisjonen to ganger — og da produserer vi den samme feilen på nytt, med dyrere maskineri.
 
 ## 8. Bildevekt
 
@@ -155,12 +173,14 @@ Men PNG i den oppløsningen er 3–4 ganger større enn nødvendig på en telefo
 
 **Rekkefølgen er viktigere enn listen.** Å regenerere før pipelinen er rettet gir de samme feilene på nytt.
 
-### Først: rett pipelinen (ingen bilder genereres)
+### Først: bygg pipelinen som allerede er spesifisert (ingen bilder genereres)
 
-1. **Del seed per øvelse, ikke per bilde.** Begge faser av samme øvelse skal ha samme seed, og fase 1 bør genereres med img2img fra fase 0 — da beholdes person, rom og lys.
-2. **Fjern smilet fra stilprompten** for fase-bilder. «Warm confident encouraging smile» hører hjemme på et forsidebilde, ikke i en instruksjon. Det er den enkeltendringen som vil flytte mest.
-3. **Skriv en negativ prompt.** Feil utstyr, ekstra lemmer, beskjæring, ansikt mot kamera i sideprofil.
+1. **Innfør ControlNet + OpenPose** slik vedlegg A § A.6 beskriver. Dette er hovedgrepet — uten skjelett er posisjonen upålitelig, og det er allerede verifisert på kitor. Skjeletter fra referansefoto der vi har dem, ellers programmatisk tegnede COCO-18 i 896×1152.
+2. **Del seed per øvelse, ikke per bilde,** så start og slutt viser samme person i samme rom.
+3. **Fjern smilet fra stilprompten** for fase-bilder. «Warm confident encouraging smile» hører hjemme på et forsidebilde, ikke i en instruksjon. Dette er den billigste enkeltendringen.
 4. **Gjør `bildeStatus` sann.** Den skal si `ok`, `må-regenereres` eller `mangler` per øvelse — og settes av kuratoren, ikke av en standardverdi.
+
+Merk at punkt 1 er en større jobb enn de tre andre til sammen. Men uten den regenererer vi med samme metode som allerede har feilet tre ganger: to batcher før vedlegget ble skrevet, og disse 28 parene etterpå.
 
 ### Så: kuratorsiden
 
