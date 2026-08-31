@@ -14,8 +14,17 @@ export interface Exercise {
 export interface IntervalItem {
   id: string;
   exercise: Exercise;
+  /**
+   * Arbeidsfasens lengde. Er `targetReps` satt, er dette et ANSLAG som brukes
+   * til å regne ut øktens totaltid — ikke en frist fasen avsluttes på.
+   */
   workDurationSeconds: number;
   restDurationSeconds: number;
+  /**
+   * Antall repetisjoner øvelsen skal gjøres i, f.eks. 25 armhevinger.
+   * Er den satt, teller ikke fasen ned: den venter til brukeren sier ifra.
+   */
+  targetReps?: number;
 }
 
 export interface WorkoutTemplate {
@@ -50,4 +59,10 @@ export interface TimerState {
   wakeLockEnabled: boolean;
   speechEnabled: boolean;
   motionReps?: number;
+  /**
+   * Antall repetisjoner den pågående fasen venter på, eller undefined for en
+   * vanlig tidsbasert fase. Visningen bruker den til å vise «ferdig»-knappen
+   * i stedet for en nedtelling.
+   */
+  awaitingReps?: number;
 }

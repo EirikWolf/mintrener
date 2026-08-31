@@ -946,13 +946,30 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           </h1>
         </div>
 
-        {/* Sirkelmåler med gjenværende tid */}
+        {/* Sirkelmåler med gjenværende tid — eller repetisjonsmålet når fasen
+            venter på brukeren. En nedtelling som ikke teller ned er verre enn
+            ingen: brukeren venter på et tall som aldri beveger seg. */}
         <div className="w-full flex items-center justify-center py-1">
-          <CircularProgress
-            progress={state.phaseProgress}
-            remainingSeconds={state.phaseRemainingSeconds}
-            phase={state.phase}
-          />
+          {state.awaitingReps !== undefined ? (
+            <div
+              data-testid="reps-maal"
+              className="flex flex-col items-center justify-center gap-1"
+              aria-live="polite"
+            >
+              <span className="text-7xl sm:text-8xl font-black text-white tabular-nums leading-none drop-shadow-sm">
+                {state.awaitingReps}
+              </span>
+              <span className="text-xs sm:text-sm font-bold uppercase tracking-widest text-zinc-400">
+                repetisjoner
+              </span>
+            </div>
+          ) : (
+            <CircularProgress
+              progress={state.phaseProgress}
+              remainingSeconds={state.phaseRemainingSeconds}
+              phase={state.phase}
+            />
+          )}
         </div>
 
         {/* Live Pulsgraf ved aktiv pulsmåling */}
@@ -1013,7 +1030,16 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           </button>
 
           {/* Stor Hovedknapp (Start / Pause / Fortsett) */}
-          {state.status === 'idle' ? (
+          {state.awaitingReps !== undefined && state.status !== 'idle' ? (
+            <button
+              onClick={onSkipNext}
+              disabled={state.isLocked}
+              className="flex-[2.5] py-3.5 px-5 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-zinc-950 font-black text-lg rounded-2xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 transition-all"
+            >
+              <Check className="w-6 h-6" />
+              FERDIG
+            </button>
+          ) : state.status === 'idle' ? (
             <button
               onClick={onStart}
               disabled={state.isLocked}

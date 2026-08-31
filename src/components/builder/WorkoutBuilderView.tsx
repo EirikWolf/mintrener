@@ -65,12 +65,22 @@ function formatChip(totalSeconds: number): string {
 
 interface WorkoutBuilderViewProps {
   initialWorkout?: WorkoutTemplate | null;
+  /**
+   * Hva den innlastede økten skal bli.
+   *
+   * 'kopi'    — katalogprogram man lager sin egen variant av: nytt navn, nye
+   *             element-id-er, ny mal ved lagring.
+   * 'rediger' — brukerens eget program: navn og id-er beholdes, og lagring
+   *             skriver over originalen i stedet for å lage en dublett.
+   */
+  initialWorkoutMode?: 'kopi' | 'rediger';
   onStartCustomWorkout: (workout: WorkoutTemplate) => void;
   onNavigateToTimer?: () => void;
 }
 
 export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
   initialWorkout,
+  initialWorkoutMode = 'kopi',
   onStartCustomWorkout,
   onNavigateToTimer,
 }) => {
@@ -103,6 +113,12 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
     toggleFavoriteProgramId(workoutId);
     setFavoriteIds(getFavoriteProgramIds());
   };
+  // Id-en til malen som er lastet inn i skjemaet, eller null for en ny økt.
+  // Uten denne mintet lagring alltid en ny id, og siden saveCustomWorkout gjør
+  // upsert på id ble hver «redigering» en kopi. Brukeren satt med samme mal
+  // flere ganger i lista uten å vite hvilken som var sist endret.
+  const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
+  const [editingWorkoutName, setEditingWorkoutName] = useState<string | null>(null);
   const [isSavedToast, setIsSavedToast] = useState(false);
   const [workoutToDelete, setWorkoutToDelete] = useState<WorkoutTemplate | null>(null);
 
@@ -132,6 +148,21 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
 
   const handleCancelDurationEditor = () => setEditingDuration(null);
 
+  // Bytt måleenhet for én øvelse. Standard 10 repetisjoner er et sted å
+  // begynne, ikke et forslag — brukeren skriver over det med det samme.
+  const handleSetMeasure = (id: string, measure: 'tid' | 'reps') => {
+    setItems((prev) =>
+      prev.map((it) =>
+        it.id === id ? { ...it, targetReps: measure === 'reps' ? (it.targetReps ?? 10) : undefined } : it
+      )
+    );
+  };
+
+  const handleSetReps = (id: string, raw: string) => {
+    const antall = Math.min(999, Math.max(1, parseInt(raw, 10) || 1));
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, targetReps: antall } : it)));
+  };
+
   const handleApplyDurationEditor = () => {
     if (!editingDuration) return;
     if (editingDuration.field === 'work' && draftTotalSeconds === 0) return;
@@ -145,20 +176,30 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
   }, [user]);
 
   useEffect(() => {
-    if (initialWorkout) {
-      setName(`${initialWorkout.name} (Min variant)`);
-      setRounds(initialWorkout.rounds || 1);
-      setPrepareSeconds(initialWorkout.prepareDurationSeconds || 5);
-      if (initialWorkout.items && initialWorkout.items.length > 0) {
-        setItems(
-          initialWorkout.items.map((it, idx) => ({
-            ...it,
-            id: `custom-item-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
-          }))
-        );
-      }
+    if (!initialWorkout) return;
+
+    if (initialWorkoutMode === 'rediger') {
+      handleLoadWorkout(initialWorkout);
+      return;
     }
-  }, [initialWorkout]);
+
+    setEditingWorkoutId(null);
+    setEditingWorkoutName(null);
+    setName(`${initialWorkout.name} (Min variant)`);
+    setRounds(initialWorkout.rounds || 1);
+    setPrepareSeconds(initialWorkout.prepareDurationSeconds || 5);
+    if (initialWorkout.items && initialWorkout.items.length > 0) {
+      setItems(
+        initialWorkout.items.map((it, idx) => ({
+          ...it,
+          id: `custom-item-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
+        }))
+      );
+    }
+    // handleLoadWorkout er stabil nok her: effekten skal kun kjøre når en ny
+    // økt sendes inn, ikke ved hver render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialWorkout, initialWorkoutMode]);
 
   // Nåværende økt-objekt
   const currentWorkout: WorkoutTemplate = {
@@ -240,29 +281,47 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
   };
 
   // Lagre mal
-  const handleSave = async () => {
-    const workoutToSave: WorkoutTemplate = {
-      ...currentWorkout,
-      id: `custom-${Date.now()}`,
-    };
+  const handleSave = async ({ somNyKopi = false } = {}) => {
+    // Redigerer vi en eksisterende mal, skal id-en følge med — ellers blir
+    // upserten en innsetting. «Lagre som ny mal» er den bevisste kopien.
+    const id =
+      editingWorkoutId && !somNyKopi ? editingWorkoutId : `custom-${Date.now()}`;
+    const workoutToSave: WorkoutTemplate = { ...currentWorkout, id };
     try {
       await saveCustomWorkout(workoutToSave, user?.uid);
     } catch {
       // saveCustomWorkout viser selv feil-toast — ikke vis «Lagret!» i tillegg
       return;
     }
+    // Etter en kopi redigerer vi kopien, ikke originalen
+    setEditingWorkoutId(id);
+    setEditingWorkoutName(workoutToSave.name);
     const updated = await fetchCustomWorkouts(user?.uid);
     setSavedWorkouts(updated);
     setIsSavedToast(true);
     setTimeout(() => setIsSavedToast(false), 2500);
   };
 
+  // Forlat redigeringen og start på blanke ark
+  const handleStartNewWorkout = () => {
+    setEditingWorkoutId(null);
+    setEditingWorkoutName(null);
+    setName('Min egendefinerte økt');
+    setRounds(1);
+    setPrepareSeconds(10);
+    setItems([]);
+    setEditingDuration(null);
+  };
+
   // Last inn lagret mal
   const handleLoadWorkout = (w: WorkoutTemplate) => {
+    setEditingWorkoutId(w.id);
+    setEditingWorkoutName(w.name);
     setName(w.name);
     setRounds(w.rounds);
     setPrepareSeconds(w.prepareDurationSeconds);
     setItems(w.items);
+    setEditingDuration(null);
   };
 
   // Slett lagret mal
@@ -294,7 +353,8 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
             </h1>
             <span className="text-[11px] text-zinc-400 font-mono flex items-center gap-1 mt-0.5">
               <Clock className="w-3.5 h-3.5 text-emerald-400" />
-              Totaltid: <strong className="text-emerald-300 font-bold">{formatTime(totalDurationSeconds)}</strong>
+              {items.some((it) => it.targetReps !== undefined) ? 'Anslått tid' : 'Totaltid'}:{' '}
+              <strong className="text-emerald-300 font-bold">{formatTime(totalDurationSeconds)}</strong>
             </span>
           </div>
         </div>
@@ -497,6 +557,56 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
                   })}
                 </div>
 
+                {/* Måleenhet: tid eller repetisjoner.
+                    «25 armhevinger» er en reell øvelse, men appen kunne bare
+                    telle sekunder — brukeren måtte gjette hvor lang tid 25
+                    repetisjoner tar. Med repetisjoner venter fasen på deg, og
+                    tiden blir et anslag for planleggingen. */}
+                <div
+                  data-testid={`maaling-${idx}`}
+                  className="flex items-center justify-between gap-2 text-[10px] pt-1"
+                >
+                  <span className="font-bold text-zinc-400 shrink-0">Måles i:</span>
+                  <div className="flex items-center gap-1 flex-wrap justify-end">
+                    <button
+                      onClick={() => handleSetMeasure(item.id, 'tid')}
+                      aria-label={`Mål ${item.exercise.name} i tid`}
+                      aria-pressed={item.targetReps === undefined}
+                      className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                        item.targetReps === undefined
+                          ? 'bg-zinc-200 text-zinc-950'
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      Tid
+                    </button>
+                    <button
+                      onClick={() => handleSetMeasure(item.id, 'reps')}
+                      aria-label={`Mål ${item.exercise.name} i repetisjoner`}
+                      aria-pressed={item.targetReps !== undefined}
+                      className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                        item.targetReps !== undefined
+                          ? 'bg-zinc-200 text-zinc-950'
+                          : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      Reps
+                    </button>
+                    {item.targetReps !== undefined && (
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={999}
+                        aria-label={`Antall repetisjoner for ${item.exercise.name}`}
+                        value={item.targetReps}
+                        onChange={(e) => handleSetReps(item.id, e.target.value)}
+                        className="w-14 bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-0.5 text-[11px] text-white"
+                      />
+                    )}
+                  </div>
+                </div>
+
                 {/* Egen tid: full bredde under cellene — to tallfelt får ikke
                     plass i en halv rad på 375 px. */}
                 {editingDuration?.itemId === item.id && (
@@ -574,15 +684,43 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
           </button>
         </div>
 
-        {/* 4. Lagre mal knapp */}
-        <button
-          onClick={handleSave}
-          disabled={items.length === 0}
-          className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-2 transition-all shadow-sm"
-        >
-          <Save className="w-4 h-4 text-emerald-400" />
-          Lagre som egen mal
-        </button>
+        {/* 4. Lagring. To veier når en mal er lastet inn: skrive over den, eller
+            lage en kopi. Før fantes bare «lagre», og den lagde alltid en kopi. */}
+        {editingWorkoutId && (
+          <div className="flex items-center justify-between gap-2 p-2.5 rounded-2xl bg-blue-950/40 border border-blue-800/60">
+            <p className="text-[11px] text-blue-200 min-w-0">
+              Redigerer «<strong className="text-white">{editingWorkoutName}</strong>»
+            </p>
+            <button
+              onClick={handleStartNewWorkout}
+              aria-label="Start på en tom økt"
+              className="shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-blue-300 hover:text-white hover:bg-blue-900/60 transition-colors"
+            >
+              Ny økt
+            </button>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => handleSave()}
+            disabled={items.length === 0}
+            className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 active:scale-95 disabled:opacity-40 disabled:pointer-events-none text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-2 transition-all shadow-sm"
+          >
+            <Save className="w-4 h-4 text-emerald-400" />
+            {editingWorkoutId ? 'Lagre endringer' : 'Lagre som egen mal'}
+          </button>
+
+          {editingWorkoutId && (
+            <button
+              onClick={() => handleSave({ somNyKopi: true })}
+              disabled={items.length === 0}
+              className="shrink-0 px-3 py-3 bg-zinc-900 hover:bg-zinc-800 active:scale-95 disabled:opacity-40 disabled:pointer-events-none text-zinc-300 font-bold rounded-2xl text-xs border border-zinc-800 transition-all"
+            >
+              Lagre som ny mal
+            </button>
+          )}
+        </div>
 
         {isSavedToast && (
           <div className="p-2 rounded-xl bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs text-center font-bold animate-in fade-in">
@@ -600,15 +738,21 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
               {savedWorkouts.map((w) => (
                 <div
                   key={w.id}
-                  onClick={() => handleLoadWorkout(w)}
-                  className="p-2.5 bg-zinc-950/80 hover:bg-zinc-800 border border-zinc-800 rounded-xl flex items-center justify-between cursor-pointer transition-all"
+                  className="p-2.5 bg-zinc-950/80 border border-zinc-800 rounded-xl flex items-center justify-between transition-all"
                 >
-                  <div className="overflow-hidden pr-2">
+                  {/* Raden var en <div onClick> — utilgjengelig for tastatur og
+                      skjermleser (WCAG 2.1.1). Favoritt, start og slett er egne
+                      knapper, så åpne-flaten må være sin egen knapp ved siden av. */}
+                  <button
+                    onClick={() => handleLoadWorkout(w)}
+                    aria-label={`Rediger ${w.name}`}
+                    className="flex-1 min-w-0 text-left overflow-hidden pr-2 rounded-lg hover:bg-zinc-800/60 -m-1 p-1 transition-colors"
+                  >
                     <h4 className="text-xs font-bold text-white truncate">{w.name}</h4>
                     <p className="text-[10px] text-zinc-400">
                       {w.items.length} øvelser • {formatTime(calculateWorkoutDuration(w))}
                     </p>
-                  </div>
+                  </button>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       onClick={(e) => {

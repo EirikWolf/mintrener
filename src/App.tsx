@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { PRESET_WORKOUTS, TABATA_WORKOUT } from './data/mockWorkouts';
 import { WorkoutTemplate } from './types/workout';
 import { useIntervalTimer } from './hooks/useIntervalTimer';
+import { useWorkoutExitGuard } from './hooks/useWorkoutExitGuard';
 import { TimerDisplay } from './components/timer/TimerDisplay';
 import { WorkoutSummary } from './components/timer/WorkoutSummary';
 import { ExerciseLibraryView } from './components/library/ExerciseLibraryView';
@@ -33,6 +34,9 @@ import { shouldShowOnboarding } from './services/onboardingService';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('timer');
+  // Byggeren kan åpnes på to måter: som kopi av et katalogprogram, eller som
+  // redigering av brukerens eget. Forskjellen avgjør om lagring lager dublett.
+  const [builderMode, setBuilderMode] = useState<'kopi' | 'rediger'>('kopi');
   const [userProfiles, setUserProfiles] = useState<UserProfilesState>(() => getUserProfilesState());
   const [showOnboarding, setShowOnboarding] = useState<boolean>(() => !userProfiles.hasCompletedOnboarding);
   // Delingslenken leses ÉN gang: kallet KONSUMERER ?w= (renser URL-en via
@@ -133,6 +137,13 @@ export function App() {
     resetWorkout();
   };
 
+  // Tilbakeknappen forlot hele nettsiden midt i en økt. Vakten fanger trykket
+  // så lenge noe kan gå tapt — altså mens økten kjører eller står i pause.
+  const exitGuard = useWorkoutExitGuard({
+    isActive: state.status === 'running' || state.status === 'paused',
+    onConfirmExit: resetWorkout,
+  });
+
   const handleStartWorkoutDirectly = (tpl: WorkoutTemplate) => {
     setSelectedWorkout(tpl);
     setActiveTab('timer');
@@ -195,7 +206,18 @@ export function App() {
           <ProgramCatalogView
             onStartProgram={handleStartCustomWorkout}
             onCustomizeProgram={(progWorkout) => {
+              setBuilderMode('kopi');
               setBuilderInitialWorkout(progWorkout);
+              setActiveTab('builder');
+            }}
+            onEditOwnProgram={(ownWorkout) => {
+              setBuilderMode('rediger');
+              setBuilderInitialWorkout(ownWorkout);
+              setActiveTab('builder');
+            }}
+            onCreateProgram={() => {
+              setBuilderMode('kopi');
+              setBuilderInitialWorkout(null);
               setActiveTab('builder');
             }}
             onNavigateToTimer={() => setActiveTab('timer')}
@@ -203,6 +225,7 @@ export function App() {
         ) : activeTab === 'builder' ? (
           <WorkoutBuilderView
             initialWorkout={builderInitialWorkout}
+            initialWorkoutMode={builderMode}
             onStartCustomWorkout={handleStartCustomWorkout}
             onNavigateToTimer={() => setActiveTab('timer')}
           />
@@ -266,6 +289,45 @@ export function App() {
             setShowOnboarding(false);
           }}
         />
+      )}
+
+      {/* Tilbake-vakt: brukeren trykket tilbake midt i en økt. Uten dette
+          forlot trykket hele nettsiden og tok økten med seg (revisjon A,
+          spørsmål C). Økten fortsetter å gå bak dialogen — et feiltrykk skal
+          ikke koste deg rytmen. */}
+      {exitGuard.isConfirming && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="avslutt-tittel"
+          className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6"
+        >
+          <div className="w-full max-w-xs bg-zinc-900 border border-zinc-700 rounded-2xl p-5 space-y-4 shadow-2xl">
+            <div className="space-y-1.5">
+              <h2 id="avslutt-tittel" className="text-lg font-black text-white">
+                Avslutte økten?
+              </h2>
+              <p className="text-xs text-zinc-400">
+                Økten går fortsatt. Avslutter du, mister du fremdriften i denne runden.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={exitGuard.cancelExit}
+                autoFocus
+                className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-zinc-950 font-black rounded-xl text-sm transition-all"
+              >
+                Fortsett økten
+              </button>
+              <button
+                onClick={exitGuard.confirmExit}
+                className="w-full py-2.5 text-rose-400 hover:text-rose-300 hover:bg-zinc-800 font-bold rounded-xl text-sm transition-colors"
+              >
+                Avslutt økten
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

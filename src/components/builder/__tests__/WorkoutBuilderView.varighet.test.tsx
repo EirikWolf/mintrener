@@ -146,3 +146,68 @@ describe('Programbyggeren — fri varighet per øvelse', () => {
     expect(screen.getByRole('button', { name: 'Bruk tiden' })).toBeEnabled();
   });
 });
+
+describe('Programbyggeren — repetisjoner i stedet for tid', () => {
+  it('måler øvelsen i tid som utgangspunkt', () => {
+    renderBuilder();
+
+    const rad = screen.getByTestId('maaling-0');
+    expect(within(rad).getByRole('button', { name: /Mål Knebøy i tid/ })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+  });
+
+  it('lar øvelsen måles i repetisjoner', () => {
+    renderBuilder();
+
+    fireEvent.click(
+      within(screen.getByTestId('maaling-0')).getByRole('button', {
+        name: /Mål Knebøy i repetisjoner/,
+      })
+    );
+
+    const antall = screen.getByLabelText('Antall repetisjoner for Knebøy');
+    expect(antall).toHaveValue(10);
+  });
+
+  it('lar antallet settes til 25', () => {
+    renderBuilder();
+
+    fireEvent.click(
+      within(screen.getByTestId('maaling-0')).getByRole('button', {
+        name: /Mål Knebøy i repetisjoner/,
+      })
+    );
+    fireEvent.change(screen.getByLabelText('Antall repetisjoner for Knebøy'), {
+      target: { value: '25' },
+    });
+
+    expect(screen.getByLabelText('Antall repetisjoner for Knebøy')).toHaveValue(25);
+  });
+
+  it('sier tydelig at tiden er et anslag når øvelsen måles i repetisjoner', () => {
+    renderBuilder();
+
+    fireEvent.click(
+      within(screen.getByTestId('maaling-0')).getByRole('button', {
+        name: /Mål Knebøy i repetisjoner/,
+      })
+    );
+
+    // Totaltiden regnes fortsatt ut, men den er ikke en frist
+    expect(screen.getByText(/Anslått tid/)).toBeInTheDocument();
+  });
+
+  it('går tilbake til tid og fjerner repetisjonsmålet', () => {
+    renderBuilder();
+
+    const rad = () => screen.getByTestId('maaling-0');
+    fireEvent.click(
+      within(rad()).getByRole('button', { name: /Mål Knebøy i repetisjoner/ })
+    );
+    fireEvent.click(within(rad()).getByRole('button', { name: /Mål Knebøy i tid/ }));
+
+    expect(screen.queryByLabelText('Antall repetisjoner for Knebøy')).not.toBeInTheDocument();
+  });
+});
