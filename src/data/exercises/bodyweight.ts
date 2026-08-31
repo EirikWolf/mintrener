@@ -213,7 +213,7 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     sensorProfil: 'ingen',
     bildePrompt: {
       '0': 'full body captured from side profile lying prone face down on gym mat with arms extended straight forward overhead and legs straight back flat on floor',
-      '1': 'full body captured from side profile at the peak of a superman back extension, chest, shoulders, arms and thighs lifted high off floor creating a concave arch, glutes and spinal erectors fully contracted, head in neutral alignment',
+      '1': 'full body captured from side profile lying prone face down on gym mat at the peak of a superman back extension, chest, shoulders, arms and thighs lifted high off floor creating a concave arch, glutes and spinal erectors fully contracted, head in neutral alignment',
     },
     bildeVinkel: 'side',
     bildeStatus: 'mangler',

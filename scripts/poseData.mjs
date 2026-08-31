@@ -179,14 +179,19 @@ export const POSES = {
     faser: [
       S({
         navn: 'Start — flatt på magen, armene strukket fram',
-        nese: [0.640, 0.660], øye: [0.628, 0.648], øre: [0.586, 0.656],
+        // INGEN ansiktspunkter. DWPose på et ekte foto av en person på magen
+        // finner ikke nese og øyne — de peker i gulvet. At vi tegnet dem, sa at
+        // ansiktet var synlig, altså at hun lå på ryggen. Modellen gjorde
+        // konsekvent nettopp det, ved begge renderere og begge kontrollverdier.
+        // Øret beholdes: det ER synlig i profil på en mageliggende person.
+        nese: null, øye: null, øre: [0.586, 0.656],
         nakke: [0.574, 0.678], skulder: [0.600, 0.686],
         albue: [0.750, 0.680], håndledd: [0.910, 0.672],
         hofte: [0.360, 0.700], kne: [0.230, 0.706], ankel: [0.075, 0.712],
       }),
       S({
         navn: 'Slutt — armer og bein løftet samtidig',
-        nese: [0.636, 0.560], øye: [0.624, 0.548], øre: [0.582, 0.560],
+        nese: null, øye: null, øre: [0.582, 0.560],
         nakke: [0.570, 0.600], skulder: [0.598, 0.620],
         albue: [0.752, 0.560], håndledd: [0.912, 0.480],
         hofte: [0.360, 0.690], kne: [0.230, 0.610], ankel: [0.075, 0.500],
