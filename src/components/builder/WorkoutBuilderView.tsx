@@ -25,6 +25,44 @@ import {
   Star,
 } from 'lucide-react';
 
+/**
+ * De to varighetsfeltene per øvelse, med hurtigvalgene sine.
+ *
+ * Hurtigvalgene er de vanlige intervallene, ikke de eneste lovlige. «Egen»
+ * ved siden av dem dekker resten — en planke på 1:40 skal bygges som program,
+ * ikke som en ny øvelse i biblioteket.
+ */
+const DURATION_FIELDS = [
+  {
+    key: 'work' as const,
+    label: 'Arbeid',
+    srPrefix: 'Arbeidstid',
+    customLabel: 'Egen arbeidstid',
+    presets: [20, 30, 45],
+    cellClass: 'bg-emerald-950/20 border-emerald-900/30',
+    labelClass: 'text-emerald-400',
+    activeClass: 'bg-emerald-500 text-zinc-950',
+  },
+  {
+    key: 'rest' as const,
+    label: 'Pause',
+    srPrefix: 'Pausetid',
+    customLabel: 'Egen pausetid',
+    presets: [0, 10, 15],
+    cellClass: 'bg-amber-950/20 border-amber-900/30',
+    labelClass: 'text-amber-400',
+    activeClass: 'bg-amber-500 text-zinc-950',
+  },
+];
+
+/** Kompakt visning i en knapp: «45s» under minuttet, «1:40» over. */
+function formatChip(totalSeconds: number): string {
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
 interface WorkoutBuilderViewProps {
   initialWorkout?: WorkoutTemplate | null;
   onStartCustomWorkout: (workout: WorkoutTemplate) => void;
@@ -67,6 +105,39 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
   };
   const [isSavedToast, setIsSavedToast] = useState(false);
   const [workoutToDelete, setWorkoutToDelete] = useState<WorkoutTemplate | null>(null);
+
+  // Egen varighet redigeres for ett felt om gangen. Utkastet holdes utenfor
+  // items slik at «Avbryt» faktisk angrer, i stedet for å skrive hvert tastetrykk.
+  const [editingDuration, setEditingDuration] = useState<{
+    itemId: string;
+    field: 'work' | 'rest';
+  } | null>(null);
+  const [draftMinutes, setDraftMinutes] = useState('0');
+  const [draftSeconds, setDraftSeconds] = useState('0');
+
+  const draftTotalSeconds = Math.max(
+    0,
+    (parseInt(draftMinutes, 10) || 0) * 60 + (parseInt(draftSeconds, 10) || 0)
+  );
+
+  const handleOpenDurationEditor = (
+    itemId: string,
+    field: 'work' | 'rest',
+    currentSeconds: number
+  ) => {
+    setEditingDuration({ itemId, field });
+    setDraftMinutes(String(Math.floor(currentSeconds / 60)));
+    setDraftSeconds(String(currentSeconds % 60));
+  };
+
+  const handleCancelDurationEditor = () => setEditingDuration(null);
+
+  const handleApplyDurationEditor = () => {
+    if (!editingDuration) return;
+    if (editingDuration.field === 'work' && draftTotalSeconds === 0) return;
+    handleUpdateDuration(editingDuration.itemId, editingDuration.field, draftTotalSeconds);
+    setEditingDuration(null);
+  };
 
   useEffect(() => {
     fetchCustomWorkouts(user?.uid).then(setSavedWorkouts);
@@ -373,48 +444,122 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
                   </div>
                 </div>
 
-                {/* Tidsjustering per øvelse */}
+                {/* Tidsjustering per øvelse.
+                    Hurtigvalgene dekker de vanlige intervallene; «Egen» dekker
+                    resten. Varigheten hører til programmet — øvelsen bærer bare
+                    et forslag, og skal ikke måtte kopieres i én variant per
+                    lengde for å komme rundt tre faste knapper. */}
                 <div className="grid grid-cols-2 gap-2 text-[10px] pt-1 border-t border-zinc-800/50">
-                  {/* Arbeidstid */}
-                  <div className="flex items-center justify-between bg-emerald-950/20 border border-emerald-900/30 rounded-xl px-2 py-1">
-                    <span className="text-emerald-400 font-bold">Arbeid:</span>
-                    <div className="flex gap-1">
-                      {[20, 30, 45].map((sec) => (
-                        <button
-                          key={sec}
-                          onClick={() => handleUpdateDuration(item.id, 'work', sec)}
-                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                            item.workDurationSeconds === sec
-                              ? 'bg-emerald-500 text-zinc-950'
-                              : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                          }`}
-                        >
-                          {sec}s
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Pausetid */}
-                  <div className="flex items-center justify-between bg-amber-950/20 border border-amber-900/30 rounded-xl px-2 py-1">
-                    <span className="text-amber-400 font-bold">Pause:</span>
-                    <div className="flex gap-1">
-                      {[0, 10, 15].map((sec) => (
-                        <button
-                          key={sec}
-                          onClick={() => handleUpdateDuration(item.id, 'rest', sec)}
-                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                            item.restDurationSeconds === sec
-                              ? 'bg-amber-500 text-zinc-950'
-                              : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                          }`}
-                        >
-                          {sec}s
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  {DURATION_FIELDS.map((felt) => {
+                    const verdi =
+                      felt.key === 'work' ? item.workDurationSeconds : item.restDurationSeconds;
+                    const erEgen = !felt.presets.includes(verdi);
+                    return (
+                      <div
+                        key={felt.key}
+                        data-testid={`varighet-${felt.key}-${idx}`}
+                        className={`flex items-center justify-between border rounded-xl px-2 py-1 ${felt.cellClass}`}
+                      >
+                        <span className={`font-bold ${felt.labelClass}`}>{felt.label}:</span>
+                        <div className="flex gap-1">
+                          {felt.presets.map((sec) => (
+                            <button
+                              key={sec}
+                              onClick={() => handleUpdateDuration(item.id, felt.key, sec)}
+                              // Navnet inneholder den synlige teksten (WCAG 2.5.3);
+                              // «20s» alene sier ingenting utenfor sin egen celle.
+                              aria-label={`${felt.srPrefix} ${sec}s`}
+                              aria-pressed={verdi === sec}
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                verdi === sec
+                                  ? felt.activeClass
+                                  : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                              }`}
+                            >
+                              {sec}s
+                            </button>
+                          ))}
+                          <button
+                            onClick={() => handleOpenDurationEditor(item.id, felt.key, verdi)}
+                            aria-label={
+                              erEgen ? `${felt.customLabel}: ${formatChip(verdi)}` : felt.customLabel
+                            }
+                            aria-pressed={erEgen}
+                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                              erEgen ? felt.activeClass : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            {erEgen ? formatChip(verdi) : 'Egen'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
+
+                {/* Egen tid: full bredde under cellene — to tallfelt får ikke
+                    plass i en halv rad på 375 px. */}
+                {editingDuration?.itemId === item.id && (
+                  <div className="flex flex-wrap items-end gap-2 pt-1.5 mt-1 border-t border-zinc-800/50">
+                    <div className="flex flex-col gap-0.5">
+                      <label
+                        htmlFor={`varighet-min-${item.id}`}
+                        className="text-[9px] uppercase font-bold text-zinc-400 tracking-wide"
+                      >
+                        Minutter
+                      </label>
+                      <input
+                        id={`varighet-min-${item.id}`}
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        max={99}
+                        value={draftMinutes}
+                        onChange={(e) => setDraftMinutes(e.target.value)}
+                        className="w-14 bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <label
+                        htmlFor={`varighet-sek-${item.id}`}
+                        className="text-[9px] uppercase font-bold text-zinc-400 tracking-wide"
+                      >
+                        Sekunder
+                      </label>
+                      <input
+                        id={`varighet-sek-${item.id}`}
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        max={59}
+                        value={draftSeconds}
+                        onChange={(e) => setDraftSeconds(e.target.value)}
+                        className="w-14 bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white"
+                      />
+                    </div>
+                    <span className="text-[10px] text-zinc-400 pb-1.5">
+                      = {formatChip(draftTotalSeconds)}
+                    </span>
+                    <div className="flex gap-1.5 ml-auto">
+                      <button
+                        onClick={handleCancelDurationEditor}
+                        aria-label="Avbryt tidsvalg"
+                        className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-white hover:bg-zinc-800"
+                      >
+                        Avbryt
+                      </button>
+                      <button
+                        onClick={handleApplyDurationEditor}
+                        // En arbeidsperiode på null er ikke en øvelse. En pause
+                        // på null er derimot et gyldig valg — rett i neste øvelse.
+                        disabled={editingDuration.field === 'work' && draftTotalSeconds === 0}
+                        className="px-2.5 py-1.5 rounded-lg text-[11px] font-black bg-emerald-500 text-zinc-950 disabled:opacity-30 disabled:pointer-events-none"
+                      >
+                        Bruk tiden
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
