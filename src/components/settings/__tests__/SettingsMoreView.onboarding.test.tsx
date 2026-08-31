@@ -43,13 +43,11 @@ async function renderView() {
     render(
       <SettingsMoreView
         soundEnabled
-        onToggleSound={vi.fn()}
         vibrateEnabled
         onToggleVibrate={vi.fn()}
         wakeLockEnabled
         onToggleWakeLock={vi.fn()}
         speechEnabled
-        onToggleSpeech={vi.fn()}
       />
     );
   });

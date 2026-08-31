@@ -57,30 +57,37 @@ import {
 import { getWeeklyGoal, setWeeklyGoal } from '../../services/weeklyGoalService';
 import { getUserBirthYear, setUserBirthYear, getUserMaxHeartRate } from '../../services/heartRateZoneService';
 import { bluetoothHeartRateService } from '../../services/bluetoothHeartRateService';
+import {
+  SOUND_LEVELS,
+  soundLevelFromFlags,
+  type SoundLevel,
+} from '../../services/soundLevelService';
 
 interface SettingsMoreViewProps {
   soundEnabled: boolean;
-  onToggleSound: () => void;
   vibrateEnabled: boolean;
   onToggleVibrate: () => void;
   wakeLockEnabled: boolean;
   onToggleWakeLock: () => void;
   speechEnabled: boolean;
-  onToggleSpeech: () => void;
+  /** Setter begge lydbryterne i ett grep. */
+  onSetSoundLevel?: (level: SoundLevel) => void;
   onOpenCurator?: () => void;
 }
 
 export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
   soundEnabled,
-  onToggleSound,
   vibrateEnabled,
   onToggleVibrate,
   wakeLockEnabled,
   onToggleWakeLock,
   speechEnabled,
-  onToggleSpeech,
+  onSetSoundLevel,
   onOpenCurator,
 }) => {
+  // Nivået er en LESNING av bryterne, ikke en fjerde tilstand å holde i synk.
+  const aktivtNivå = soundLevelFromFlags({ soundEnabled, speechEnabled });
+
   const { user, signInWithGoogle, logout, deleteAccount } = useAuth();
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
   // Ikke lov pulsbelte på enheter uten Web Bluetooth — pulsmåleren skjuler
@@ -234,44 +241,52 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
       <section className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-3.5 space-y-2.5">
         <h2 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Lyd, tale & skjerm</h2>
         <div className="divide-y divide-zinc-800/60">
-          {/* Lyd */}
-          <div className="flex items-center justify-between py-2">
+          {/* Lydnivå — ett valg, tre navngitte nivåer.
+              Her sto tidligere to uavhengige brytere («Lydsignaler» og
+              «Stemmeveiledning»). De ga fire kombinasjoner, hvorav brukeren
+              fant to. Nivået arbeidsplassen faktisk ba om — diskrete pip uten
+              stemme — krevde at man skjønte at bryterne var forskjellige ting
+              og satte dem i riktig kombinasjon. */}
+          <div className="py-2 space-y-2">
             <div className="flex items-center gap-2.5">
-              {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-zinc-400" />}
+              {aktivtNivå === 'stille' ? (
+                <VolumeX className="w-4 h-4 text-zinc-400" />
+              ) : aktivtNivå === 'signal' ? (
+                <Volume2 className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <AudioLines className="w-4 h-4 text-emerald-400" />
+              )}
               <div>
-                <p className="text-xs font-bold text-white">Lydsignaler (Pip)</p>
-                <p className="text-[10px] text-zinc-400">Varsler start, pause og 3-2-1 nedtelling</p>
+                <p className="text-xs font-bold text-white">Lydnivå</p>
+                <p className="text-[10px] text-zinc-400">Hvor mye appen skal si underveis</p>
               </div>
             </div>
-            <button
-              role="switch"
-              aria-checked={soundEnabled}
-              aria-label="Lydsignaler"
-              onClick={onToggleSound}
-              className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${soundEnabled ? 'bg-emerald-500' : 'bg-zinc-600'}`}
-            >
-              <div className={`w-5 h-5 rounded-full bg-white transition-transform ${soundEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
-            </button>
-          </div>
 
-          {/* Stemmeveiledning */}
-          <div className="flex items-center justify-between py-2">
-            <div className="flex items-center gap-2.5">
-              <AudioLines className={`w-4 h-4 ${speechEnabled ? 'text-emerald-400' : 'text-zinc-400'}`} />
-              <div>
-                <p className="text-xs font-bold text-white">Norsk stemmeveiledning</p>
-                <p className="text-[10px] text-zinc-400">Leser opp øvelsesnavn og instruksjoner</p>
-              </div>
-            </div>
-            <button
-              role="switch"
-              aria-checked={speechEnabled}
-              aria-label="Norsk stemmeveiledning"
-              onClick={onToggleSpeech}
-              className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${speechEnabled ? 'bg-emerald-500' : 'bg-zinc-600'}`}
+            <div
+              role="radiogroup"
+              aria-label="Lydnivå"
+              className="grid grid-cols-3 gap-1.5 p-1 bg-zinc-950/60 border border-zinc-800 rounded-2xl"
             >
-              <div className={`w-5 h-5 rounded-full bg-white transition-transform ${speechEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
-            </button>
+              {SOUND_LEVELS.map((nivå) => (
+                <button
+                  key={nivå.id}
+                  role="radio"
+                  aria-checked={aktivtNivå === nivå.id}
+                  onClick={() => onSetSoundLevel?.(nivå.id)}
+                  className={`min-h-[44px] py-2 px-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+                    aktivtNivå === nivå.id
+                      ? 'bg-emerald-500 text-zinc-950 shadow-sm'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                  }`}
+                >
+                  {nivå.label}
+                </button>
+              ))}
+            </div>
+
+            <p className="text-[10px] text-zinc-400 px-1">
+              {SOUND_LEVELS.find((n) => n.id === aktivtNivå)?.description}
+            </p>
           </div>
 
           {/* Trenerstemme & Dialekt (Suno & Kitor Personaer) */}

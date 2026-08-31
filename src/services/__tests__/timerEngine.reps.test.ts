@@ -134,3 +134,26 @@ describe('TimerEngine – repetisjonsbaserte øvelser', () => {
     expect(rigg.engine.getSnapshot().totalRemainingSeconds).toBe(115);
   });
 });
+
+describe('TimerEngine – lyd av betyr av', () => {
+  it('rapporterer tale som avslått når lyden er slått av', () => {
+    const rigg = createRigg(repsØkt());
+    expect(rigg.engine.getSnapshot().speechEnabled).toBe(true);
+
+    rigg.engine.setSoundEnabled(false);
+
+    // Med to uavhengige brytere kunne stemmen fortsette å snakke etter at
+    // brukeren hadde slått av lyden. Snapshotet rapporterer nå den FAKTISKE
+    // tilstanden, som er det lydkjeden og innstillingene leser.
+    expect(rigg.engine.getSnapshot().speechEnabled).toBe(false);
+  });
+
+  it('gir tilbake talen når lyden slås på igjen', () => {
+    const rigg = createRigg(repsØkt());
+    rigg.engine.setSoundEnabled(false);
+    rigg.engine.setSoundEnabled(true);
+
+    // Brukerens valg av nivå skal overleve en midlertidig demping
+    expect(rigg.engine.getSnapshot().speechEnabled).toBe(true);
+  });
+});

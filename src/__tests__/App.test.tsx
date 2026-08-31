@@ -47,6 +47,7 @@ vi.mock('../hooks/useIntervalTimer', () => ({
     toggleVibrate: vi.fn(),
     toggleWakeLock: vi.fn(),
     toggleSpeech: vi.fn(),
+    setSoundLevel: vi.fn(),
   }),
 }));
 

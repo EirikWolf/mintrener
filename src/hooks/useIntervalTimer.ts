@@ -9,6 +9,8 @@ import { createTicker } from '../services/tickerService';
 import { audioService } from '../services/audioService';
 import { wakeLockService } from '../services/wakeLockService';
 import { speechService } from '../services/speechService';
+import { flagsForSoundLevel, type SoundLevel } from '../services/soundLevelService';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 import { audioClipService } from '../services/audioClipService';
 import { InterruptedSession } from '../services/sessionRecoveryService';
 import { perfMonitorService } from '../services/perfMonitorService';
@@ -226,6 +228,21 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     }
   }, [engine]);
 
+  // Setter begge bryterne i ett grep. Nivåene er navngitte kombinasjoner —
+  // se soundLevelService for hvorfor to uavhengige brytere ikke var et valg.
+  const setSoundLevel = useCallback(
+    (level: SoundLevel, { erBrukerensValg = true } = {}) => {
+      if (erBrukerensValg) {
+        localStorage.setItem(STORAGE_KEYS.SOUND_LEVEL_CHOSEN, 'true');
+      }
+      const { soundEnabled, speechEnabled } = flagsForSoundLevel(level);
+      engine.setSoundEnabled(soundEnabled);
+      engine.setSpeechEnabled(speechEnabled);
+      speechService.setEnabled(speechEnabled);
+    },
+    [engine]
+  );
+
   const toggleSpeech = useCallback(() => {
     const next = !engine.getSnapshot().speechEnabled;
     engine.setSpeechEnabled(next);
@@ -246,5 +263,6 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     toggleVibrate,
     toggleWakeLock,
     toggleSpeech,
+    setSoundLevel,
   };
 }

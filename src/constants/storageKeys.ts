@@ -42,6 +42,11 @@ export const STORAGE_KEYS = {
   USER_PROFILE: 'mintrener_user_profile',
   USER_PROFILES: 'mintrener_user_profiles_v1',
   USER_SETTINGS: 'mintrener_user_settings',
+  /**
+   * Om brukeren har valgt lydnivå SELV. Profilen foreslår bare et nivå, og
+   * forslaget skal ikke overkjøre et bevisst valg neste gang profilen endres.
+   */
+  SOUND_LEVEL_CHOSEN: 'mintrener_sound_level_chosen',
   FAVORITE_PROGRAM_IDS: 'mintrener_favorite_program_ids',
   COACH_PERSONA: 'mintrener_coach_persona',
   ONBOARDING: 'mintrener_onboarding_v1',

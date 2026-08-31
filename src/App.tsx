@@ -3,6 +3,8 @@ import { PRESET_WORKOUTS, TABATA_WORKOUT } from './data/mockWorkouts';
 import { WorkoutTemplate } from './types/workout';
 import { useIntervalTimer } from './hooks/useIntervalTimer';
 import { useWorkoutExitGuard } from './hooks/useWorkoutExitGuard';
+import { defaultSoundLevelForProfiles } from './services/soundLevelService';
+import { STORAGE_KEYS } from './constants/storageKeys';
 import { TimerDisplay } from './components/timer/TimerDisplay';
 import { WorkoutSummary } from './components/timer/WorkoutSummary';
 import { ExerciseLibraryView } from './components/library/ExerciseLibraryView';
@@ -103,6 +105,7 @@ export function App() {
     toggleVibrate,
     toggleWakeLock,
     toggleSpeech,
+    setSoundLevel,
   } = useIntervalTimer({ workout: selectedWorkout });
 
   const [latestLogId, setLatestLogId] = useState<string | undefined>(undefined);
@@ -136,6 +139,16 @@ export function App() {
     setSelectedWorkout(tpl);
     resetWorkout();
   };
+
+  // Profilen FORESLÅR et lydnivå: et åpent kontorlandskap og et korlokale
+  // tåler et pip, men ikke en stemme. Har brukeren valgt selv, står valget —
+  // et forslag som overkjører et bevisst valg er ikke et forslag.
+  useEffect(() => {
+    if (localStorage.getItem(STORAGE_KEYS.SOUND_LEVEL_CHOSEN) === 'true') return;
+    setSoundLevel(defaultSoundLevelForProfiles(userProfiles.profiles), {
+      erBrukerensValg: false,
+    });
+  }, [userProfiles.profiles, setSoundLevel]);
 
   // Tilbakeknappen forlot hele nettsiden midt i en økt. Vakten fanger trykket
   // så lenge noe kan gå tapt — altså mens økten kjører eller står i pause.
@@ -246,13 +259,12 @@ export function App() {
         ) : (
           <SettingsMoreView
             soundEnabled={state.soundEnabled}
-            onToggleSound={toggleSound}
+            onSetSoundLevel={setSoundLevel}
             vibrateEnabled={state.vibrateEnabled}
             onToggleVibrate={toggleVibrate}
             wakeLockEnabled={state.wakeLockEnabled}
             onToggleWakeLock={toggleWakeLock}
             speechEnabled={state.speechEnabled}
-            onToggleSpeech={toggleSpeech}
             onOpenCurator={IS_CURATOR_ENABLED ? () => setActiveTab('curator') : undefined}
           />
         )}

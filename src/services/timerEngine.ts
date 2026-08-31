@@ -304,7 +304,7 @@ export class TimerEngine {
       s.status, s.phase, s.currentRound, s.currentItemIndex, s.phaseDuration,
       Math.ceil(s.phaseRemaining), Math.floor(s.totalElapsed),
       s.isLocked, s.soundEnabled, s.vibrateEnabled, s.wakeLockEnabled,
-      s.speechEnabled, s.motionReps, s.awaitingReps,
+      s.speechEnabled && s.soundEnabled, s.motionReps, s.awaitingReps,
     ].join('|');
   }
 
@@ -369,7 +369,11 @@ export class TimerEngine {
       soundEnabled: s.soundEnabled,
       vibrateEnabled: s.vibrateEnabled,
       wakeLockEnabled: s.wakeLockEnabled,
-      speechEnabled: s.speechEnabled,
+      // Tale er BETINGET av lyd. Med to uavhengige brytere kunne stemmen
+      // fortsette etter at brukeren hadde slått av lyden — «av» må bety av.
+      // Brukerens valg ligger urørt i s.speechEnabled, så nivået kommer
+      // tilbake når lyden slås på igjen.
+      speechEnabled: s.speechEnabled && s.soundEnabled,
       motionReps: s.motionReps,
       // undefined, ikke null, i den utadvendte typen: fraværet av et mål er
       // «ingen repetisjoner å vente på», ikke «null repetisjoner».

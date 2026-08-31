@@ -41,6 +41,7 @@ const UTENFOR_EKSPORT: Partial<Record<keyof typeof STORAGE_KEYS, string>> = {
   STREAK_REPORTED: 'Intern de-duplisering av telemetri.',
   STREAK_CELEBRATED: 'Intern de-duplisering av feiring.',
   TELEMETRY_ENABLED: 'Samtykkeflagg, ikke innsamlet data.',
+  SOUND_LEVEL_CHOSEN: 'Flagg for om lydnivået er valgt manuelt. Nivået selv ligger i USER_SETTINGS.',
   ORGANIZATION: 'Organisasjonstilknytning, ikke personlige treningsdata.',
   CHALLENGE_PROGRESS_PREFIX: 'Prefiks, ikke en enkeltnøkkel. Dekkes av ACTIVE_CHALLENGE_ID.',
 };
