@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildComfyPromptJob, exportAllExercisePromptJobs, ASTRID_FLUX_BASE_STYLE } from '../imagePromptService';
+import { buildComfyPromptJob, exportAllExercisePromptJobs, ASTRID_FLUX_DEMO_STYLE } from '../imagePromptService';
 import { ExerciseItem } from '../../schemas/exerciseSchema';
 
 const mockExercise: ExerciseItem = {
@@ -16,20 +16,24 @@ const mockExercise: ExerciseItem = {
   bildeVinkel: 'side',
   bildeStatus: 'mangler',
   bildePrompt: {
-    '0': 'actively locking in an athletic squat stance, feet planted wide, engaged quads, warm encouraging smile',
+    '0': 'actively locking in an athletic squat stance, feet planted wide, engaged quads',
     '1': 'captured mid-rep in the lowest point of a deep powerful squat, thighs parallel to ground, proud chest',
   },
 };
 
 describe('ImagePromptService (Flux + Astrid LoRA)', () => {
-  it('genererer gyldig ComfyUI prompt med bevegelse, smil og treningsglede', () => {
+  // Denne testen fastholdt tidligere smilet som et KRAV — «med bevegelse, smil
+  // og treningsglede». Det var nettopp den forutsetningen som gjorde bildene
+  // ubrukelige: et smil mot kamera og en streng sideprofil i bunnen av en
+  // armheving kan ikke være sanne samtidig (bildekuratering 2026-08-31 § 2).
+  it('genererer gyldig ComfyUI-prompt med posituren først og uten smil', () => {
     const job = buildComfyPromptJob(mockExercise, 0);
 
     expect(job.exerciseId).toBe('kneboy');
     expect(job.phaseIndex).toBe(0);
-    expect(job.positivePrompt).toContain(ASTRID_FLUX_BASE_STYLE);
-    expect(job.positivePrompt).toContain('warm confident encouraging smile');
-    expect(job.positivePrompt).toContain('joy of training');
+    expect(job.positivePrompt).toContain(ASTRID_FLUX_DEMO_STYLE);
+    expect(job.positivePrompt).not.toMatch(/smile/i);
+    expect(job.positivePrompt).not.toMatch(/joy of training/i);
   });
 
   it('eksporterer alle faser for en liste med øvelser', () => {

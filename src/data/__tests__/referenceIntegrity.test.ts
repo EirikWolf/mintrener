@@ -186,3 +186,17 @@ describe('Referanseintegritet for øvelses-ID-er og treningspakker (Revisjon 202
     });
   });
 });
+
+describe('Bildepromptene ber ikke om et ansiktsuttrykk', () => {
+  it('ingen øvelse ber om smil i sin bildePrompt', () => {
+    // Et smil mot kamera og en streng sideprofil i bunnen av en armheving kan
+    // ikke være sanne samtidig — modellen velger ansiktet, og instruksjonen
+    // går tapt (bildekuratering 2026-08-31 § 2). Fjernet fra stilprompten er
+    // ikke nok hvis det siver inn i dataene igjen.
+    const syndere = EXERCISE_LIBRARY.filter((ex) =>
+      Object.values(ex.bildePrompt ?? {}).some((p) => /smil|smile|grin|joyful/i.test(p))
+    ).map((ex) => ex.id);
+
+    expect(syndere, `Øvelser som ber om et smil: ${syndere.join(', ')}`).toEqual([]);
+  });
+});

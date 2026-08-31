@@ -118,7 +118,7 @@ export const CARDIO_EXERCISES: ExerciseInput[] = [
     sensorProfil: 'kadens',
     bildePrompt: {
       '0': 'full body captured in front view jogging lightly on the spot, springy step on balls of feet, arms bent at sides',
-      '1': 'full body captured in front view jogging actively in place while circling straight arms in wide dynamic arcs, light smile, bouncy athletic cardio movement',
+      '1': 'full body captured in front view jogging actively in place while circling straight arms in wide dynamic arcs, bouncy athletic cardio movement',
     },
     bildeVinkel: 'front',
     bildeStatus: 'mangler',
