@@ -75,8 +75,19 @@ Dette er den viktigste delen. Sett av plass til å faktisk bevege deg.
 **Sjekk først:** skru på lyden på telefonen (ringelyd-bryteren på siden skal ikke stå på lydløs).
 
 1. Velg en kort økt fra forsiden — «Klassisk Tabata» eller en av favorittene
-2. Trykk **START**
+2. Trykk **START** — og **stopp opp i to sekunder her** før du begynner å bevege deg
 3. **Gjennomfør hele økta.** Ikke bare se på — gjør øvelsene
+
+**Om overgangen når du trykker START** (svar før du glemmer det):
+
+Skjermen skifter utseende når økta begynner: fargen endres, menyen nederst forsvinner, og innholdet blir større.
+
+- Føltes det som at du kom til **en ny side**, eller som at **samme side endret seg**?
+- Var det tydelig **hvordan du kommer deg ut igjen** om du ombestemmer deg?
+- Savnet du menyen nederst, eller var det befriende at den forsvant?
+- Ble noe **vanskeligere å finne** etter at den forsvant?
+
+Vi vurderer å beholde menyen synlig under økta, og er genuint usikre. Si hva du selv ville foretrukket.
 
 **Noter underveis (eller rett etterpå):**
 
