@@ -46,6 +46,55 @@ export interface WorkoutSummaryFeedbackContext {
  * Fungerer 100% offline uten eksterne serverkall (maksimalt personvern).
  * Kan også koble seg på Chrome Prompt API (window.ai) dersom tilgjengelig.
  */
+/**
+ * Slår spørsmålet opp i øvelseskatalogen.
+ *
+ * Regelmotoren under hadde åtte nøkkelord-regler, hvorav to gjaldt en øvelse.
+ * «Hvordan gjør jeg planken?» og «Hva er push-ups?» traff ingen av dem og fikk
+ * samme generiske svar — mens katalogens 74 øvelser hver har `instruks` steg
+ * for steg og `vanligeFeil`.
+ *
+ * Svaret lå i dataene. Dette er et oppslag, ikke en modell.
+ *
+ * Returnerer null når spørsmålet ikke handler om en øvelse, slik at de øvrige
+ * reglene får slippe til.
+ */
+export function answerFromCatalogue(question: string): string | null {
+  const q = question.toLowerCase().trim();
+  if (!q) return null;
+
+  // Ordgrenser: uten dem ville «liv» i «et aktivt liv» truffet en øvelse, og
+  // coachen svart om trening på nesten hvilket som helst spørsmål.
+  const treffer = (navn: string) => {
+    const n = navn.toLowerCase();
+    if (n.length < 4) return false;
+    const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Norsk bøyning: brukeren skriver «planken», ikke «planke». Suffikset er
+    // valgfritt og dekker bestemt form og flertall.
+    const bøyning = '(ene|en|et|er|a|e|n|s)?';
+    return new RegExp(`(^|[^a-zà-ÿ])${escaped}${bøyning}([^a-zà-ÿ]|$)`, 'i').test(q);
+  };
+
+  // Lengste navn vinner: «sideplanke» inneholder «planke», og spør brukeren om
+  // sideplanke skal hun ikke få svar om vanlig planke.
+  const kandidater = EXERCISE_LIBRARY.filter(
+    (ex) => treffer(ex.navn.nb) || (ex.navn.en ? treffer(ex.navn.en) : false)
+  ).sort((a, b) => b.navn.nb.length - a.navn.nb.length);
+
+  const ex = kandidater[0];
+  if (!ex) return null;
+
+  const linjer: string[] = [`${ex.navn.nb} — slik gjør du den:`];
+  (ex.instruks?.nb ?? []).forEach((steg, i) => linjer.push(`${i + 1}. ${steg}`));
+
+  const feil = ex.vanligeFeil?.nb ?? [];
+  if (feil.length > 0) {
+    linjer.push('', `Vanlige feil: ${feil.join('. ')}.`);
+  }
+
+  return linjer.join('\n');
+}
+
 class LocalAiCoachService {
   /**
    * Genererer en personlig velkomsthilsen eller dagsstatus fra treneren.
@@ -105,7 +154,12 @@ class LocalAiCoachService {
       }
     }
 
-    // 2. Regel- og semantisk basert lokal intelligens (Lynrask & 100% offline)
+    // 2. Øvelseskatalogen: spør brukeren om en konkret øvelse, ligger svaret
+    //    allerede i dataene våre — steg for steg, med vanlige feil.
+    const fraKatalogen = answerFromCatalogue(prompt);
+    if (fraKatalogen) return fraKatalogen;
+
+    // 3. Regel- og semantisk basert lokal intelligens (Lynrask & 100% offline)
     if (p.includes('hva bør jeg trene') || p.includes('forslag') || p.includes('anbefal')) {
       const comp = context.weeklyGoal?.completedThisWeek || 0;
       if (comp % 2 === 0) {
