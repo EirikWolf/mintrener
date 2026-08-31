@@ -88,12 +88,18 @@ interface Jobb {
   fase: number;
   variant: number;
   seed: number;
+  lerret: { width: number; height: number };
   prompt: string;
   poseRef: string;
   filnavn: string;
 }
 
-function lesFaser(exerciseId: string): { fase: number; png: string; navn: string }[] {
+function lesFaser(exerciseId: string): {
+  fase: number;
+  png: string;
+  navn: string;
+  lerret: { width: number; height: number };
+}[] {
   const mappe = path.join(POSE_DIR, exerciseId);
   if (!fs.existsSync(mappe)) throw new Error(`Ingen skjeletter for ${exerciseId}`);
   return fs
@@ -104,8 +110,8 @@ function lesFaser(exerciseId: string): { fase: number; png: string; navn: string
       const fase = Number(f.split('_')[0]);
       const meta = JSON.parse(
         fs.readFileSync(path.join(mappe, `${fase}_pose.json`), 'utf-8')
-      ) as { navn: string };
-      return { fase, png: path.join(mappe, f), navn: meta.navn };
+      ) as { navn: string; lerret: { width: number; height: number } };
+      return { fase, png: path.join(mappe, f), navn: meta.navn, lerret: meta.lerret };
     });
 }
 
@@ -124,7 +130,7 @@ async function main() {
 
   const jobber: Jobb[] = [];
   for (const id of UTVALG) {
-    for (const { fase, navn } of lesFaser(id)) {
+    for (const { fase, navn, lerret } of lesFaser(id)) {
       for (let v = 0; v < SEEDS_PER_POSISJON; v++) {
         jobber.push({
           exerciseId: id,
@@ -132,6 +138,7 @@ async function main() {
           variant: v,
           // Begge faser deler seed innenfor samme variant
           seed: seedForExercise(id) + v,
+          lerret,
           prompt: byggPrompt(id, fase),
           poseRef: '',
           filnavn: `${id}_f${fase}_v${v}${CONTROL_END !== 0.65 ? `_e${Math.round(CONTROL_END * 100)}` : ''}`,
@@ -183,6 +190,8 @@ async function main() {
         const wf = buildAstridFluxPoseWorkflow(j.prompt, j.seed, j.filnavn, j.poseRef, {
           controlStrength: CONTROL_STRENGTH,
           controlEnd: CONTROL_END,
+          width: j.lerret.width,
+          height: j.lerret.height,
         });
         const promptId = await submitPrompt(token, wf);
         // waitForCompletion returnerer SELVE bildeobjektet ({filename, subfolder,

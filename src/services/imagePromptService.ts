@@ -260,6 +260,9 @@ export function buildAstridFluxPoseWorkflow(
     guidance?: number;
     controlStrength?: number;
     controlEnd?: number;
+    /** Må matche skjelettets lerret — ellers forskyves posituren (vedlegg A § A.6). */
+    width?: number;
+    height?: number;
   } = {}
 ) {
   const steps = options.steps ?? 24;
@@ -269,6 +272,8 @@ export function buildAstridFluxPoseWorkflow(
   // liggende positurer — se runPoseTestBatch. Derfor et argument, ikke en
   // konstant.
   const controlEnd = options.controlEnd ?? 0.65;
+  const width = options.width ?? POSE_CANVAS.width;
+  const height = options.height ?? POSE_CANVAS.height;
 
   return {
     "1": {
@@ -301,8 +306,8 @@ export function buildAstridFluxPoseWorkflow(
     },
     "6": {
       "inputs": {
-        "width": POSE_CANVAS.width,
-        "height": POSE_CANVAS.height,
+        "width": width,
+        "height": height,
         "batch_size": 1
       },
       "class_type": "EmptyLatentImage"

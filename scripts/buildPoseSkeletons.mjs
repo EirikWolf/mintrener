@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { renderPose, POSE_CANVAS } from './poseSkeleton.mjs';
+import { renderPose, POSE_CANVAS, POSE_CANVAS_LANDSCAPE } from './poseSkeleton.mjs';
 import { POSES, toCoco18 } from './poseData.mjs';
 
 /**
@@ -28,9 +28,11 @@ for (const [id, def] of Object.entries(POSES)) {
   antallØvelser++;
   if (def.hold) hold.push(id);
 
+  const lerret = def.lerret === 'liggende' ? POSE_CANVAS_LANDSCAPE : POSE_CANVAS;
+
   def.faser.forEach((fase, i) => {
     const joints = toCoco18(fase);
-    writeFileSync(join(mappe, `${i}_pose.png`), renderPose(joints));
+    writeFileSync(join(mappe, `${i}_pose.png`), renderPose(joints, lerret));
     writeFileSync(
       join(mappe, `${i}_pose.json`),
       JSON.stringify(
@@ -39,7 +41,7 @@ for (const [id, def] of Object.entries(POSES)) {
           fase: i,
           navn: fase.navn,
           vinkel: def.vinkel,
-          lerret: POSE_CANVAS,
+          lerret,
           format: 'COCO-18, normaliserte koordinater (0–1), null = ikke synlig',
           ledd: joints,
         },

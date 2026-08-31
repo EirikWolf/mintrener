@@ -173,20 +173,23 @@ export const POSES = {
 
   'rygghev-superman': {
     vinkel: 'side',
+    // Liggende lerret: på portrett brukte skjelettet 4 % av høyden og ble tolket
+    // som en sittende kvinne — to ganger, ved begge kontrollinnstillinger.
+    lerret: 'liggende',
     faser: [
       S({
         navn: 'Start — flatt på magen, armene strukket fram',
-        nese: [0.730, 0.752], øye: [0.720, 0.746], øre: [0.686, 0.750],
-        nakke: [0.680, 0.762], skulder: [0.700, 0.765],
-        albue: [0.800, 0.762], håndledd: [0.890, 0.760],
-        hofte: [0.440, 0.772], kne: [0.290, 0.775], ankel: [0.140, 0.778],
+        nese: [0.640, 0.660], øye: [0.628, 0.648], øre: [0.586, 0.656],
+        nakke: [0.574, 0.678], skulder: [0.600, 0.686],
+        albue: [0.750, 0.680], håndledd: [0.910, 0.672],
+        hofte: [0.360, 0.700], kne: [0.230, 0.706], ankel: [0.075, 0.712],
       }),
       S({
         navn: 'Slutt — armer og bein løftet samtidig',
-        nese: [0.728, 0.712], øye: [0.718, 0.705], øre: [0.684, 0.712],
-        nakke: [0.678, 0.735], skulder: [0.700, 0.742],
-        albue: [0.805, 0.712], håndledd: [0.895, 0.688],
-        hofte: [0.440, 0.770], kne: [0.292, 0.742], ankel: [0.145, 0.700],
+        nese: [0.636, 0.560], øye: [0.624, 0.548], øre: [0.582, 0.560],
+        nakke: [0.570, 0.600], skulder: [0.598, 0.620],
+        albue: [0.752, 0.560], håndledd: [0.912, 0.480],
+        hofte: [0.360, 0.690], kne: [0.230, 0.610], ankel: [0.075, 0.500],
       }),
     ],
   },

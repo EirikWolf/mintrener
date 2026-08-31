@@ -55,6 +55,19 @@ export const COLORS = [
 
 export const POSE_CANVAS = { width: 896, height: 1152 };
 
+/**
+ * Liggende lerret for liggende øvelser.
+ *
+ * Målt 2026-08-31: hvor mye av lerrethøyden skjelettet bruker, forutsier
+ * resultatet nesten perfekt. Sprellmenn brukte 0,82 og ble riktig; superman
+ * brukte 0,04 — en vannrett strek — og ble to personer, deretter en sittende
+ * kvinne. Et portrettlerret tvinger en liggende kropp inn i en tynn stripe.
+ *
+ * Vedlegg A krever at skjelett og latent har SAMME sideforhold. Det kravet
+ * holdes; det er portrett-formatet som ikke var et krav.
+ */
+export const POSE_CANVAS_LANDSCAPE = { width: 1152, height: 896 };
+
 /** Enkel RGB-buffer med svart bakgrunn — OpenPose-skjeletter tegnes på svart. */
 function createCanvas(width, height) {
   return { width, height, data: new Uint8Array(width * height * 3) };
