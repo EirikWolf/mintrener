@@ -371,3 +371,43 @@ Dette dokumentet fører en kronologisk oversikt over tekniske og arkitektoniske 
 * **Funn:** FLUX.1 [dev]-lisensen sier ordrett: «You may use Output for any purpose (including for commercial purposes), except as expressly prohibited herein.» «Non-Commercial Purpose» er definert som en begrensning på bruk av **modellen** — «so far as you do not receive any direct or indirect payment arising from the use of the FLUX.1 [dev] Model». De eneste begrensningene på utdataene er at de ikke kan brukes til å trene en konkurrerende modell, og at innholdskravene følges. De to formuleringene motsa altså aldri hverandre; tvetydigheten var vår lesning.
 * **Valg:** De 74 øvelsesbildene beholdes uendret, også ved fremtidig inntekt. **Ingen regenerering planlegges.** Det som er heftet er å *kjøre* modellen kommersielt: skal det genereres nytt materiale etter at appen gir inntekt, må det skje på en annen modell. FLUX.2 [klein] 4B (Apache 2.0) er nærmeste kandidat og er liten nok til å dele GPU-en. Merk at et modellbytte krever at person-LoRA-en trenes på nytt — det, og ikke bildene, er den reelle kostnaden.
 * **Konsekvens:** En antatt fremtidig kostnad forsvinner fra planen, og «regenerer bildene før første betaling» er ikke lenger en betingelse for å ta inntekt. Rettet i spesifikasjonen (beslutningstabellen), vedlegg A (A.2 og A.12) og B1-bestillingens kapasitetstabell. Lærdommen er verdt å notere: vedlegg A så tvetydigheten og valgte forsiktighet framfor å lese kilden. Forsiktighet er riktig når man ikke vet — men her sto svaret i lisensteksten, og det kostet oss en oppdiktet post i budsjettet i flere uker.
+
+## [2026-09-01] Beslutning 49: ControlNet-pipelinen legges ned til fordel for illustrasjoner
+* **Kontekst:** Øvelsesbiblioteket trenger to bilder per øvelse — start og slutt — for 75 øvelser. Etter at ren promptstyring feilet (17 av 28 bildepar viste ikke øvelsen, kuratering 2026-08-31), ble ControlNet Union Pro 2.0 med selvtegnede OpenPose-skjeletter tatt i bruk. Posituren ble riktig, men arbeidet avdekket en kjede av feil som alle stammet fra samme sted, og tre av dem lot seg ikke løse. En ekstern revisjon ble bestilt med eksplisitt invitasjon til å foreslå at vi forkastet sporet (`docs/ekstern-revisjon-bildepipeline-2026-09-01.md`), og svaret anbefaler nedleggelse (`docs/ekstern-revisjon-bildepipeline-svar-2026-09-01.md`).
+* **Det som IKKE bærer beslutningen:** Revisor fremhever Flux-lisensen som «en blokker» og hevder at bildene må regenereres ved kommersialisering. **Det er feil, og Beslutning 48 avgjorde det to dager tidligere** etter å ha lest lisensteksten fra kilden: «You may use Output for any purpose (including for commercial purposes)». Det ikke-kommersielle hefter ved å *kjøre modellen*, ikke ved utdataene. Revisor hadde ikke tilgang til Beslutning 48, og vi gjentok feilen ukritisk i første gjennomlesning. Argumentet er strøket.
+* **Det som bærer beslutningen:**
+  1. **Et 2D-skjelett kan ikke uttrykke kroppsorientering.** COCO-18 er 18 punkter (x, y) uten dybdeakse. En person på magen og en på ryggen gir identiske koordinater, og hals-til-hofte er én rett linje, så katt og ku er samme skjelett. Vi testet og avkreftet fire selvstendige hypoteser (kontrollvindu, kontrollstyrke, lerretsorientering, ansiktspunkter), hver med en tro gjengivelse av `draw_bodypose`. Revisor kom uavhengig til samme konklusjon fra førsteprinsipper. Tre problemer står uløste: orientering, ryggkrumning og rotasjon om kroppsaksen.
+  2. **Kostnaden er reell og har vært stor.** Vi har rettet en felles kroppsmodell, gulvforankring, lerretsvalg, kameraskala, marg for isse og hender, og kroppsbredde — hver av dem etter at et bilde avslørte feilen. En fotoserie tar én dag.
+  3. **Bransjen gjør det ikke slik.** Seven, Nike Training Club, Freeletics, `wger` og `free-exercise-db` bruker stiliserte illustrasjoner, ikke fotorealistisk KI.
+  4. **Muskelkart avgjør valget mellom foto og illustrasjon.** Et fotografi kan ikke vise hvilke muskler øvelsen aktiverer. Med det kravet er det ikke lenger uavgjort mellom revisorens alternativ 1 (foto) og 3 (illustrasjon) — illustrasjon dominerer strengt.
+  5. **Marginalkostnaden.** Biblioteket vokser — vi la til to øvelser 2026-09-01 alene. Foto kan ikke utvides med én øvelse uten å gjenskape samme person, antrekk, rom og lys. En illustrasjon koster én tegning.
+* **Valg:**
+  1. **ControlNet-generering av øvelsesbilder legges ned.** `runFullKitorBatch.ts` og `runPoseTestBatch.ts` skal ikke videreutvikles. De eksisterende bildene blir stående til illustrasjonene erstatter dem — de er lovlige å bruke (Beslutning 48).
+  2. **Retning: 2D-illustrasjoner**, med muskelkart som egen visning.
+  3. **Rekkefølge:** (a) normaliser muskelordforrådet, (b) muskelkart som én datadrevet SVG, (c) de 150 utførelsesillustrasjonene.
+* **Konsekvens:**
+  - **Kroppsmodellen er ikke tapt arbeid.** `poseBody.mjs` og `poseData.mjs` gir 31 skjeletter for 17 øvelser med verifiserte proporsjoner, gulvkontakt og innramming. Et skjelett med riktig anatomi *er* geometrien i en strektegning, og systemet for å lage de resterende 58 er bygget og testet.
+  - **Visningslaget trenger ingen endring.** `ExerciseIllustration` leser `/images/exercises/{id}-{fase}.png` og `/videos/exercises/{id}.mp4`. Alle alternativene faller inn i samme spor.
+  - **Muskelkartet er billig:** én SVG med for- og bakside, ikke 150 filer. Den serverer alle 75 øvelsene fra data vi allerede har.
+  - Tre uløste problemer i vedlegg A — orientering, ryggkrumning, rotasjon — er ikke lenger åpne punkter, men bortfalt sammen med metoden.
+  - **Lærdom:** vi bestilte revisjonen med invitasjon til å bli motsagt, og fikk det. Men revisors sterkeste argument var feil, og vi gjentok det før vi slo opp i vår egen beslutningslogg. En ekstern vurdering skal etterprøves mot det vi allerede vet, ikke bare leses.
+
+## [2026-09-01] Beslutning 50: Kontrollert muskelordforråd, og fire ikonfeil i produksjon
+* **Kontekst:** Første steg mot muskelkartet (Beslutning 49). `muskler.primær` og `muskler.sekundær` i øvelseskatalogen er fritekst, og teksten hadde drevet fra hverandre: **55 unike navn for 75 øvelser**. `sete` og `setemuskulatur`, `bakside lår` og `hamstring`, `latissimus` og `brede ryggmuskel` er samme muskel skrevet på to måter. Rundt en femtedel av navnene er ikke muskler i det hele tatt — `kondisjon`, `balanse`, `restitusjon`, `grep`, `lepper`.
+* **Funn — fire feil sto i produksjon.** `MuscleIcon` normaliserte med delstrengsjekker i fast rekkefølge, og rekkefølgen var feil:
+
+  | Øvelser | Katalogen sier | Ikonet viste | Årsak |
+  |---|---|---|---|
+  | 4 | `bakside lår` | quadriceps | `lår`-sjekken sto før `bakside lår` |
+  | 2 | `korsrygg` | øvre rygg | `rygg`-sjekken sto før `korsrygg` |
+  | 2 | `brystrygg` | bryst | `bryst`-sjekken sto først |
+  | 5 | `latissimus` | magemuskler | ingen gren traff — falt til fallback |
+
+  Grenene for `korsrygg` og `bakside lår` var **død kode** og kunne aldri nås. I tillegg fikk alt umatchet — `kondisjon`, `balanse`, `hofteleddsbøyere`, `lepper` — magemuskel-ikonet.
+* **Valg:**
+  1. `src/data/muskler.ts` med **18 anatomiske grupper** og **8 kvaliteter** som ikke er anatomi. Oppslaget er en eksplisitt tabell, ikke mønstermatching. Et ukjent navn gir `null`.
+  2. Ett navn kan peke på flere grupper. Katte-ku oppgir `ryggsøyle`, og øvelsen mobiliserer hele ryggen — ett kart-område ville løyet om halve øvelsen.
+  3. **Friteksten beholdes i katalogen.** Den er brukervendt, og en kanonisk nøkkel ved siden av dekker ikoner, filtrering og muskelkart uten å endre 75 øvelser.
+  4. `MuscleIcon` slår opp kanonisk gruppe og bruker `Record<MuskelGruppe, IkonKomponent>`. Legger noen til en gruppe uten å velge ikon, **nekter TypeScript å kompilere** — sterkere enn en test, fordi det ikke kan glemmes. Seks grupper uten eget ikon deler et beslektet, med kompromisset skrevet ned.
+  5. Kvaliteter gir **ingen ikon**. Et magemuskel-ikon ved siden av «kondisjon» er en påstand om anatomi der det ikke finnes noen.
+* **Konsekvens:** Ni tester binder ordforrådet, hvorav den viktigste er uttømmenhet: hvert eneste navn i katalogen må være kjent. Neste person som skriver «rumpemuskler» får rød test i stedet for et stilltiende feil ikon. Kvalitetene bør på sikt flyttes til et eget felt i `ExerciseSchema` — de er reell informasjon om øvelsen, men de hører ikke i et muskelfelt.
