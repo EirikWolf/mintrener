@@ -39,6 +39,12 @@ export const MOBILITY_EXERCISES: ExerciseInput[] = [
      * katte-ku sin ID. Da fantes øvelsen bare i det navnet — ikke søkbar under
      * Øvelser, ikke instruert, ikke illustrert, og den som fulgte lenken fikk
      * beskjed om å gå ned på alle fire.
+     *
+     * Formen er verifisert mot videoreferanse fra Eirik 2026-09-01: en
+     * PENDELBEVEGELSE der armene henger løst og kroppen selv finner
+     * vendepunktet. Det er ikke en kontrollert tøying mot ytterstilling — første
+     * utkast her beskrev armene løftet til brysthøyde og listet svingen som en
+     * vanlig feil. Begge deler var motsatt av øvelsen.
      */
     id: 'staende-ryggvri',
     navn: { nb: 'Stående ryggvri', en: 'Standing Spinal Twist' },
@@ -55,32 +61,32 @@ export const MOBILITY_EXERCISES: ExerciseInput[] = [
     instruks: {
       nb: [
         'Stå med føttene i hoftebreddes avstand og knærne mykt bøyd.',
-        'Løft armene til brysthøyde og la albuene henge avslappet.',
-        'Roter overkroppen rolig mot høyre så langt det går uten å tvinge, og la blikket følge med.',
-        'Kom tilbake til midten og roter mot venstre. Hoftene og knærne peker rett fram hele veien.',
-        'Pust ut i vridningen, inn på vei tilbake.',
+        'La armene henge helt løst. De skal verken holdes oppe eller styres.',
+        'Sett overkroppen i en rolig pendelbevegelse fra side til side.',
+        'La kroppen selv finne vendepunktet — ikke press vridningen lenger enn pendelen tar den.',
+        'Blikket følger med. Hoftene og knærne peker rett fram. Pust fritt.',
       ],
       en: [
         'Stand with feet hip-width apart, knees softly bent.',
-        'Raise the arms to chest height with relaxed elbows.',
-        'Rotate the torso slowly to the right as far as is comfortable, letting the gaze follow.',
-        'Return to centre and rotate to the left. Hips and knees stay facing forward throughout.',
-        'Exhale into the twist, inhale on the way back.',
+        'Let the arms hang completely loose — neither held up nor steered.',
+        'Set the torso into a calm pendulum swing from side to side.',
+        'Let the body find its own turning point — never push the twist further than the swing carries it.',
+        'The gaze follows along. Hips and knees stay facing forward. Breathe freely.',
       ],
     },
     vanligeFeil: {
       nb: [
+        'Holder armene aktivt oppe i stedet for å la dem henge og pendle med',
+        'Tvinger vridningen forbi der pendelen stopper av seg selv',
         'Lar hoftene snu med — da roterer ikke brystryggen, som er det øvelsen er til for',
-        'Kaster overkroppen rundt i fart i stedet for å rotere rolig',
-        'Roterer bare nakken og tror det er ryggvri',
       ],
     },
     sensorProfil: 'ingen',
     // Frontvinkel: en rotasjon leses ikke i ren profil. Skuldrene som svinger
     // bort fra kamera mens hoftene står stille, ER hele øvelsen.
     bildePrompt: {
-      '0': 'standing upright with feet hip-width apart, knees softly bent, arms raised to chest height with relaxed elbows, torso rotated to her right so the shoulders turn away from the camera while the hips stay squarely forward, gaze following the rotation',
-      '1': 'standing upright with feet hip-width apart, knees softly bent, arms raised to chest height with relaxed elbows, torso rotated to her left so the shoulders turn away from the camera while the hips stay squarely forward, gaze following the rotation',
+      '0': 'standing upright with feet hip-width apart, knees softly bent, torso swung to her right so the shoulders turn away from the camera while the hips stay squarely forward, both arms hanging completely loose and swept out to the sides by the momentum of the swing, gaze following the movement',
+      '1': 'standing upright with feet hip-width apart, knees softly bent, torso swung to her left so the shoulders turn away from the camera while the hips stay squarely forward, both arms hanging completely loose and swept out to the sides by the momentum of the swing, gaze following the movement',
     },
     bildeVinkel: 'front',
     bildeStatus: 'mangler',
