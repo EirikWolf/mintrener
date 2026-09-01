@@ -3,6 +3,7 @@ import { render, screen, within, fireEvent } from '@testing-library/react';
 import { ChallengeDetailModal } from '../ChallengeDetailModal';
 import { STARTER_CHALLENGES } from '../../../data/challenges';
 import { calculateWorkoutDuration } from '../../../services/customWorkoutsService';
+import { EXERCISE_LIBRARY } from '../../../data/exercises/index';
 
 /**
  * Forhåndsvisning av en dag i en utfordring.
@@ -58,6 +59,14 @@ function åpneDag(dag: number) {
  * avrundingsdetalj, det er hele grunnen til at tallet vises.
  */
 const minutter = (sekunder: number) => Math.ceil(sekunder / 60);
+
+/**
+ * Escaper regex-tegn i et øvelsesnavn.
+ *
+ * «Knebøy til stol (Box Squat)» har parenteser, og uten dette ble de tolket som
+ * en gruppe — søket lette etter «Box Squat» uten parentesene og fant ingenting.
+ */
+const somMønster = (tekst: string) => tekst.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 beforeEach(() => {
   localStorage.clear();
@@ -149,5 +158,65 @@ describe('Dagsvisning — hvor lang tid tar det', () => {
     vis();
     const min = minutter(calculateWorkoutDuration(førsteTreningsdag.workout!));
     expect(screen.getByTestId('utfordring-varighet')).toHaveTextContent(new RegExp(`${min}\\s*min`));
+  });
+});
+
+describe('Dagsvisning — veien til «hvordan gjør jeg dette?»', () => {
+  /**
+   * Funn fra Eirik: «Om man for eksempel ikke vet hvordan skulderåpnere
+   * utføres, så kan man finne det uten å gå om Øvelser og søke der?»
+   *
+   * Å liste navnet var bare halve svaret. Den som ikke kjenner øvelsen må
+   * fortsatt huske navnet, lukke utfordringen, gå til Øvelser og søke — og i
+   * mellomtiden er navnet i utfordringen ikke alltid det samme som i katalogen.
+   *
+   * En lenke er dessuten et BEDRE grep enn å rette navnene, for navnedriften
+   * har tre klasser: kosmetisk («Sprellmenn» mot «Sprellmenn (Jumping Jacks)»),
+   * bevisst tematisering (familie-utfordringen kaller sprellmenn «Kenguruhopp»,
+   * som er en funksjon for barn), og feil øvelse («Skulderåpnere» peker på en
+   * øvelse som krever strikk). En navneregel ville ødelagt den midterste.
+   * Lenken løser alle tre — og avslører den siste.
+   */
+  it('lar hver katalogøvelse åpnes direkte fra dagen', () => {
+    vis();
+    åpneDag(førsteTreningsdag.day);
+
+    const panel = screen.getByTestId('dagsvisning');
+    for (const item of førsteTreningsdag.workout!.items) {
+      expect(
+        within(panel).getByRole('button', { name: new RegExp(`Vis .*${somMønster(item.exercise.name)}`, 'i') })
+      ).toBeInTheDocument();
+    }
+  });
+
+  it('viser katalogens egen beskrivelse, ikke utfordringens navn på nytt', () => {
+    // Poenget: trykker du «Skulderåpnere» skal du se «Skulderrotasjon med
+    // strikk/stang» og forstå at du trenger utstyr. Identiteten er det lenken
+    // skal avsløre.
+    vis();
+    åpneDag(førsteTreningsdag.day);
+
+    const item = førsteTreningsdag.workout!.items[0];
+    fireEvent.click(
+      within(screen.getByTestId('dagsvisning')).getByRole('button', {
+        name: new RegExp(`Vis .*${somMønster(item.exercise.name)}`, 'i'),
+      })
+    );
+
+    const katalogNavn = EXERCISE_LIBRARY.find((ex) => ex.id === item.exercise.id)!.navn.nb;
+    expect(screen.getAllByText(katalogNavn).length).toBeGreaterThan(0);
+  });
+
+  it('starter ikke økta når man bare vil se en øvelse', () => {
+    const { onStartWorkout } = vis();
+    åpneDag(førsteTreningsdag.day);
+
+    const item = førsteTreningsdag.workout!.items[0];
+    fireEvent.click(
+      within(screen.getByTestId('dagsvisning')).getByRole('button', {
+        name: new RegExp(`Vis .*${somMønster(item.exercise.name)}`, 'i'),
+      })
+    );
+    expect(onStartWorkout).not.toHaveBeenCalled();
   });
 });

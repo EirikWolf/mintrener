@@ -9,6 +9,8 @@ import {
 } from '../../services/challengeService';
 import { CalendarExportModal } from '../calendar/CalendarExportModal';
 import { calculateWorkoutDuration } from '../../services/customWorkoutsService';
+import { EXERCISE_LIBRARY } from '../../data/exercises/index';
+import { ExerciseDetailModal } from '../library/ExerciseDetailModal';
 import {
   X,
   Play,
@@ -54,6 +56,17 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState<boolean>(false);
   // Hvilken dag som er åpnet for forhåndsvisning. Null = dagsrutenettet vises.
   const [valgtDag, setValgtDag] = useState<number | null>(null);
+  /**
+   * Øvelsen som er slått opp fra dagsvisningen.
+   *
+   * Utfordringens `name` er ikke alltid katalogens: noen ganger kosmetisk
+   * («Sprellmenn» mot «Sprellmenn (Jumping Jacks)»), noen ganger bevisst
+   * tematisert (familie-utfordringen kaller sprellmenn «Kenguruhopp», og det er
+   * en funksjon for barn), og noen ganger direkte feil («Skulderåpnere» peker
+   * på en øvelse som krever strikk). Oppslaget går derfor på ID, ikke navn —
+   * og det avslører den siste klassen i det du åpner den.
+   */
+  const [oppslåttØvelse, setOppslåttØvelse] = useState<string | null>(null);
   const [isShared, setIsShared] = useState<boolean>(false);
 
   const modalRef = useRef<HTMLDivElement>(null);
@@ -393,10 +406,24 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
                       <span className="text-[10px] font-black text-zinc-500 shrink-0 w-4 pt-0.5">
                         {i + 1}.
                       </span>
-                      <span className="min-w-0 space-y-0.5">
-                        <span className="block text-xs font-bold text-white break-words">
-                          {item.exercise.name}
-                        </span>
+                      <span className="min-w-0 space-y-0.5 flex-1">
+                        {EXERCISE_LIBRARY.some((ex) => ex.id === item.exercise.id) ? (
+                          <button
+                            type="button"
+                            onClick={() => setOppslåttØvelse(item.exercise.id)}
+                            aria-label={`Vis hvordan ${item.exercise.name} utføres`}
+                            className="block text-left text-xs font-bold text-white break-words underline decoration-dotted decoration-zinc-600 underline-offset-4 hover:decoration-emerald-400 hover:text-emerald-300 transition-colors"
+                          >
+                            {item.exercise.name}
+                          </button>
+                        ) : (
+                          // Egendefinerte øvelser finnes ikke i katalogen. Uten
+                          // denne grenen ville raden sett trykkbar ut og ikke
+                          // gjort noe — verre enn ingen lenke.
+                          <span className="block text-xs font-bold text-white break-words">
+                            {item.exercise.name}
+                          </span>
+                        )}
                         <span className="block text-[11px] font-mono text-emerald-400">
                           {item.targetReps
                             ? `${item.targetReps} reps`
@@ -442,6 +469,13 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
           )}
         </div>
       </div>
+
+      {oppslåttØvelse && (
+        <ExerciseDetailModal
+          exercise={EXERCISE_LIBRARY.find((ex) => ex.id === oppslåttØvelse)!}
+          onClose={() => setOppslåttØvelse(null)}
+        />
+      )}
 
       {isCalendarModalOpen && (
         <CalendarExportModal
