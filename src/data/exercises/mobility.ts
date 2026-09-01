@@ -27,6 +27,64 @@ export const MOBILITY_EXERCISES: ExerciseInput[] = [
     },
     bildeVinkel: 'side',
     bildeStatus: 'mangler',
+    // `noFloor` er en ekte oppslagsnøkkel i profileCompositionService: profiler
+    // med resolve: ['noFloor'] bytter automatisk til den stående varianten.
+    // Kontorprofilen er nettopp en slik — ingen legger seg på alle fire ved pulten.
+    alternatives: { noFloor: 'staende-ryggvri' },
+  },
+  {
+    /**
+     * Lagt inn 2026-09-01. «Kontorvanen 28 dager» hadde i praksis denne
+     * øvelsen allerede: den skrev «Stående ryggvri» som navn, men lånte
+     * katte-ku sin ID. Da fantes øvelsen bare i det navnet — ikke søkbar under
+     * Øvelser, ikke instruert, ikke illustrert, og den som fulgte lenken fikk
+     * beskjed om å gå ned på alle fire.
+     */
+    id: 'staende-ryggvri',
+    navn: { nb: 'Stående ryggvri', en: 'Standing Spinal Twist' },
+    type: 'tid',
+    kategori: 'mobilitet',
+    muskler: {
+      primær: ['brystrygg', 'skrå magemuskler'],
+      sekundær: ['korsrygg', 'skuldre', 'hofter'],
+    },
+    // Poenget med øvelsen: ingenting. Den skal kunne gjøres ved en pult, i
+    // arbeidsklær, uten å flytte på noe.
+    utstyr: ['ingen'],
+    nivå: 'nybegynner',
+    instruks: {
+      nb: [
+        'Stå med føttene i hoftebreddes avstand og knærne mykt bøyd.',
+        'Løft armene til brysthøyde og la albuene henge avslappet.',
+        'Roter overkroppen rolig mot høyre så langt det går uten å tvinge, og la blikket følge med.',
+        'Kom tilbake til midten og roter mot venstre. Hoftene og knærne peker rett fram hele veien.',
+        'Pust ut i vridningen, inn på vei tilbake.',
+      ],
+      en: [
+        'Stand with feet hip-width apart, knees softly bent.',
+        'Raise the arms to chest height with relaxed elbows.',
+        'Rotate the torso slowly to the right as far as is comfortable, letting the gaze follow.',
+        'Return to centre and rotate to the left. Hips and knees stay facing forward throughout.',
+        'Exhale into the twist, inhale on the way back.',
+      ],
+    },
+    vanligeFeil: {
+      nb: [
+        'Lar hoftene snu med — da roterer ikke brystryggen, som er det øvelsen er til for',
+        'Kaster overkroppen rundt i fart i stedet for å rotere rolig',
+        'Roterer bare nakken og tror det er ryggvri',
+      ],
+    },
+    sensorProfil: 'ingen',
+    // Frontvinkel: en rotasjon leses ikke i ren profil. Skuldrene som svinger
+    // bort fra kamera mens hoftene står stille, ER hele øvelsen.
+    bildePrompt: {
+      '0': 'standing upright with feet hip-width apart, knees softly bent, arms raised to chest height with relaxed elbows, torso rotated to her right so the shoulders turn away from the camera while the hips stay squarely forward, gaze following the rotation',
+      '1': 'standing upright with feet hip-width apart, knees softly bent, arms raised to chest height with relaxed elbows, torso rotated to her left so the shoulders turn away from the camera while the hips stay squarely forward, gaze following the rotation',
+    },
+    bildeVinkel: 'front',
+    bildeStatus: 'mangler',
+    alternatives: { seated: 'seated-skulder-rull', easier: 'katte-ku' },
   },
   {
     id: 'verdens-beste-toyeovelse',

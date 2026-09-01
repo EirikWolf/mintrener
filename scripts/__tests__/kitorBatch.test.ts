@@ -13,12 +13,24 @@ import { runFullBatch } from '../runFullKitorBatch';
 import fs from 'fs';
 import path from 'path';
 
-describe('Kitor Batch Infrastructure & 74 Exercises Coverage', () => {
-  it('alle 74 øvelser finnes i EXERCISE_LIBRARY', () => {
-    expect(EXERCISE_LIBRARY.length).toBe(74);
+/**
+ * Antallet øvelser er ikke en invariant — katalogen skal kunne vokse.
+ *
+ * Testene her sto med 74 og 148 skrevet inn. Da «Stående ryggvri» ble lagt inn
+ * 2026-09-01 feilet tre tester, uten at noe var galt: de målte at ingen hadde
+ * lagt til en øvelse. Det som FAKTISK skal holde, er at hver øvelse gir nøyaktig
+ * to jobber og at filnavnene er unike. Gulvet står igjen for å fange at
+ * katalogen tømmes.
+ */
+const ANTALL_ØVELSER = EXERCISE_LIBRARY.length;
+const ANTALL_JOBBER = ANTALL_ØVELSER * 2;
+
+describe('Kitor Batch Infrastructure & øvelsesdekning', () => {
+  it('har en katalog å kjøre batch på', () => {
+    expect(ANTALL_ØVELSER).toBeGreaterThanOrEqual(74);
   });
 
-  it('alle 74 øvelser har fullverdige prompt-definisjoner for både fase 0 og fase 1', () => {
+  it('alle øvelser har fullverdige prompt-definisjoner for både fase 0 og fase 1', () => {
     for (const ex of EXERCISE_LIBRARY) {
       expect(ex.bildePrompt, `Øvelse ${ex.id} (${ex.navn.nb}) mangler bildePrompt`).toBeDefined();
       expect(ex.bildePrompt?.['0'], `Øvelse ${ex.id} mangler fase 0 prompt`).toBeDefined();
@@ -48,12 +60,14 @@ describe('Kitor Batch Infrastructure & 74 Exercises Coverage', () => {
     expect(job0.positivePrompt).toContain(EXERCISE_LIBRARY[0].bildePrompt!['0']);
   });
 
-  it('exportAllExercisePromptJobs genererer nøyaktig 148 prompt-jobber (74 × 2)', () => {
+  it('gir nøyaktig to prompt-jobber per øvelse, med unike filnavn', () => {
     const jobs = exportAllExercisePromptJobs(EXERCISE_LIBRARY);
-    expect(jobs.length).toBe(148);
+    expect(jobs.length).toBe(ANTALL_JOBBER);
 
+    // Unike filnavn er det egentlige kravet: to jobber som skriver til samme fil
+    // gir én fil og en tapt positur, uten at noe feiler.
     const filenames = new Set(jobs.map((j) => j.outputFilename));
-    expect(filenames.size).toBe(148);
+    expect(filenames.size).toBe(ANTALL_JOBBER);
   });
 
   it('buildAstridFluxWorkflow genererer gyldig ComfyUI API graf med KSampler, LoRA og SaveImage', () => {
@@ -93,9 +107,9 @@ describe('Kitor Batch Infrastructure & 74 Exercises Coverage', () => {
     const flux = JSON.parse(fs.readFileSync(fluxPath, 'utf-8'));
     const wan = JSON.parse(fs.readFileSync(wanPath, 'utf-8'));
 
-    expect(payload.length).toBe(148);
-    expect(flux.length).toBe(148);
-    expect(wan.length).toBe(148);
+    expect(payload.length).toBe(ANTALL_JOBBER);
+    expect(flux.length).toBe(ANTALL_JOBBER);
+    expect(wan.length).toBe(ANTALL_JOBBER);
   });
 
   it('runFullBatch kjører i --dry-run modus uten å kaste feil', async () => {
