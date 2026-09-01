@@ -110,34 +110,12 @@ describe('Delte lenker kan leses tilbake', () => {
     expect(lest?.items[0].exercise.id).toBe('planke');
   });
 
-  it('leser fortsatt gamle base64-lenker', () => {
-    // Lenker som allerede er delt i kalenderinvitasjoner og meldinger skal
-    // ikke slutte å virke fordi vi kortet ned formatet.
-    const gammel = {
-      id: 'shared-1',
-      name: 'Gammel lenke',
-      description: '',
-      type: 'custom',
-      prepareDurationSeconds: 10,
-      rounds: 1,
-      roundRestDurationSeconds: 0,
-      items: [
-        {
-          id: 'i1',
-          exercise: { id: 'kneboy', name: 'Knebøy' },
-          workDurationSeconds: 20,
-          restDurationSeconds: 10,
-        },
-      ],
-    };
-    const b64 = btoa(
-      encodeURIComponent(JSON.stringify(gammel)).replace(/%([0-9A-F]{2})/g, (_, p) =>
-        String.fromCharCode(parseInt(p, 16))
-      )
-    );
+  it('avviser det gamle base64-formatet i stedet for å bære en dekoder for det', () => {
+    // Formatet ble delt i en kort periode da lenkene var for lange til QR.
+    // Bevisst droppet: en avvist lenke sier fra, en halvveis lastet gjør ikke.
+    const b64 = btoa('{"name":"Gammel"}');
     settUrl(`?w=${encodeURIComponent(b64)}&ref=share`);
-
-    expect(getSharedWorkoutFromUrl()?.name).toBe('Gammel lenke');
+    expect(getSharedWorkoutFromUrl()).toBeNull();
   });
 
   it('avviser en skadet lenke i stedet for å laste noe halvt', () => {

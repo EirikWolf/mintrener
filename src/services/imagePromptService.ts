@@ -19,7 +19,34 @@ export const ASTRID_FLUX_BASE_STYLE =
  * Et smil hører hjemme på et forsidebilde. En instruksjon skal vise arbeidet.
  */
 export const ASTRID_FLUX_DEMO_STYLE =
-  'fitness instruction photography, full body shot completely visible within frame including hands and feet, neutral focused expression, controlled effort, engaged core, precise exercise form, even natural lighting, sharp focus';
+  'fitness instruction photography, full body completely visible within frame including hands and feet, calm focused expression with a faint natural smile, engaged core, precise exercise form, even natural lighting, sharp focus';
+
+/**
+ * Astrids utseende — identiteten, ikke handlingen.
+ *
+ * Første utkast slettet HELE basestilen for å bli kvitt smilet. Det var å kaste
+ * ut for mye: «light sweat sheen on sun-tanned skin, golden tan, tense flexed
+ * muscles» beskriver hvordan hun SER UT og kolliderer ikke med noen positur.
+ * Uten dem ble hun utrent og skiftende fra bilde til bilde.
+ *
+ * Det som måtte bort, var «warm confident encouraging smile» — ikke fordi det
+ * er et smil, men fordi et smil forutsetter et ansikt mot kamera, og det slåss
+ * mot en streng sideprofil. Et svakt, naturlig smil uten kamerakontakt gjør det
+ * ikke.
+ */
+export const ASTRID_APPEARANCE =
+  'an attractive muscular athletic woman with visibly defined abs, strong toned shoulders and legs, light sweat sheen on sun-tanned skin, golden tan, long blonde hair tied back in a tight high ponytail';
+
+/**
+ * Ett fast rom for hele biblioteket.
+ *
+ * «in a bright modern gym» er en sjanger, ikke et sted — modellen fant opp et
+ * nytt gym for hvert bilde, med snekkerbenker, racks og pulter som ikke hører
+ * til øvelsen. Et konkret, nøytralt rom gir samme bakgrunn på tvers av
+ * biblioteket og lar øvelsen være det eneste som endrer seg.
+ */
+export const ASTRID_SETTING =
+  'in a bright minimal studio with a plain pale grey wall and light wood floor, no gym equipment in the background';
 
 /**
  * Lerretet for både latent og skjelett.
@@ -49,8 +76,18 @@ export function seedForExercise(exerciseId: string): number {
   return (hash >>> 0) + 1;
 }
 
+/**
+ * Antrekket, med fargen gjentatt per plagg.
+ *
+ * «charcoal … and matching leggings» holdt ikke: «matching» er en relasjon
+ * modellen kan oppfylle med hvilken som helst farge, og hun endte i svart, grått
+ * og olivengrønt om hverandre. Fargen står nå eksplisitt på begge plagg.
+ *
+ * Håret hører til utseendet, ikke antrekket — men det er samme problem: LoRA-en
+ * låser ansiktet, ikke frisyren, så både farge og oppsett må sies.
+ */
 export const ASTRID_FLUX_OUTFIT_STYLE =
-  'in a bright modern gym, wearing a charcoal modern seamless cropped racerback sports bra and matching high-waist ribbed leggings, black training shoes, natural athletic lighting, sharp focus';
+  'wearing a fitted charcoal grey seamless cropped racerback sports bra and matching charcoal grey high-waist full-length leggings, tight-fitting, plain black training shoes';
 
 /**
  * Kanonisk stilmal for Wan2.1 I2V (Image-to-Video) animering på Kitor
@@ -101,7 +138,13 @@ export function buildComfyPromptJob(
   // Handling og vinkel FØRST: batch-scriptet satte stilen først og begravde
   // posituren midt i prompten — det forsterket akkurat den feilen § 2 i
   // kurateringsrapporten beskriver.
-  const positivePrompt = `ASTRID, a woman, ${specificAction}, ${angleStr}, ${ASTRID_FLUX_DEMO_STYLE}, ${ASTRID_FLUX_OUTFIT_STYLE}`;
+  // Identitet og antrekk FØRST. Flux vekter tidlige tokens tyngst, og antrekket
+  // sto sist — derfor havnet hun i løse joggebukser i stedet for tights.
+  //
+  // At handlingen kan flyttes bakover, er nytt: ControlNet holder posituren nå,
+  // så prompten trenger ikke lenger slåss for den. Da er det identiteten som
+  // trenger plassen foran.
+  const positivePrompt = `ASTRID, ${ASTRID_APPEARANCE}, ${ASTRID_FLUX_OUTFIT_STYLE}, ${specificAction}, ${angleStr}, ${ASTRID_FLUX_DEMO_STYLE}, ${ASTRID_SETTING}`;
 
   return {
     exerciseId: exercise.id,

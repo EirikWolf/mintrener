@@ -57,27 +57,41 @@ describe('Seeden hører til øvelsen, ikke til bildet', () => {
   });
 });
 
-describe('Fase-prompten ber ikke lenger om et smil', () => {
-  it('holder smil og «treningsglede» ute av demonstrasjonsstilen', () => {
-    expect(ASTRID_FLUX_DEMO_STYLE).not.toMatch(/smile/i);
-    expect(ASTRID_FLUX_DEMO_STYLE).not.toMatch(/joy/i);
-    expect(ASTRID_FLUX_DEMO_STYLE).not.toMatch(/radiant/i);
+describe('Fase-prompten ber ikke om et ansikt mot kamera', () => {
+  // Regelen er IKKE «ingen smil». Det var overkorrigeringen: å slette hele
+  // basestilen for å bli kvitt smilet tok med seg «tense flexed muscles» og
+  // «sun-tanned skin», og Astrid ble utrent og skiftende.
+  //
+  // Det som kolliderer med en streng sideprofil, er et uttrykk som forutsetter
+  // ØYEKONTAKT. Et svakt naturlig smil gjør det ikke.
+
+  it('ber ikke om oppmuntrende blikk eller kamerakontakt', () => {
+    for (const forbudt of [/encouraging smile/i, /looking at camera/i, /at the camera/i, /radiant/i]) {
+      expect(ASTRID_FLUX_DEMO_STYLE).not.toMatch(forbudt);
+    }
   });
 
-  it('bruker demonstrasjonsstilen i jobben som sendes til ComfyUI', () => {
+  it('beskriver Astrid som veltrent, så utseendet ikke drifter mellom bildene', () => {
     const job = buildComfyPromptJob(mockExercise, 1);
-    expect(job.positivePrompt).not.toMatch(/smile/i);
-    expect(job.positivePrompt).toContain(ASTRID_FLUX_DEMO_STYLE);
+    expect(job.positivePrompt).toMatch(/toned|athletic|muscles/i);
   });
 
-  it('setter posituren først, ikke stilen', () => {
-    // Batch-scriptet satte stilen først og begravde handlingen midt i
-    // prompten. Handlingen skal komme før alt annet.
+  it('setter identitet og antrekk før handlingen', () => {
+    // Antrekket sto SIST og ble derfor svakest — Flux vekter tidlige tokens
+    // tyngst, og hun havnet i løse joggebukser i stedet for tights. At
+    // handlingen kan flyttes bakover, er nytt: ControlNet holder posituren nå.
     const job = buildComfyPromptJob(mockExercise, 1);
-    const posisjon = job.positivePrompt.indexOf('lowest point of a push-up');
-    const stil = job.positivePrompt.indexOf(ASTRID_FLUX_DEMO_STYLE);
-    expect(posisjon).toBeGreaterThanOrEqual(0);
-    expect(posisjon).toBeLessThan(stil);
+    const antrekk = job.positivePrompt.indexOf('sports bra');
+    const handling = job.positivePrompt.indexOf('lowest point of a push-up');
+    expect(antrekk).toBeGreaterThanOrEqual(0);
+    expect(antrekk).toBeLessThan(handling);
+  });
+
+  it('låser bakgrunnen til ett rom for hele biblioteket', () => {
+    // «in a bright modern gym» er en sjanger, ikke et sted — modellen fant opp
+    // et nytt gym med snekkerbenker og racks for hvert bilde.
+    const job = buildComfyPromptJob(mockExercise, 1);
+    expect(job.positivePrompt).toMatch(/no gym equipment in the background/i);
   });
 });
 

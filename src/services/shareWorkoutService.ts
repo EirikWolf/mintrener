@@ -115,16 +115,6 @@ function dekodKompakt(rå: string): WorkoutTemplate | null {
   };
 }
 
-/** Bakoverkompatibel lesing av lenker som allerede er delt. */
-function dekodBase64(encoded: string): unknown {
-  const json = decodeURIComponent(
-    Array.prototype.map
-      .call(atob(encoded), (c: string) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-      .join('')
-  );
-  return JSON.parse(json);
-}
-
 /** Bygger delelenken — kort nok til en QR-kode. */
 export function generateShareUrl(workout: WorkoutTemplate): string {
   try {
@@ -177,11 +167,12 @@ export async function shareWorkout(workout: WorkoutTemplate): Promise<{ shared: 
 /**
  * Leser en delt økt fra URL-en ved oppstart.
  *
- * Tre former må forstås: katalog-ID (`?p=`), kompakt (`?w=1~…`) og gamle
- * base64-lenker (`?w=<base64>`). De gamle ligger allerede i kalenderinvitasjoner
- * og meldinger, og skal ikke slutte å virke fordi vi kortet ned formatet.
+ * To former: katalog-ID (`?p=`) og kompakt (`?w=1~…`).
  *
- * `~` er skillet mellom dem: base64-alfabetet inneholder den ikke.
+ * Det gamle base64-formatet leses IKKE lenger. Det ble delt i en periode da
+ * lenkene var for lange til å bli QR-koder, og er bevisst droppet framfor å
+ * bære en dekoder for det. En gammel lenke avvises med feilmelding, ikke i
+ * stillhet.
  */
 export function getSharedWorkoutFromUrl(): WorkoutTemplate | null {
   if (typeof window === 'undefined') return null;
@@ -199,7 +190,7 @@ export function getSharedWorkoutFromUrl(): WorkoutTemplate | null {
       workout = finnKatalogØkt(presetId) ?? null;
       if (!workout) console.warn('Delt katalog-ID finnes ikke:', presetId);
     } else if (encoded) {
-      const rå = encoded.includes(SEP) ? dekodKompakt(encoded) : dekodBase64(encoded);
+      const rå = dekodKompakt(encoded);
       // Skjemavalider uansett form: en fiendtlig eller korrupt lenke skal
       // aldri legge vilkårlige objekter i state (revisjon § 2.4).
       const result = WorkoutTemplateSchema.safeParse(rå);

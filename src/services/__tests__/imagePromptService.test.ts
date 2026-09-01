@@ -26,13 +26,13 @@ describe('ImagePromptService (Flux + Astrid LoRA)', () => {
   // og treningsglede». Det var nettopp den forutsetningen som gjorde bildene
   // ubrukelige: et smil mot kamera og en streng sideprofil i bunnen av en
   // armheving kan ikke være sanne samtidig (bildekuratering 2026-08-31 § 2).
-  it('genererer gyldig ComfyUI-prompt med posituren først og uten smil', () => {
+  it('genererer gyldig ComfyUI-prompt uten uttrykk som krever kamerakontakt', () => {
     const job = buildComfyPromptJob(mockExercise, 0);
 
     expect(job.exerciseId).toBe('kneboy');
     expect(job.phaseIndex).toBe(0);
     expect(job.positivePrompt).toContain(ASTRID_FLUX_DEMO_STYLE);
-    expect(job.positivePrompt).not.toMatch(/smile/i);
+    expect(job.positivePrompt).not.toMatch(/encouraging smile/i);
     expect(job.positivePrompt).not.toMatch(/joy of training/i);
   });
 
