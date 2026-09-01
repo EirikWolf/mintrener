@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ExerciseItem } from '../../schemas/exerciseSchema';
 import { ExerciseIllustration } from '../exercises/ExerciseIllustration';
 import { MuscleIcon } from '../icons/MuscleIcon';
+import { MuscleMap } from '../exercises/MuscleMap';
 import { EquipmentIcon } from '../icons/EquipmentIcon';
 import { X, CheckCircle2, AlertTriangle, Target } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
@@ -140,6 +141,22 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                 Type: {exercise.type === 'reps' ? 'Repetisjoner' : 'Tid'}
               </p>
             </div>
+          </div>
+
+          {/* Muskelkart i full bredde.
+              Sto først inne i «Muskler»-kolonnen, og da ble hver figur under
+              90 px bred — for smal til at en region kunne leses. Kartet svarer
+              «hvor på kroppen», og det svaret krever plass.
+
+              Etikettene over blir stående. En figur kan ikke søkes, kopieres
+              eller leses av en skjermleser; kartet supplerer teksten, det
+              erstatter den ikke. */}
+          <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-3">
+            <div className="flex items-center gap-1.5 text-zinc-400 font-semibold uppercase text-[10px] mb-1.5">
+              <Target className="w-3.5 h-3.5 text-emerald-400" />
+              Hvor du kjenner det
+            </div>
+            <MuscleMap muskler={exercise.muskler} className="max-w-[280px] mx-auto" />
           </div>
 
           {/* Slik gjør du (Instruksjoner) */}
