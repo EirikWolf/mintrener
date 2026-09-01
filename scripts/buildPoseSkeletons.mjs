@@ -1,8 +1,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { renderPose, POSE_CANVAS, POSE_CANVAS_LANDSCAPE } from './poseSkeleton.mjs';
-import { POSES, toCoco18 } from './poseData.mjs';
+import { renderPose } from './poseSkeleton.mjs';
+import { POSES, byggØvelse, lerretFor } from './poseData.mjs';
 
 /**
  * Tegner OpenPose-skjelettene og legger dem i pipeline/poses/.
@@ -28,10 +28,11 @@ for (const [id, def] of Object.entries(POSES)) {
   antallØvelser++;
   if (def.hold) hold.push(id);
 
-  const lerret = def.lerret === 'liggende' ? POSE_CANVAS_LANDSCAPE : POSE_CANVAS;
+  const lerret = lerretFor(def);
+  const faser = byggØvelse(def);
 
   def.faser.forEach((fase, i) => {
-    const joints = toCoco18(fase);
+    const joints = faser[i];
     writeFileSync(join(mappe, `${i}_pose.png`), renderPose(joints, lerret));
     writeFileSync(
       join(mappe, `${i}_pose.json`),

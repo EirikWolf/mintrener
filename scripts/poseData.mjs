@@ -1,117 +1,160 @@
-/**
- * Leddkoordinater for øvelsesskjelettene.
- *
- * Normaliserte (0–1) på lerretet i vedlegg A: x fra venstre, y fra topp.
- * Figuren står i profil mot HØYRE der ingenting annet er sagt.
- *
- * ANTALL FASER ER EN PÅSTAND. En bevegelse har start og slutt; et statisk hold
- * har én posisjon. Katalogens `type` skiller ikke disse — planke og sprellmenn
- * er begge `tid`, men bare den ene er et hold. Derfor sier posedataene det:
- * planke, sideplanke og hulekroppshold har én fase.
- *
- * Appen viser fortsatt to faneknapper for alle. Det er en UI-følge å ta
- * separat; å tegne det samme skjelettet to ganger for å fylle en fane ville
- * vært nøyaktig feilen bildekurateringen fant (sideplanke-0 og -1 var samme
- * fil).
- *
- * HÅNDREGELEN fra vedlegg A § A.6 er fulgt: hendene er opptatt eller nøytrale
- * — flate mot gulv, på hoftene, samlet ved brystet. Åpne håndflater mot kamera
- * er der artefaktene kommer.
- */
+import { byggCoco18Px } from './poseBody.mjs';
+import { POSE_CANVAS, POSE_CANVAS_LANDSCAPE } from './poseSkeleton.mjs';
 
 /**
- * Symmetrisk profil: én side oppgis, den andre speiles med et lite avvik.
+ * Positurene for øvelsesskjelettene, oppgitt som VINKLER på den felles kroppen
+ * i poseBody.mjs.
  *
- * `navn` løftes ut av leddene. Uten det havnet fasenavnet inne i `symmetrisk`
- * og forsvant fra JSON-en som skrives ved siden av skjelettet — en positur som
- * må rettes, kunne da ikke omtales med navn.
+ * Fram til 2026-09-01 sto de her som absolutte koordinater, tegnet for hånd én
+ * for én. Målt på resultatet varierte underarmen 2,20×, overarmen 1,65× og
+ * torsoen 1,45× mellom øvelsene — skjelettene beskrev bokstavelig talt ulike
+ * mennesker, og ControlNet gjengav det trofast. Vinkler fjerner hele feilklassen:
+ * lengdene kan ikke avvike, fordi de ikke oppgis her.
+ *
+ * VINKLER: grader, 0 = mot høyre, positiv mot klokka slik det ser ut på skjermen.
+ * Stående figur i profil mot høyre: torso 90, lår −90, overarm −90.
+ *
+ * ANTALL FASER ER EN PÅSTAND. En bevegelse har start og slutt; et statisk hold
+ * har én posisjon. Katalogens `type` skiller ikke disse — planke og sprellmenn er
+ * begge `tid`, men bare den ene er et hold. Derfor sier posedataene det.
+ *
+ * GULVLEDD er den andre påstanden: hvilke ledd som hviler på gulvet. Uten den
+ * kunne en positur ha hendene i lufta og føttene i gulvet uten at noe sa fra —
+ * den gamle armhevingen hadde håndleddet 122 px under ankelen.
+ *
+ * HÅNDREGELEN fra vedlegg A § A.6 er fulgt: hendene er opptatt eller nøytrale.
+ * Åpne håndflater mot kamera er der artefaktene kommer.
  */
-const S = ({ navn, ...ledd }) => ({ navn, symmetrisk: ledd });
+
+/** Symmetrisk positur: én side oppgis, den andre følger av kameravinkelen. */
+const S = ({ navn, torso, hode, ansikt, gulvledd, ...ledd }) => ({
+  navn,
+  torso,
+  hode,
+  ansikt,
+  gulvledd,
+  symmetrisk: ledd,
+});
+
+// COCO-18-indekser, for gulvledd
+const HÅNDLEDD_H = 4;
+const ALBUE_H = 3;
+const KNE_H = 9;
+const ANKEL_H = 10;
+const ANKEL_V = 13;
+const HOFTE_H = 8;
 
 export const POSES = {
   // --- Armhevinger og progresjonene fram til dem -------------------------
 
   'push-ups': {
     vinkel: 'side',
+    gulvledd: [HÅNDLEDD_H, ANKEL_H],
     faser: [
       S({
         navn: 'Start — høy planke, strake armer',
-        nese: [0.735, 0.425], øye: [0.720, 0.415], øre: [0.680, 0.420],
-        nakke: [0.675, 0.455], skulder: [0.655, 0.465],
-        albue: [0.660, 0.590], håndledd: [0.665, 0.710],
-        hofte: [0.415, 0.520], kne: [0.285, 0.595], ankel: [0.155, 0.700],
+        // Kroppen er én rett linje fra skulder til ankel. Hellingen er ikke et
+        // valg: armen er 259 px og bærer skulderen, beina rekker 383 px bakover,
+        // og da FØLGER 26° av proporsjonene. Den gamle posituren hadde 18° med
+        // korte bein, og håndleddet havnet 122 px under ankelen — en planke med
+        // hendene på en kasse.
+        torso: 26,
+        hode: 55,
+        overarm: -88,
+        underarm: -88,
+        lår: -154,
+        legg: -154,
       }),
       S({
         navn: 'Bunn — brystet like over gulvet, albuene bak',
-        // Albuen lå først 28 px over gulvet — altså praktisk talt PÅ det. Da
-        // fulgte ControlNet skjelettet helt riktig og tegnet en underarmsplanke.
-        // I en armhevings bunnposisjon peker overarmen BAKOVER og litt OPP fra
-        // skulderen; bare hånden er i gulvet. A/B-testen på kontrollvinduet
-        // (0,65 mot 0,9) ga ingen forskjell og utelukket den forklaringen.
-        nese: [0.748, 0.620], øye: [0.734, 0.612], øre: [0.696, 0.618],
-        nakke: [0.694, 0.643], skulder: [0.674, 0.658],
-        albue: [0.588, 0.636], håndledd: [0.666, 0.712],
-        hofte: [0.424, 0.662], kne: [0.292, 0.682], ankel: [0.156, 0.706],
+        // I en armhevings bunnposisjon peker overarmen BAKOVER fra skulderen og
+        // litt opp; bare hånden er i gulvet. Første forsøk la albuen 28 px over
+        // gulvet, og ControlNet tegnet lydig en underarmsplanke.
+        torso: 7,
+        hode: 40,
+        overarm: 168,
+        underarm: -58,
+        lår: -173,
+        legg: -173,
       }),
     ],
   },
 
   'kne-pushup': {
     vinkel: 'side',
+    gulvledd: [HÅNDLEDD_H, KNE_H],
     faser: [
       S({
         navn: 'Start — knærne i gulvet, strake armer',
-        nese: [0.730, 0.442], øye: [0.718, 0.433], øre: [0.680, 0.440],
-        nakke: [0.672, 0.462], skulder: [0.650, 0.480],
-        albue: [0.655, 0.590], håndledd: [0.660, 0.700],
-        hofte: [0.440, 0.545], kne: [0.310, 0.690], ankel: [0.215, 0.610],
+        // Brattere enn en full armheving, og det er riktig: armen (259 px) er
+        // lengre enn låret (191 px), så skulderen MÅ ligge høyere enn kneet.
+        torso: 42,
+        hode: 65,
+        overarm: -88,
+        underarm: -88,
+        lår: -138,
+        legg: 155, // leggen opp fra kneet — føttene i lufta
       }),
       S({
         navn: 'Bunn — brystet ned, hoften i linje med knærne',
-        nese: [0.738, 0.588], øye: [0.726, 0.580], øre: [0.690, 0.586],
-        nakke: [0.682, 0.605], skulder: [0.660, 0.620],
-        albue: [0.592, 0.678], håndledd: [0.660, 0.702],
-        hofte: [0.445, 0.648], kne: [0.312, 0.692], ankel: [0.218, 0.612],
+        torso: 10,
+        hode: 42,
+        overarm: 168,
+        underarm: -58,
+        lår: -170,
+        legg: 165,
       }),
     ],
   },
 
   'vegg-pushup': {
     vinkel: 'side',
+    gulvledd: [ANKEL_H],
     faser: [
       S({
         navn: 'Start — strake armer mot veggen',
-        nese: [0.545, 0.310], øye: [0.534, 0.302], øre: [0.500, 0.310],
-        nakke: [0.492, 0.330], skulder: [0.470, 0.360],
-        albue: [0.592, 0.355], håndledd: [0.720, 0.350],
-        hofte: [0.395, 0.560], kne: [0.360, 0.742], ankel: [0.330, 0.930],
+        torso: 72,
+        hode: 78,
+        overarm: 5,
+        underarm: 5,
+        lår: -99,
+        legg: -97,
       }),
       S({
         navn: 'Bunn — brystet mot veggen, albuene bøyd',
-        nese: [0.622, 0.325], øye: [0.610, 0.317], øre: [0.576, 0.324],
-        nakke: [0.568, 0.343], skulder: [0.545, 0.372],
-        albue: [0.642, 0.432], håndledd: [0.720, 0.352],
-        hofte: [0.420, 0.564], kne: [0.372, 0.744], ankel: [0.330, 0.930],
+        // Håndleddet blir stående i omtrent samme høyde som i start — hånden
+        // ligger på veggen, og veggen flytter seg ikke mellom de to bildene.
+        torso: 62,
+        hode: 70,
+        overarm: -30,
+        underarm: 55,
+        lår: -102,
+        legg: -100,
       }),
     ],
   },
 
   'desk-push-up': {
     vinkel: 'side',
+    gulvledd: [ANKEL_H],
     faser: [
       S({
         navn: 'Start — hendene på pultkanten, strake armer',
-        nese: [0.606, 0.378], øye: [0.594, 0.370], øre: [0.560, 0.376],
-        nakke: [0.552, 0.395], skulder: [0.530, 0.420],
-        albue: [0.586, 0.508], håndledd: [0.645, 0.600],
-        hofte: [0.375, 0.585], kne: [0.300, 0.760], ankel: [0.240, 0.930],
+        torso: 54,
+        hode: 68,
+        overarm: -60,
+        underarm: -60,
+        lår: -108,
+        legg: -105,
       }),
       S({
         navn: 'Bunn — brystet mot kanten',
-        nese: [0.650, 0.468], øye: [0.638, 0.460], øre: [0.604, 0.466],
-        nakke: [0.596, 0.482], skulder: [0.575, 0.505],
-        albue: [0.546, 0.582], håndledd: [0.645, 0.602],
-        hofte: [0.390, 0.592], kne: [0.305, 0.762], ankel: [0.240, 0.930],
+        torso: 38,
+        hode: 55,
+        overarm: -118,
+        underarm: -12,
+        lår: -111,
+        legg: -107,
       }),
     ],
   },
@@ -121,13 +164,18 @@ export const POSES = {
   planke: {
     vinkel: 'side',
     hold: true,
+    gulvledd: [ALBUE_H, HÅNDLEDD_H, ANKEL_H],
     faser: [
       S({
         navn: 'Underarmsplanke — rett linje fra hode til hæl',
-        nese: [0.720, 0.487], øye: [0.708, 0.478], øre: [0.672, 0.484],
-        nakke: [0.665, 0.505], skulder: [0.640, 0.520],
-        albue: [0.645, 0.685], håndledd: [0.748, 0.692],
-        hofte: [0.400, 0.578], kne: [0.270, 0.632], ankel: [0.145, 0.692],
+        // Underarmen ligger FLATT på gulvet (0°), ikke skrått. Albue og håndledd
+        // deler gulvhøyde med ankelen.
+        torso: 14,
+        hode: 45,
+        overarm: -89,
+        underarm: 0,
+        lår: -166,
+        legg: -166,
       }),
     ],
   },
@@ -135,24 +183,16 @@ export const POSES = {
   sideplanke: {
     vinkel: 'skrå',
     hold: true,
+    gulvledd: [ALBUE_H, HÅNDLEDD_H, ANKEL_H],
     faser: [
       {
         navn: 'Sideplanke — hoften løftet, føttene stablet',
+        torso: 14,
+        hode: 48,
         // Albuen står PÅ gulvet, rett under skulderen, med underarmen langs
-        // gulvet — samme gulvhøyde som føttene. Første utkast hadde albuen
-        // svevende over gulvlinja, og posituren leste som en Y.
-        høyre: {
-          nese: [0.700, 0.590], øye: [0.690, 0.582], øre: [0.660, 0.596],
-          nakke: [0.648, 0.618], skulder: [0.632, 0.640],
-          albue: [0.640, 0.795], håndledd: [0.748, 0.802],
-          hofte: [0.450, 0.700], kne: [0.300, 0.752], ankel: [0.150, 0.802],
-        },
-        venstre: {
-          nese: null, øye: [0.708, 0.580], øre: null,
-          nakke: null, skulder: [0.648, 0.622],
-          albue: [0.700, 0.500], håndledd: [0.742, 0.382],
-          hofte: [0.462, 0.690], kne: [0.312, 0.742], ankel: [0.162, 0.792],
-        },
+        // gulvet. Første utkast hadde albuen svevende, og posituren leste som en Y.
+        høyre: { overarm: -89, underarm: 0, lår: -166, legg: -166 },
+        venstre: { overarm: 72, underarm: 75, lår: -166, legg: -166 },
       },
     ],
   },
@@ -160,13 +200,18 @@ export const POSES = {
   hulekroppshold: {
     vinkel: 'side',
     hold: true,
+    gulvledd: [HOFTE_H],
     faser: [
       S({
         navn: 'Hulekropp — korsryggen presset i gulvet, armer og bein løftet',
-        nese: [0.420, 0.678], øye: [0.412, 0.672], øre: [0.392, 0.686],
-        nakke: [0.385, 0.700], skulder: [0.360, 0.700],
-        albue: [0.245, 0.672], håndledd: [0.135, 0.640],
-        hofte: [0.560, 0.735], kne: [0.700, 0.680], ankel: [0.840, 0.630],
+        // Hodet peker mot venstre, føttene mot høyre. Hakan er trukket mot
+        // brystet, så hodeaksen er rullet ned fra ryggraden.
+        torso: 166,
+        hode: 140,
+        overarm: 163,
+        underarm: 159,
+        lår: 27,
+        legg: 25,
       }),
     ],
   },
@@ -176,6 +221,7 @@ export const POSES = {
     // Liggende lerret: på portrett brukte skjelettet 4 % av høyden og ble tolket
     // som en sittende kvinne — to ganger, ved begge kontrollinnstillinger.
     lerret: 'liggende',
+    gulvledd: [HOFTE_H],
     faser: [
       S({
         navn: 'Start — flatt på magen, armene strukket fram',
@@ -184,67 +230,82 @@ export const POSES = {
         // ansiktet var synlig, altså at hun lå på ryggen. Modellen gjorde
         // konsekvent nettopp det, ved begge renderere og begge kontrollverdier.
         // Øret beholdes: det ER synlig i profil på en mageliggende person.
-        nese: null, øye: null, øre: [0.586, 0.656],
-        nakke: [0.574, 0.678], skulder: [0.600, 0.686],
-        albue: [0.750, 0.680], håndledd: [0.910, 0.672],
-        hofte: [0.360, 0.700], kne: [0.230, 0.706], ankel: [0.075, 0.712],
+        ansikt: 'skjult',
+        torso: 6,
+        hode: 6,
+        overarm: 3,
+        underarm: 4,
+        lår: -177,
+        legg: -177,
       }),
       S({
         navn: 'Slutt — armer og bein løftet samtidig',
-        nese: null, øye: null, øre: [0.582, 0.560],
-        nakke: [0.570, 0.600], skulder: [0.598, 0.620],
-        albue: [0.752, 0.560], håndledd: [0.912, 0.480],
-        hofte: [0.360, 0.690], kne: [0.230, 0.610], ankel: [0.075, 0.500],
+        ansikt: 'skjult',
+        torso: 20,
+        hode: 30,
+        overarm: 25,
+        underarm: 32,
+        lår: 145,
+        legg: 140,
       }),
     ],
   },
 
   'mountain-climbers': {
     vinkel: 'side',
+    gulvledd: [HÅNDLEDD_H, ANKEL_V],
     faser: [
       S({
         navn: 'Start — høy planke, beina strukket bak',
-        nese: [0.730, 0.435], øye: [0.718, 0.426], øre: [0.680, 0.433],
-        nakke: [0.672, 0.452], skulder: [0.650, 0.470],
-        albue: [0.655, 0.585], håndledd: [0.660, 0.700],
-        hofte: [0.420, 0.522], kne: [0.290, 0.592], ankel: [0.155, 0.690],
+        torso: 26,
+        hode: 55,
+        overarm: -88,
+        underarm: -88,
+        lår: -154,
+        legg: -154,
       }),
       {
         navn: 'Slutt — kneet trukket opp mot brystet',
-        høyre: {
-          nese: [0.730, 0.435], øye: [0.718, 0.426], øre: [0.680, 0.433],
-          nakke: [0.672, 0.452], skulder: [0.650, 0.470],
-          albue: [0.655, 0.585], håndledd: [0.660, 0.700],
-          hofte: [0.428, 0.522], kne: [0.548, 0.588], ankel: [0.472, 0.662],
-        },
-        venstre: {
-          nese: null, øye: [0.724, 0.424], øre: [0.688, 0.430],
-          nakke: null, skulder: [0.640, 0.478],
-          albue: [0.645, 0.590], håndledd: [0.650, 0.702],
-          hofte: [0.418, 0.532], kne: [0.288, 0.598], ankel: [0.152, 0.694],
-        },
+        torso: 26,
+        hode: 55,
+        høyre: { overarm: -88, underarm: -88, lår: -15, legg: -145 },
+        venstre: { overarm: -88, underarm: -88, lår: -154, legg: -154 },
       },
     ],
   },
 
   'katte-ku': {
     vinkel: 'side',
+    gulvledd: [HÅNDLEDD_H, KNE_H, ANKEL_H],
     faser: [
       S({
-        navn: 'Ku — svai rygg, blikket opp',
-        nese: [0.760, 0.520], øye: [0.748, 0.512], øre: [0.702, 0.532],
-        nakke: [0.690, 0.570], skulder: [0.700, 0.585],
-        albue: [0.700, 0.680], håndledd: [0.700, 0.775],
-        hofte: [0.380, 0.545], kne: [0.360, 0.682], ankel: [0.310, 0.776],
+        // COCO-18 har ingen ledd i midtryggen, så selve krumningen kan ikke
+        // tegnes. Med bare hodet til å bære forskjellen ble de to fasene 0,41
+        // fra hverandre — under grensen for «tydelig forskjellige», og altså to
+        // nesten like bilder. BEKKENVIPPEN er det som faktisk skiller dem, og
+        // den ER synlig i COCO-18: i ku står kneet foran hoften (halebeinet opp),
+        // i katt bak den (bekkenet tucket under). Det gir 1,07.
+        //
+        // Torsovinkelen er ikke fri: kne og håndledd i gulvet pinner skulderen
+        // til armlengden og hoften til lårlengden, og vinkelen følger av de to.
+        navn: 'Ku — svai rygg, halebeinet opp, blikket opp',
+        torso: 21,
+        hode: 85,
+        overarm: -90,
+        underarm: -90,
+        lår: -80,
+        // Leggen ligger LANGS gulvet (180°), ikke skrått ned. På alle fire er
+        // kneet kontaktpunktet og skinnleggen hviler bakover.
+        legg: 180,
       }),
       S({
-        navn: 'Katt — krum rygg, haken mot brystet',
-        // COCO-18 har ingen ledd i midtryggen, så krumningen kan ikke tegnes
-        // direkte. Den bæres av haken presset ned og hoften rullet under.
-        nese: [0.688, 0.688], øye: [0.686, 0.678], øre: [0.690, 0.632],
-        nakke: [0.690, 0.608], skulder: [0.702, 0.605],
-        albue: [0.700, 0.688], håndledd: [0.700, 0.776],
-        hofte: [0.392, 0.598], kne: [0.362, 0.692], ankel: [0.310, 0.778],
+        navn: 'Katt — krum rygg, bekkenet tucket, haken mot brystet',
+        torso: 25,
+        hode: -60,
+        overarm: -90,
+        underarm: -90,
+        lår: -112,
+        legg: 180,
       }),
     ],
   },
@@ -253,194 +314,199 @@ export const POSES = {
 
   kneboy: {
     vinkel: 'side',
+    gulvledd: [ANKEL_H],
     faser: [
       S({
         navn: 'Start — stående, hendene samlet ved brystet',
-        nese: [0.530, 0.268], øye: [0.520, 0.260], øre: [0.488, 0.268],
-        nakke: [0.480, 0.290], skulder: [0.478, 0.312],
-        albue: [0.520, 0.402], håndledd: [0.558, 0.452],
-        hofte: [0.480, 0.500], kne: [0.478, 0.700], ankel: [0.470, 0.930],
+        torso: 90,
+        hode: 90,
+        overarm: -80,
+        underarm: 40,
+        lår: -90,
+        legg: -90,
       }),
       S({
         navn: 'Bunn — lårene parallelle med gulvet',
-        nese: [0.495, 0.478], øye: [0.484, 0.470], øre: [0.450, 0.480],
-        nakke: [0.440, 0.500], skulder: [0.432, 0.522],
-        albue: [0.500, 0.588], håndledd: [0.545, 0.612],
-        hofte: [0.398, 0.700], kne: [0.558, 0.700], ankel: [0.470, 0.930],
+        torso: 70,
+        hode: 75,
+        overarm: -60,
+        underarm: 30,
+        lår: 0,
+        legg: -107,
       }),
     ],
   },
 
   'stol-kneboy': {
     vinkel: 'side',
+    gulvledd: [ANKEL_H],
     faser: [
       S({
         navn: 'Start — stående foran stolen, armene fram',
-        nese: [0.530, 0.268], øye: [0.520, 0.260], øre: [0.488, 0.268],
-        nakke: [0.480, 0.290], skulder: [0.478, 0.312],
-        albue: [0.545, 0.372], håndledd: [0.612, 0.395],
-        hofte: [0.480, 0.500], kne: [0.478, 0.700], ankel: [0.470, 0.930],
+        torso: 90,
+        hode: 90,
+        overarm: -35,
+        underarm: -10,
+        lår: -90,
+        legg: -90,
       }),
       S({
         navn: 'Slutt — setet så vidt borti stolen',
-        nese: [0.505, 0.492], øye: [0.494, 0.484], øre: [0.460, 0.494],
-        nakke: [0.450, 0.515], skulder: [0.442, 0.538],
-        albue: [0.520, 0.578], håndledd: [0.600, 0.598],
-        hofte: [0.362, 0.716], kne: [0.548, 0.716], ankel: [0.470, 0.930],
+        torso: 70,
+        hode: 78,
+        overarm: -35,
+        underarm: -10,
+        lår: -5,
+        legg: -100,
       }),
     ],
   },
 
   'reise-seg-stol': {
     vinkel: 'side',
+    gulvledd: [ANKEL_H],
     faser: [
       S({
         navn: 'Start — sittende, føttene under knærne',
-        nese: [0.505, 0.492], øye: [0.494, 0.484], øre: [0.460, 0.494],
-        nakke: [0.450, 0.515], skulder: [0.442, 0.538],
-        albue: [0.520, 0.578], håndledd: [0.600, 0.598],
-        hofte: [0.362, 0.716], kne: [0.548, 0.716], ankel: [0.470, 0.930],
+        torso: 75,
+        hode: 82,
+        overarm: -35,
+        underarm: -10,
+        lår: 0,
+        legg: -90,
       }),
       S({
         navn: 'Slutt — reist opp, strak hofte',
-        nese: [0.530, 0.268], øye: [0.520, 0.260], øre: [0.488, 0.268],
-        nakke: [0.480, 0.290], skulder: [0.478, 0.312],
-        albue: [0.545, 0.372], håndledd: [0.612, 0.395],
-        hofte: [0.480, 0.500], kne: [0.478, 0.700], ankel: [0.470, 0.930],
+        torso: 90,
+        hode: 90,
+        overarm: -35,
+        underarm: -10,
+        lår: -90,
+        legg: -90,
       }),
     ],
   },
 
   'utfall-forover': {
     vinkel: 'side',
+    gulvledd: [ANKEL_H, ANKEL_V],
     faser: [
       S({
         navn: 'Start — stående, hendene på hoftene',
-        nese: [0.530, 0.268], øye: [0.520, 0.260], øre: [0.488, 0.268],
-        nakke: [0.480, 0.290], skulder: [0.478, 0.312],
-        albue: [0.428, 0.430], håndledd: [0.468, 0.500],
-        hofte: [0.480, 0.500], kne: [0.478, 0.700], ankel: [0.470, 0.930],
+        torso: 90,
+        hode: 90,
+        overarm: -105,
+        underarm: -60,
+        lår: -90,
+        legg: -90,
       }),
       {
-        navn: 'Slutt — fremre kne i 90 grader, bakre kne mot gulvet',
-        høyre: {
-          nese: [0.532, 0.330], øye: [0.522, 0.322], øre: [0.490, 0.330],
-          nakke: [0.482, 0.352], skulder: [0.472, 0.372],
-          albue: [0.422, 0.480], håndledd: [0.462, 0.552],
-          hofte: [0.470, 0.562], kne: [0.332, 0.848], ankel: [0.250, 0.905],
-        },
-        venstre: {
-          nese: null, øye: [0.540, 0.322], øre: null,
-          nakke: null, skulder: [0.492, 0.372],
-          albue: [0.542, 0.480], håndledd: [0.502, 0.552],
-          hofte: [0.492, 0.562], kne: [0.642, 0.742], ankel: [0.642, 0.930],
-        },
+        // Bakre bein er nesten strakt, ikke med kneet i gulvet. Med riktige
+        // lemmelengder rekker ikke låret ned dit uten at fremre bein blir
+        // absurd langt — den gamle posituren løste det med et lår på 352 px.
+        // Å tegne en positur kroppen ikke kan innta er verre enn å navngi den
+        // vi faktisk viser.
+        navn: 'Slutt — fremre kne over ankelen, bakre bein strakt bakover',
+        torso: 87,
+        hode: 88,
+        høyre: { overarm: -105, underarm: -60, lår: -112, legg: -128 },
+        venstre: { overarm: -105, underarm: -60, lår: -48, legg: -80 },
       },
     ],
   },
 
   'hoye-kneloft': {
     vinkel: 'side',
+    gulvledd: [ANKEL_V],
     faser: [
       {
-        // Løpearmer: overarmen henger ned, underarmen svinger fram og tilbake.
-        // Første utkast hadde begge hendene over hodet — det leser som jubel,
-        // ikke som løping på stedet.
-        navn: 'Høyre kne opp i hoftehøyde',
-        høyre: {
-          nese: [0.535, 0.288], øye: [0.524, 0.280], øre: [0.494, 0.290],
-          nakke: [0.488, 0.315], skulder: [0.470, 0.335],
-          albue: [0.442, 0.458], håndledd: [0.372, 0.502],
-          hofte: [0.478, 0.520], kne: [0.478, 0.722], ankel: [0.472, 0.928],
-        },
-        venstre: {
-          nese: null, øye: [0.542, 0.282], øre: null,
-          nakke: null, skulder: [0.505, 0.335],
-          albue: [0.522, 0.452], håndledd: [0.618, 0.410],
-          hofte: [0.505, 0.518], kne: [0.628, 0.510], ankel: [0.604, 0.692],
-        },
+        // Løpearmer: overarmen henger ned, underarmen svinger fram og tilbake,
+        // motsatt arm av kneet som er oppe. Første utkast hadde begge hendene
+        // over hodet — det leser som jubel, ikke som løping på stedet.
+        //
+        // Navnet sier ikke «høyre»/«venstre». I ren profil ligger nær og fjern
+        // side nesten oppå hverandre, og et bilde kan ikke vise hvilken som er
+        // anatomisk høyre. Det gamle navnet påsto det likevel — og var uenig med
+        // sine egne koordinater.
+        navn: 'Ett kne opp i hoftehøyde',
+        torso: 88,
+        hode: 88,
+        høyre: { overarm: -105, underarm: -155, lår: 10, legg: -85 },
+        venstre: { overarm: -70, underarm: 30, lår: -90, legg: -90 },
       },
       {
-        navn: 'Venstre kne opp i hoftehøyde',
-        høyre: {
-          nese: [0.535, 0.288], øye: [0.524, 0.280], øre: [0.494, 0.290],
-          nakke: [0.488, 0.315], skulder: [0.470, 0.335],
-          albue: [0.492, 0.452], håndledd: [0.588, 0.410],
-          hofte: [0.478, 0.518], kne: [0.600, 0.510], ankel: [0.576, 0.692],
-        },
-        venstre: {
-          nese: null, øye: [0.542, 0.282], øre: null,
-          nakke: null, skulder: [0.505, 0.335],
-          albue: [0.472, 0.458], håndledd: [0.402, 0.502],
-          hofte: [0.505, 0.520], kne: [0.505, 0.722], ankel: [0.500, 0.928],
-        },
+        navn: 'Motsatt kne opp, armene byttet',
+        torso: 88,
+        hode: 88,
+        // Standbeinet bytter side, og da bytter gulvleddet det også. Med
+        // øvelsens felles gulvledd sto figuren på det løftede beinet, og den
+        // andre foten stakk 150 px gjennom gulvkanten.
+        gulvledd: [ANKEL_H],
+        høyre: { overarm: -70, underarm: 30, lår: -90, legg: -90 },
+        venstre: { overarm: -105, underarm: -155, lår: 10, legg: -85 },
       },
     ],
   },
 
   sprellmenn: {
     vinkel: 'front',
+    gulvledd: [ANKEL_H, ANKEL_V],
     faser: [
-      {
+      S({
         navn: 'Start — føttene samlet, armene langs siden',
-        høyre: {
-          nese: [0.500, 0.115], øye: [0.482, 0.100], øre: [0.466, 0.112],
-          nakke: [0.500, 0.185], skulder: [0.435, 0.200],
-          albue: [0.415, 0.330], håndledd: [0.402, 0.455],
-          hofte: [0.462, 0.480], kne: [0.458, 0.690], ankel: [0.456, 0.900],
-        },
-        venstre: {
-          nese: null, øye: [0.518, 0.100], øre: [0.534, 0.112],
-          nakke: null, skulder: [0.565, 0.200],
-          albue: [0.585, 0.330], håndledd: [0.598, 0.455],
-          hofte: [0.538, 0.480], kne: [0.542, 0.690], ankel: [0.544, 0.900],
-        },
-      },
-      {
+        torso: 90,
+        hode: 90,
+        overarm: -97,
+        underarm: -95,
+        lår: -91,
+        legg: -90,
+      }),
+      S({
         navn: 'Slutt — stjerne, armene over hodet og føttene ut',
-        høyre: {
-          nese: [0.500, 0.115], øye: [0.482, 0.100], øre: [0.466, 0.112],
-          nakke: [0.500, 0.185], skulder: [0.435, 0.200],
-          albue: [0.332, 0.148], håndledd: [0.256, 0.062],
-          hofte: [0.462, 0.480], kne: [0.396, 0.688], ankel: [0.322, 0.880],
-        },
-        venstre: {
-          nese: null, øye: [0.518, 0.100], øre: [0.534, 0.112],
-          nakke: null, skulder: [0.565, 0.200],
-          albue: [0.668, 0.148], håndledd: [0.744, 0.062],
-          hofte: [0.538, 0.480], kne: [0.604, 0.688], ankel: [0.678, 0.880],
-        },
-      },
+        torso: 90,
+        hode: 90,
+        overarm: 147,
+        underarm: 125,
+        lår: -104,
+        legg: -107,
+      }),
     ],
   },
 };
 
+/** Lerretet en øvelse tegnes på. */
+export function lerretFor(def) {
+  return def.lerret === 'liggende' ? POSE_CANVAS_LANDSCAPE : POSE_CANVAS;
+}
+
 /**
- * Gjør en fase om til de 18 COCO-punktene ControlNet forventer.
+ * Bygger alle fasene til én øvelse som COCO-18 i normaliserte koordinater.
  *
- * En symmetrisk profil speiles med et lite avvik: i en ekte sideprofil
- * detekterer DWPose begge sider nesten oppå hverandre, og et skjelett med bare
- * én side leses som en halv kropp.
+ * TO FASTE STØRRELSER, OG DE ER IKKE DE SAMME:
+ *
+ * GULVET ligger stille, og det er per fase. Kroppen bygges fra hoften, men
+ * hoften er nettopp det som beveger seg i et knebøy — forankret vi hele figuren
+ * i hoften, sank gulvet med den, og i bunnposisjonen svevde føttene 200 px over
+ * det de sto på i startbildet.
+ *
+ * KAMERAET ligger stille, og det er per øvelse. Vedlegg A § A.10 krever «start
+ * og slutt … fra samme kameraposisjon», så den vannrette innrammingen regnes ut
+ * én gang, over alle fasene, og rammer inn hele bevegelsen.
  */
-export function toCoco18(fase, offset = 0.014) {
-  const h = fase.høyre ?? fase.symmetrisk;
-  const v = fase.venstre ?? null;
-  if (!h) throw new Error(`Fasen «${fase.navn}» mangler leddkoordinater`);
+export function byggØvelse(def, { gulv = 0.94, senter = 0.5 } = {}) {
+  const lerret = lerretFor(def);
 
-  const speil = (navn) => {
-    if (v) return v[navn] ?? null;
-    const p = h[navn];
-    return p ? [p[0] - offset, p[1] + offset * 0.35] : null;
-  };
+  const faser = def.faser.map((fase) => {
+    const joints = byggCoco18Px(fase, def.vinkel);
+    const gulvY = (fase.gulvledd ?? def.gulvledd).map((k) => joints[k][1]);
+    const dy = gulv * lerret.height - gulvY.reduce((a, b) => a + b, 0) / gulvY.length;
+    return joints.map((p) => p && [p[0], p[1] + dy]);
+  });
 
-  return [
-    h.nese ?? null,
-    h.nakke ?? null,
-    h.skulder ?? null, h.albue ?? null, h.håndledd ?? null,
-    speil('skulder'), speil('albue'), speil('håndledd'),
-    h.hofte ?? null, h.kne ?? null, h.ankel ?? null,
-    speil('hofte'), speil('kne'), speil('ankel'),
-    h.øye ?? null, speil('øye'),
-    h.øre ?? null, speil('øre'),
-  ];
+  const xs = faser.flat().filter(Boolean).map((p) => p[0]);
+  const dx = senter * lerret.width - (Math.min(...xs) + Math.max(...xs)) / 2;
+
+  return faser.map((joints) =>
+    joints.map((p) => (p ? [(p[0] + dx) / lerret.width, p[1] / lerret.height] : null))
+  );
 }
