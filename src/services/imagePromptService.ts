@@ -19,7 +19,7 @@ export const ASTRID_FLUX_BASE_STYLE =
  * Et smil hører hjemme på et forsidebilde. En instruksjon skal vise arbeidet.
  */
 export const ASTRID_FLUX_DEMO_STYLE =
-  'fitness instruction photography, full body completely visible within frame including hands and feet, calm focused expression with a faint natural smile, engaged core, precise exercise form, even natural lighting, sharp focus';
+  'fitness instruction photography, full body completely visible within frame including hands and feet, calm focused expression with a faint natural smile, engaged core, precise exercise form, warm natural lighting that keeps skin tones rich and sun-tanned, sharp focus';
 
 /**
  * Astrids utseende — identiteten, ikke handlingen.
@@ -35,7 +35,7 @@ export const ASTRID_FLUX_DEMO_STYLE =
  * ikke.
  */
 export const ASTRID_APPEARANCE =
-  'an attractive muscular athletic woman with visibly defined abs, strong toned shoulders and legs, light sweat sheen on sun-tanned skin, golden tan, long blonde hair tied back in a tight high ponytail';
+  'an attractive muscular athletic woman with deeply sun-tanned golden-bronze skin, visibly defined abs, strong toned shoulders and legs, light sweat sheen, long blonde hair tied back in a tight high ponytail';
 
 /**
  * Ett fast rom for hele biblioteket.
@@ -92,15 +92,22 @@ export const ASTRID_FLUX_OUTFIT_STYLE =
 /**
  * Hvor hardt Astrid-LoRA-en vektes.
  *
- * SynthIQ dokumenterer 0,75 for `astrid_k` i sin egen runbook; vi har kjørt 1,0
- * siden den ble tatt i bruk. LoRA-en er dessuten en ANSIKTS-LoRA, ikke en
- * kropps-LoRA — på 1,0 drar den hele bildet mot treningsdataenes portretter, og
- * det er en av mistankene bak at kroppen varierte mellom bildene.
+ * MÅLT 2026-09-01, samme seed og samme skjelett ved 0,75 og 1,0:
+ * forskjellen er liten. Posituren er identisk (ControlNet dominerer), og på
+ * 0,75 er huden marginalt varmere og muskulaturen marginalt tydeligere.
+ * Ingen av delene er utslagsgivende alene.
  *
- * Verdien er styrbar fordi den skal måles, ikke antas: `LORA_STRENGTH=0.75` i
- * runPoseTestBatch kjører samme seed ved begge verdier.
+ * 0,75 velges fordi det er SynthIQs dokumenterte verdi for `astrid_k`, og fordi
+ * en svakere ansikts-LoRA gir prompten mer plass. Vi kjørte 1,0 fram til nå uten
+ * at noen hadde målt det.
+ *
+ * Det A/B-en IKKE forklarte: brunfargen. Begge armene ga blek hud, så
+ * `sun-tanned` tapte mot lyssettingen i stilprompten, ikke mot LoRA-en.
+ * Ordlyden i ASTRID_APPEARANCE og ASTRID_FLUX_DEMO_STYLE er endret som følge.
+ *
+ * Verdien er fortsatt styrbar: `LORA_STRENGTH=<n>` i runPoseTestBatch.
  */
-export const LORA_STYRKE = 1.0;
+export const LORA_STYRKE = 0.75;
 
 /**
  * Kanonisk stilmal for Wan2.1 I2V (Image-to-Video) animering på Kitor

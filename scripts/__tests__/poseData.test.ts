@@ -162,7 +162,10 @@ describe('Alle skjelettene beskriver samme kropp', () => {
       const synlige = (byggØvelse(def) as Ledd[][]).flat().filter(Boolean) as [number, number][];
       const bredde = Math.max(...synlige.map((p) => p[0])) - Math.min(...synlige.map((p) => p[0]));
       const høyde = Math.max(...synlige.map((p) => p[1])) - Math.min(...synlige.map((p) => p[1]));
-      expect(Math.max(bredde, høyde), `${id} er for liten i ramma`).toBeGreaterThan(0.8);
+      // 0,75 og ikke 0,86: ramma reserverer plass til issen. COCO-18 har ingen
+      // hodetopp — øverste ledd er øyet — og uten den marginen ble kronen
+      // avkuttet på stående ryggvri.
+      expect(Math.max(bredde, høyde), `${id} er for liten i ramma`).toBeGreaterThan(0.75);
     }
   });
 });

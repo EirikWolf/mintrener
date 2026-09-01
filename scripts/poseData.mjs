@@ -1,4 +1,4 @@
-import { byggCoco18Px } from './poseBody.mjs';
+import { byggCoco18Px, STATUR } from './poseBody.mjs';
 import { POSE_CANVAS, POSE_CANVAS_LANDSCAPE } from './poseSkeleton.mjs';
 
 /**
@@ -544,7 +544,17 @@ export function byggØvelse(def, { gulv = 0.94, senter = 0.5, fyll = 0.86 } = {}
   // Formatet følger nå av hvor bred posituren faktisk er.
   const alle = råFaser.flat().filter(Boolean);
   const bredde = Math.max(...alle.map((p) => p[0])) - Math.min(...alle.map((p) => p[0]));
-  const høyde = Math.max(...alle.map((p) => p[1])) - Math.min(...alle.map((p) => p[1]));
+  /**
+   * Plass til issen.
+   *
+   * COCO-18 har ingen hodetopp — det øverste leddet er øyet. Skalerte vi mot
+   * skjelettets ytterpunkt, havnet den rendrede hodetoppen utenfor bildet, og
+   * stående ryggvri kom tilbake med kronen avkuttet. Marginen er avstanden fra
+   * øyet og opp, med litt slark for hår.
+   */
+  const HODEROM = 0.11 * STATUR;
+  const høyde =
+    Math.max(...alle.map((p) => p[1])) - Math.min(...alle.map((p) => p[1])) + HODEROM;
   const lerret = def.lerret === 'liggende' || bredde > høyde ? POSE_CANVAS_LANDSCAPE : POSE_CANVAS;
 
   // --- Kameraavstanden ----------------------------------------------------
