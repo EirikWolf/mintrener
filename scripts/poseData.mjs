@@ -448,6 +448,37 @@ export const POSES = {
     ],
   },
 
+  'staende-ryggvri': {
+    vinkel: 'front',
+    gulvledd: [ANKEL_H, ANKEL_V],
+    faser: [
+      {
+        // ÆRLIG FORBEHOLD: selve vridningen kan ikke uttrykkes i COCO-18. Det
+        // finnes ingen ledd i ryggen, og et 2D-skjelett kan ikke vise at
+        // skuldrene har rotert bort fra hoftene — samme grense som gjorde
+        // sideplanke og katt/ku vanskelig.
+        //
+        // Det skjelettet KAN bære, er armene: i en pendel svinges begge til
+        // samme side av kroppen, og det er signalet som leser som en vridning.
+        // Resten må prompten gjøre. Skjelettet låser til gjengjeld ståstillingen,
+        // innrammingen og lemmelengdene, som er grunnen til at det er verdt å ha.
+        navn: 'Pendelen ute til én side — armene svinger med',
+        torso: 90,
+        hode: 90,
+        høyre: { overarm: -55, underarm: -38, lår: -91, legg: -90 },
+        venstre: { overarm: -72, underarm: -52, lår: -89, legg: -90 },
+      },
+      {
+        // Speilbildet av fase 0: pendelen ute på motsatt side.
+        navn: 'Pendelen ute til motsatt side',
+        torso: 90,
+        hode: 90,
+        høyre: { overarm: -108, underarm: -128, lår: -91, legg: -90 },
+        venstre: { overarm: -125, underarm: -142, lår: -89, legg: -90 },
+      },
+    ],
+  },
+
   sprellmenn: {
     vinkel: 'front',
     gulvledd: [ANKEL_H, ANKEL_V],

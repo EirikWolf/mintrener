@@ -11856,6 +11856,214 @@
     }
   },
   {
+    "exerciseId": "staende-ryggvri",
+    "phaseIndex": 0,
+    "inputImage": "staende-ryggvri-0.png",
+    "workflow": {
+      "1": {
+        "inputs": {
+          "image": "staende-ryggvri-0.png",
+          "upload": "image"
+        },
+        "class_type": "LoadImage"
+      },
+      "2": {
+        "inputs": {
+          "unet_name": "wan2.1_i2v_480p_14B_fp8.safetensors"
+        },
+        "class_type": "UNETLoader"
+      },
+      "3": {
+        "inputs": {
+          "clip_name": "umt5_xxl_fp8_e4m3fn.safetensors",
+          "type": "wan"
+        },
+        "class_type": "CLIPLoader"
+      },
+      "4": {
+        "inputs": {
+          "vae_name": "wan2.1_vae.safetensors"
+        },
+        "class_type": "VAELoader"
+      },
+      "5": {
+        "inputs": {
+          "text": "seamless fluid biomechanical loop of athletic woman exercising with perfect exercise form, smooth dynamic motion, stable camera perspective, high frame rate, photorealistic fitness demonstration, Stående ryggvri smooth repetition movement",
+          "clip": [
+            "3",
+            0
+          ]
+        },
+        "class_type": "CLIPTextEncode"
+      },
+      "6": {
+        "inputs": {
+          "pixels": [
+            "1",
+            0
+          ],
+          "vae": [
+            "4",
+            0
+          ]
+        },
+        "class_type": "VAEEncode"
+      },
+      "7": {
+        "inputs": {
+          "seed": 115886,
+          "steps": 20,
+          "cfg": 6,
+          "sampler_name": "euler",
+          "scheduler": "simple",
+          "denoise": 1,
+          "model": [
+            "2",
+            0
+          ],
+          "positive": [
+            "5",
+            0
+          ],
+          "latent_image": [
+            "6",
+            0
+          ],
+          "length": 33
+        },
+        "class_type": "KSampler"
+      },
+      "8": {
+        "inputs": {
+          "samples": [
+            "7",
+            0
+          ],
+          "vae": [
+            "4",
+            0
+          ]
+        },
+        "class_type": "VAEDecode"
+      },
+      "9": {
+        "inputs": {
+          "filename_prefix": "mintrener/videos/staende-ryggvri_motion_phase0",
+          "fps": 16,
+          "images": [
+            "8",
+            0
+          ]
+        },
+        "class_type": "VHS_VideoCombine"
+      }
+    }
+  },
+  {
+    "exerciseId": "staende-ryggvri",
+    "phaseIndex": 1,
+    "inputImage": "staende-ryggvri-1.png",
+    "workflow": {
+      "1": {
+        "inputs": {
+          "image": "staende-ryggvri-1.png",
+          "upload": "image"
+        },
+        "class_type": "LoadImage"
+      },
+      "2": {
+        "inputs": {
+          "unet_name": "wan2.1_i2v_480p_14B_fp8.safetensors"
+        },
+        "class_type": "UNETLoader"
+      },
+      "3": {
+        "inputs": {
+          "clip_name": "umt5_xxl_fp8_e4m3fn.safetensors",
+          "type": "wan"
+        },
+        "class_type": "CLIPLoader"
+      },
+      "4": {
+        "inputs": {
+          "vae_name": "wan2.1_vae.safetensors"
+        },
+        "class_type": "VAELoader"
+      },
+      "5": {
+        "inputs": {
+          "text": "seamless fluid biomechanical loop of athletic woman exercising with perfect exercise form, smooth dynamic motion, stable camera perspective, high frame rate, photorealistic fitness demonstration, Stående ryggvri smooth repetition movement",
+          "clip": [
+            "3",
+            0
+          ]
+        },
+        "class_type": "CLIPTextEncode"
+      },
+      "6": {
+        "inputs": {
+          "pixels": [
+            "1",
+            0
+          ],
+          "vae": [
+            "4",
+            0
+          ]
+        },
+        "class_type": "VAEEncode"
+      },
+      "7": {
+        "inputs": {
+          "seed": 116885,
+          "steps": 20,
+          "cfg": 6,
+          "sampler_name": "euler",
+          "scheduler": "simple",
+          "denoise": 1,
+          "model": [
+            "2",
+            0
+          ],
+          "positive": [
+            "5",
+            0
+          ],
+          "latent_image": [
+            "6",
+            0
+          ],
+          "length": 33
+        },
+        "class_type": "KSampler"
+      },
+      "8": {
+        "inputs": {
+          "samples": [
+            "7",
+            0
+          ],
+          "vae": [
+            "4",
+            0
+          ]
+        },
+        "class_type": "VAEDecode"
+      },
+      "9": {
+        "inputs": {
+          "filename_prefix": "mintrener/videos/staende-ryggvri_motion_phase1",
+          "fps": 16,
+          "images": [
+            "8",
+            0
+          ]
+        },
+        "class_type": "VHS_VideoCombine"
+      }
+    }
+  },
+  {
     "exerciseId": "verdens-beste-toyeovelse",
     "phaseIndex": 0,
     "inputImage": "verdens-beste-toyeovelse-0.png",
@@ -11911,7 +12119,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 115886,
+          "seed": 117884,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -12015,7 +12223,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 116885,
+          "seed": 118883,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -12119,7 +12327,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 117884,
+          "seed": 119882,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -12223,7 +12431,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 118883,
+          "seed": 120881,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -12327,7 +12535,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 119882,
+          "seed": 121880,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -12431,7 +12639,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 120881,
+          "seed": 122879,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -12535,7 +12743,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 121880,
+          "seed": 123878,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -12639,7 +12847,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 122879,
+          "seed": 124877,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -12743,7 +12951,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 123878,
+          "seed": 125876,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -12847,7 +13055,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 124877,
+          "seed": 126875,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -12951,7 +13159,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 125876,
+          "seed": 127874,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -13055,7 +13263,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 126875,
+          "seed": 128873,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -13159,7 +13367,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 127874,
+          "seed": 129872,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -13263,7 +13471,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 128873,
+          "seed": 130871,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -13367,7 +13575,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 129872,
+          "seed": 131870,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -13471,7 +13679,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 130871,
+          "seed": 132869,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -13575,7 +13783,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 131870,
+          "seed": 133868,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -13679,7 +13887,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 132869,
+          "seed": 134867,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -13783,7 +13991,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 133868,
+          "seed": 135866,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -13887,7 +14095,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 134867,
+          "seed": 136865,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -13991,7 +14199,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 135866,
+          "seed": 137864,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -14095,7 +14303,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 136865,
+          "seed": 138863,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -14199,7 +14407,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 137864,
+          "seed": 139862,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -14303,7 +14511,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 138863,
+          "seed": 140861,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -14407,7 +14615,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 139862,
+          "seed": 141860,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -14511,7 +14719,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 140861,
+          "seed": 142859,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -14615,7 +14823,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 141860,
+          "seed": 143858,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -14719,7 +14927,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 142859,
+          "seed": 144857,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -14823,7 +15031,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 143858,
+          "seed": 145856,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -14927,7 +15135,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 144857,
+          "seed": 146855,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -15031,7 +15239,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 145856,
+          "seed": 147854,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -15135,7 +15343,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 146855,
+          "seed": 148853,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -15239,7 +15447,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 147854,
+          "seed": 149852,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
@@ -15343,7 +15551,7 @@
       },
       "7": {
         "inputs": {
-          "seed": 148853,
+          "seed": 150851,
           "steps": 20,
           "cfg": 6,
           "sampler_name": "euler",
