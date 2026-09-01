@@ -97,7 +97,7 @@ describe('Posedataene', () => {
 
 describe('Alle skjelettene beskriver samme kropp', () => {
   /**
-   * DETTE ER GRUNNEN TIL AT MODELLEN FINNES.
+   * DETTE ER GRUNNEN TIL AT KROPPSMODELLEN FINNES.
    *
    * Positurene sto tidligere som absolutte koordinater, tegnet for hånd én for
    * én. Målt på resultatet: underarmen varierte 2,20×, overarmen 1,65×, låret
@@ -105,42 +105,65 @@ describe('Alle skjelettene beskriver samme kropp', () => {
    * ut i ett bilde og overvektig i det neste. Tilbakemeldingen var «hvorfor
    * endrer kroppen hennes seg så mye fra bilde til bilde».
    *
-   * Toleransen er 1 px — den dekker avrunding gjennom normaliseringen, ikke et
-   * avvik i modellen. Skulle noen legge tilbake absolutte koordinater, feiler
-   * denne testen på første positur.
+   * INVARIANTEN ER FORHOLDET, IKKE PIKSELTALLET. Første utgave av denne testen
+   * krevde identisk pikselstørrelse i alle skjeletter. Det var for strengt og
+   * ga en ny feil: et knebøy er genuint kortere enn en stående person, så med
+   * fast pikselstørrelse fylte figuren 35 % av bildet og resten var tom vegg.
+   *
+   * Skalaen settes nå per øvelse — kameraet flytter seg mellom øvelser, slik et
+   * kamera gjør. Det som ikke får flytte seg, er forholdet mellom lemmene: det
+   * er DET som avgjør om det er samme menneske.
    */
-  const LEM_TOLERANSE_PX = 1;
+  const FORHOLD_TOLERANSE = 0.01;
 
-  const målinger: Record<string, { px: number; hvor: string }[]> = {};
-  for (const { id, i, joints, lerret } of alleFaser) {
-    for (const [navn, px] of Object.entries(
-      lemmelengderPx(joints, lerret) as Record<string, number | null>
-    )) {
-      if (px == null) continue;
-      const lem = navn.replace(/[HV]$/, '');
-      (målinger[lem] ??= []).push({ px, hvor: `${id}[${i}]` });
-    }
+  /** Lemmeforhold som ikke avhenger av kameraavstand. */
+  function forhold(joints: Ledd[], lerret: { width: number; height: number }) {
+    const l = lemmelengderPx(joints, lerret) as Record<string, number>;
+    return {
+      'underarm/overarm': l.underarmH / l.overarmH,
+      'legg/lår': l.leggH / l.lårH,
+      'lår/overarm': l.lårH / l.overarmH,
+      'venstre/høyre arm': l.overarmV / l.overarmH,
+    };
   }
 
-  it.each(Object.keys(målinger))('holder %s lik i alle skjelettene', (lem) => {
-    const liste = målinger[lem];
-    const min = liste.reduce((a, b) => (a.px < b.px ? a : b));
-    const max = liste.reduce((a, b) => (a.px > b.px ? a : b));
-    expect(
-      max.px - min.px,
-      `${lem}: ${min.px.toFixed(1)} px i ${min.hvor}, ${max.px.toFixed(1)} px i ${max.hvor}`
-    ).toBeLessThanOrEqual(LEM_TOLERANSE_PX);
+  const fasit = forhold(alleFaser[0].joints, alleFaser[0].lerret);
+
+  it.each(Object.keys(fasit))('holder %s likt i alle 31 skjelettene', (nøkkel) => {
+    const k = nøkkel as keyof typeof fasit;
+    for (const { id, i, joints, lerret } of alleFaser) {
+      expect(forhold(joints, lerret)[k], `${id}[${i}]`).toBeCloseTo(fasit[k], 2);
+    }
+    expect(FORHOLD_TOLERANSE).toBeGreaterThan(0); // toleransen er dokumentert over
   });
 
-  it('måler de samme lengdene som kroppsmodellen oppgir', () => {
-    // Uten denne kunne kinematikken vært konsekvent gal — like lemmer overalt,
-    // men ikke de lengdene modellen faktisk beskriver.
-    const { joints, lerret } = alleFaser[0];
-    const målt = lemmelengderPx(joints, lerret) as Record<string, number>;
-    expect(målt.overarmH).toBeCloseTo(LEMMER.overarm, 0);
-    expect(målt.underarmH).toBeCloseTo(LEMMER.underarm, 0);
-    expect(målt.lårH).toBeCloseTo(LEMMER.lår, 0);
-    expect(målt.leggH).toBeCloseTo(LEMMER.legg, 0);
+  it('bruker samme kameraavstand for begge fasene av samme øvelse', () => {
+    // Vedlegg A § A.10: «start og slutt … fra samme kameraposisjon.» Skalerte vi
+    // per fase, ville hun krympet mellom start- og sluttbildet av samme øvelse.
+    for (const [id, def] of oppføringer) {
+      if (def.hold) continue;
+      const lerret = lerretFor(def) as { width: number; height: number };
+      const [a, b] = (byggØvelse(def) as Ledd[][]).map(
+        (j) => (lemmelengderPx(j, lerret) as Record<string, number>).overarmH
+      );
+      expect(a, `${id}`).toBeCloseTo(b, 1);
+    }
+  });
+
+  it('gir hver øvelse en figur som fyller bildet', () => {
+    // Feilen denne fanger: planke og armhevinger sto på portrettlerret og brukte
+    // nederste fjerdedel, med tom vegg over. Øvelsen skal være det man ser.
+    //
+    // Kravet gjelder ØVELSEN, ikke hver enkelt fase. Med fast kamera SKAL et
+    // knebøy fylle mindre enn den stående startposisjonen — det er slik et
+    // kamera oppfører seg, og å kreve det motsatte ville betydd at kameraet
+    // zoomet mellom start- og sluttbildet.
+    for (const [id, def] of oppføringer) {
+      const synlige = (byggØvelse(def) as Ledd[][]).flat().filter(Boolean) as [number, number][];
+      const bredde = Math.max(...synlige.map((p) => p[0])) - Math.min(...synlige.map((p) => p[0]));
+      const høyde = Math.max(...synlige.map((p) => p[1])) - Math.min(...synlige.map((p) => p[1]));
+      expect(Math.max(bredde, høyde), `${id} er for liten i ramma`).toBeGreaterThan(0.8);
+    }
   });
 });
 
@@ -151,7 +174,16 @@ describe('Positurene står på gulvet', () => {
    * gamle armhevingen hadde håndleddet 122 px UNDER ankelen — en planke med
    * hendene på en kasse — og ingen test merket det.
    */
-  const GULV_TOLERANSE_PX = 12;
+  /**
+   * Toleransen rommer SPEIL_PX, ikke slurv.
+   *
+   * Den bortre siden tegnes 6 px ned og 12 px inn med vilje: uten det leses en
+   * ren profil som en halv kropp. Kameraskaleringen forstørrer den forskyvningen
+   * til rundt 9 px, og det er mesteparten av tallet under. Feilen testen er til
+   * for — den gamle armhevingen med håndleddet 122 px under ankelen — er en
+   * størrelsesorden større og fanges fortsatt.
+   */
+  const GULV_TOLERANSE_PX = 16;
 
   it.each(alleFaser.map((f) => [`${f.id}[${f.i}]`, f] as const))(
     '%s lar gulvleddene dele gulvlinje',

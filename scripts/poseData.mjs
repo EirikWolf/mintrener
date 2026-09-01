@@ -505,9 +505,18 @@ export const POSES = {
   },
 };
 
-/** Lerretet en øvelse tegnes på. */
+/**
+ * Lerretet en øvelse tegnes på.
+ *
+ * Må gi nøyaktig samme svar som byggØvelse — tegnes skjelettet på ett format
+ * mens latenten lages på et annet, forskyves posituren (vedlegg A § A.6).
+ */
 export function lerretFor(def) {
-  return def.lerret === 'liggende' ? POSE_CANVAS_LANDSCAPE : POSE_CANVAS;
+  if (def.lerret === 'liggende') return POSE_CANVAS_LANDSCAPE;
+  const alle = def.faser.map((f) => byggCoco18Px(f, def.vinkel)).flat().filter(Boolean);
+  const bredde = Math.max(...alle.map((p) => p[0])) - Math.min(...alle.map((p) => p[0]));
+  const høyde = Math.max(...alle.map((p) => p[1])) - Math.min(...alle.map((p) => p[1]));
+  return bredde > høyde ? POSE_CANVAS_LANDSCAPE : POSE_CANVAS;
 }
 
 /**
@@ -524,14 +533,44 @@ export function lerretFor(def) {
  * og slutt … fra samme kameraposisjon», så den vannrette innrammingen regnes ut
  * én gang, over alle fasene, og rammer inn hele bevegelsen.
  */
-export function byggØvelse(def, { gulv = 0.94, senter = 0.5 } = {}) {
-  const lerret = lerretFor(def);
+export function byggØvelse(def, { gulv = 0.94, senter = 0.5, fyll = 0.86 } = {}) {
+  const råFaser = def.faser.map((fase) => byggCoco18Px(fase, def.vinkel));
 
-  const faser = def.faser.map((fase) => {
-    const joints = byggCoco18Px(fase, def.vinkel);
-    const gulvY = (fase.gulvledd ?? def.gulvledd).map((k) => joints[k][1]);
+  // --- Lerretet velges av posituren, ikke av et flagg ---------------------
+  //
+  // Superman hadde `lerret: 'liggende'` satt for hånd fordi den feilet synlig.
+  // Planke, armhevinger og mountain climbers er like vannrette og sto likevel
+  // på portrett — figuren endte i nederste fjerdedel med tom vegg over seg.
+  // Formatet følger nå av hvor bred posituren faktisk er.
+  const alle = råFaser.flat().filter(Boolean);
+  const bredde = Math.max(...alle.map((p) => p[0])) - Math.min(...alle.map((p) => p[0]));
+  const høyde = Math.max(...alle.map((p) => p[1])) - Math.min(...alle.map((p) => p[1]));
+  const lerret = def.lerret === 'liggende' || bredde > høyde ? POSE_CANVAS_LANDSCAPE : POSE_CANVAS;
+
+  // --- Kameraavstanden ----------------------------------------------------
+  //
+  // STATUR er lik for alle positurer, og det er RIKTIG for proporsjonene: det
+  // var ulike lemmeforhold som gjorde at Astrid så ut som ulike mennesker.
+  // Men absolutt størrelse er noe annet. Et knebøy er genuint kortere enn en
+  // stående person, så med fast pikselstørrelse fylte det 35 % av bildet mens
+  // resten var tom vegg.
+  //
+  // Skalaen regnes derfor per ØVELSE, over alle fasene samlet — kameraet står
+  // stille mellom start og slutt (vedlegg A § A.10), men flytter seg mellom
+  // øvelser, slik et kamera gjør. Forholdene mellom lemmene er urørt.
+  const skala = Math.min(
+    (fyll * lerret.width) / bredde,
+    (fyll * lerret.height) / høyde
+  );
+
+  const faser = råFaser.map((joints, i) => {
+    const skalert = joints.map((p) => p && [p[0] * skala, p[1] * skala]);
+    const gulvledd = def.faser[i].gulvledd ?? def.gulvledd;
+    const gulvY = gulvledd.map((k) => skalert[k][1]);
+    // Gulvet forankres per FASE: kroppen bygges fra hoften, men hoften er
+    // nettopp det som beveger seg i et knebøy.
     const dy = gulv * lerret.height - gulvY.reduce((a, b) => a + b, 0) / gulvY.length;
-    return joints.map((p) => p && [p[0], p[1] + dy]);
+    return skalert.map((p) => p && [p[0], p[1] + dy]);
   });
 
   const xs = faser.flat().filter(Boolean).map((p) => p[0]);
