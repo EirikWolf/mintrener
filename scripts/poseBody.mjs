@@ -41,8 +41,22 @@ export const STATUR = 780;
 const ANDEL = {
   torso: 0.288, // hofte → nakke
   nakkeSkulder: 0.036, // nakke → skulder, langs ryggraden bakover
-  halvSkulder: 0.125, // nakke → skulder sideveis (frontvinkel)
-  halvHofte: 0.095, // hoftesenter → hofte sideveis (frontvinkel)
+  /**
+   * Kroppsbredden, og hvorfor den var feil.
+   *
+   * I SIDEPROFIL ligger skuldre og hofter oppå hverandre i skjelettet, så Flux
+   * finner selv kroppsbredden ut fra prompten — og traff fint. I FRONTVINKEL
+   * dikterer ControlNet bredden fra disse to tallene, og da slår en feil rett
+   * inn i kroppsformen. Begge frontbildene 2026-09-01 kom tilbake med brede
+   * hofter og smale skuldre; begge sideprofilene var slanke og atletiske.
+   *
+   * Feilen: `halvHofte` var satt fra BI-TROKANTÆR bredde (0,19 av statur), som
+   * er avstanden mellom de ytre hoftebeina. COCO-18 sitt hofteledd er
+   * LEDDSENTERET, og de ligger omtrent halvparten så langt fra hverandre.
+   * Skulder/hofte-forholdet ble 1,32 der en trent kvinne ligger nærmere 1,8.
+   */
+  halvSkulder: 0.115, // biakromial bredde 0,23 av statur
+  halvHofte: 0.062, // hofteleddsentre, ikke trokantere
   overarm: 0.186,
   underarm: 0.146,
   lår: 0.245,

@@ -542,19 +542,23 @@ export function byggØvelse(def, { gulv = 0.94, senter = 0.5, fyll = 0.86 } = {}
   // Planke, armhevinger og mountain climbers er like vannrette og sto likevel
   // på portrett — figuren endte i nederste fjerdedel med tom vegg over seg.
   // Formatet følger nå av hvor bred posituren faktisk er.
-  const alle = råFaser.flat().filter(Boolean);
-  const bredde = Math.max(...alle.map((p) => p[0])) - Math.min(...alle.map((p) => p[0]));
   /**
-   * Plass til issen.
+   * Marg rundt skjelettet, fordi kroppen er større enn leddene.
    *
-   * COCO-18 har ingen hodetopp — det øverste leddet er øyet. Skalerte vi mot
-   * skjelettets ytterpunkt, havnet den rendrede hodetoppen utenfor bildet, og
-   * stående ryggvri kom tilbake med kronen avkuttet. Marginen er avstanden fra
-   * øyet og opp, med litt slark for hår.
+   * COCO-18 markerer LEDD, ikke ytterpunkter. Øverste ledd er øyet, ikke issen;
+   * ytterste ledd er håndleddet, ikke fingertuppen. Skalerte vi mot leddene,
+   * havnet det som stikker utenfor dem ute av bildet — stående ryggvri kom
+   * tilbake med kronen avkuttet, sprellmenn med hendene kuttet i hjørnene.
+   *
+   * Én marg rundt hele, ikke bare på toppen: hendene i en stjerne peker opp OG
+   * ut, og føttene stikker fram forbi ankelen.
    */
-  const HODEROM = 0.11 * STATUR;
+  const MARG = 0.10 * STATUR;
+  const alle = råFaser.flat().filter(Boolean);
+  const bredde =
+    Math.max(...alle.map((p) => p[0])) - Math.min(...alle.map((p) => p[0])) + 2 * MARG;
   const høyde =
-    Math.max(...alle.map((p) => p[1])) - Math.min(...alle.map((p) => p[1])) + HODEROM;
+    Math.max(...alle.map((p) => p[1])) - Math.min(...alle.map((p) => p[1])) + 2 * MARG;
   const lerret = def.lerret === 'liggende' || bredde > høyde ? POSE_CANVAS_LANDSCAPE : POSE_CANVAS;
 
   // --- Kameraavstanden ----------------------------------------------------
