@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   ASTRID_FLUX_DEMO_STYLE,
+  LORA_STYRKE,
   POSE_CANVAS,
   buildAstridFluxPoseWorkflow,
   buildComfyPromptJob,
@@ -148,5 +149,19 @@ describe('Workflowen styrer posituren med skjelett', () => {
     expect(latent?.inputs.width).toBe(POSE_CANVAS.width);
     expect(latent?.inputs.height).toBe(POSE_CANVAS.height);
     expect(POSE_CANVAS).toEqual({ width: 896, height: 1152 });
+  });
+
+  it('lar LoRA-styrken styres, og bruker fasiten når den ikke er oppgitt', () => {
+    // SynthIQ dokumenterer 0,75 for astrid_k; vi har kjørt 1,0 siden den ble
+    // tatt i bruk. Verdien skal måles, ikke antas — derfor et argument. Testen
+    // binder at standarden er ÉN konstant, ikke et tall skrevet inn to steder
+    // i workflow-byggerne, som var tilfellet fram til nå.
+    expect(nodeAv('LoraLoaderModelOnly')?.inputs.strength_model).toBe(LORA_STYRKE);
+
+    const svakere = buildAstridFluxPoseWorkflow('p', 1, 'f', 'pose.png', {
+      loraStrength: 0.75,
+    }) as Record<string, { class_type: string; inputs: Record<string, unknown> }>;
+    const lora = Object.values(svakere).find((n) => n.class_type === 'LoraLoaderModelOnly');
+    expect(lora?.inputs.strength_model).toBe(0.75);
   });
 });

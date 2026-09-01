@@ -90,6 +90,19 @@ export const ASTRID_FLUX_OUTFIT_STYLE =
   'wearing a fitted charcoal grey seamless cropped racerback sports bra and matching charcoal grey high-waist full-length leggings, tight-fitting, plain black training shoes';
 
 /**
+ * Hvor hardt Astrid-LoRA-en vektes.
+ *
+ * SynthIQ dokumenterer 0,75 for `astrid_k` i sin egen runbook; vi har kjørt 1,0
+ * siden den ble tatt i bruk. LoRA-en er dessuten en ANSIKTS-LoRA, ikke en
+ * kropps-LoRA — på 1,0 drar den hele bildet mot treningsdataenes portretter, og
+ * det er en av mistankene bak at kroppen varierte mellom bildene.
+ *
+ * Verdien er styrbar fordi den skal måles, ikke antas: `LORA_STRENGTH=0.75` i
+ * runPoseTestBatch kjører samme seed ved begge verdier.
+ */
+export const LORA_STYRKE = 1.0;
+
+/**
  * Kanonisk stilmal for Wan2.1 I2V (Image-to-Video) animering på Kitor
  */
 export const ASTRID_WAN_VIDEO_BASE_STYLE =
@@ -187,12 +200,19 @@ export function buildAstridFluxWorkflow(
   promptText: string,
   seed: number,
   filenamePrefix: string,
-  options: { width?: number; height?: number; steps?: number; guidance?: number } = {}
+  options: {
+    width?: number;
+    height?: number;
+    steps?: number;
+    guidance?: number;
+    loraStrength?: number;
+  } = {}
 ) {
   const width = options.width ?? 896;
   const height = options.height ?? 1152;
   const steps = options.steps ?? 24;
   const guidance = options.guidance ?? 3.5;
+  const loraStrength = options.loraStrength ?? LORA_STYRKE;
 
   return {
     "1": {
@@ -219,7 +239,7 @@ export function buildAstridFluxWorkflow(
     "4": {
       "inputs": {
         "lora_name": "synthiq/astrid_k.safetensors",
-        "strength_model": 1.0,
+        "strength_model": loraStrength,
         "model": ["1", 0]
       },
       "class_type": "LoraLoaderModelOnly"
@@ -303,6 +323,8 @@ export function buildAstridFluxPoseWorkflow(
     guidance?: number;
     controlStrength?: number;
     controlEnd?: number;
+    /** Se LORA_STYRKE. */
+    loraStrength?: number;
     /** Må matche skjelettets lerret — ellers forskyves posituren (vedlegg A § A.6). */
     width?: number;
     height?: number;
@@ -315,6 +337,7 @@ export function buildAstridFluxPoseWorkflow(
   // liggende positurer — se runPoseTestBatch. Derfor et argument, ikke en
   // konstant.
   const controlEnd = options.controlEnd ?? 0.65;
+  const loraStrength = options.loraStrength ?? LORA_STYRKE;
   const width = options.width ?? POSE_CANVAS.width;
   const height = options.height ?? POSE_CANVAS.height;
 
@@ -338,7 +361,7 @@ export function buildAstridFluxPoseWorkflow(
     "4": {
       "inputs": {
         "lora_name": "synthiq/astrid_k.safetensors",
-        "strength_model": 1.0,
+        "strength_model": loraStrength,
         "model": ["1", 0]
       },
       "class_type": "LoraLoaderModelOnly"

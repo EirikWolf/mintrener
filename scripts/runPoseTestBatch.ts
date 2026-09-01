@@ -3,11 +3,10 @@ import path from 'path';
 import { fileURLToPath } from 'node:url';
 import { EXERCISE_LIBRARY } from '../src/data/exercises';
 import {
-  ASTRID_FLUX_DEMO_STYLE,
-  ASTRID_FLUX_OUTFIT_STYLE,
-  formatViewAngle,
+  buildComfyPromptJob,
   buildAstridFluxPoseWorkflow,
   seedForExercise,
+  LORA_STYRKE,
 } from '../src/services/imagePromptService';
 import {
   acquireGpuLeaseWithRetry,
@@ -57,6 +56,26 @@ const SEEDS_PER_POSISJON = Number(process.env.POSE_SEEDS ?? 3);
  */
 const CONTROL_END = Number(process.env.POSE_CONTROL_END ?? 0.65);
 const CONTROL_STRENGTH = Number(process.env.POSE_CONTROL_STRENGTH ?? 0.9);
+
+/**
+ * Hvor hardt Astrid-LoRA-en vektes. Se LORA_STYRKE i imagePromptService.
+ *
+ * Styrken havner i filnavnet når den avviker fra standard, slik at en A/B kan
+ * skrive til samme mappe uten at den ene varianten overskriver den andre. Første
+ * utkast av en slik test gjorde nettopp det, og «resultatet» var 12 filer der
+ * halvparten var borte.
+ */
+const LORA_STRENGTH = Number(process.env.LORA_STRENGTH ?? LORA_STYRKE);
+
+/**
+ * Hvor lenge vi står i kø på GPU-en før vi gir opp.
+ *
+ * Standarden i acquireGpuLeaseWithRetry er 5 forsøk à 10 s — 50 sekunder. Det
+ * holder når kitor er ledig, men ikke når et annet prosjekt har en eksklusiv
+ * lease: da feiler batchen umiddelbart, og det ser ut som en teknisk feil
+ * framfor en opptatt maskin. Kø er den normale tilstanden på en delt GPU.
+ */
+const LEASE_FORSØK = Number(process.env.POSE_LEASE_RETRIES ?? 5);
 
 /**
  * Legger skjelettet i ComfyUIs input-mappe.
@@ -115,13 +134,18 @@ function lesFaser(exerciseId: string): {
     });
 }
 
+/**
+ * Prompten bygges av buildComfyPromptJob, ikke her.
+ *
+ * Denne fila hadde sin egen kopi, og den var blitt stående igjen: den manglet
+ * ASTRID_APPEARANCE og ASTRID_SETTING, som ble lagt til da antrekket, håret og
+ * rommet ble låst. Prøvebatchen testet altså en prompt vi ikke lenger bruker —
+ * den dyreste formen for grønn test.
+ */
 function byggPrompt(exerciseId: string, fase: number): string {
   const ex = EXERCISE_LIBRARY.find((e) => e.id === exerciseId);
   if (!ex) throw new Error(`Ukjent øvelse: ${exerciseId}`);
-  const handling =
-    ex.bildePrompt?.[String(fase)] ?? `${ex.navn.en || ex.navn.nb} step ${fase + 1}`;
-  const vinkel = formatViewAngle(ex.bildeVinkel);
-  return `ASTRID, a woman, ${handling}, ${vinkel}, ${ASTRID_FLUX_DEMO_STYLE}, ${ASTRID_FLUX_OUTFIT_STYLE}`;
+  return buildComfyPromptJob(ex, fase).positivePrompt;
 }
 
 async function main() {
@@ -141,14 +165,20 @@ async function main() {
           lerret,
           prompt: byggPrompt(id, fase),
           poseRef: '',
-          filnavn: `${id}_f${fase}_v${v}${CONTROL_END !== 0.65 ? `_e${Math.round(CONTROL_END * 100)}` : ''}`,
+          filnavn:
+            `${id}_f${fase}_v${v}` +
+            (CONTROL_END !== 0.65 ? `_e${Math.round(CONTROL_END * 100)}` : '') +
+            `_lora${Math.round(LORA_STRENGTH * 100)}`,
         });
       }
       console.log(`  ${id} fase ${fase}: ${navn}`);
     }
   }
 
-  console.log(`\n${jobber.length} bilder (${UTVALG.length} øvelser, ${SEEDS_PER_POSISJON} seeds per posisjon)`);
+  console.log(
+    `\n${jobber.length} bilder (${UTVALG.length} øvelser, ${SEEDS_PER_POSISJON} seeds per posisjon, ` +
+      `LoRA-styrke ${LORA_STRENGTH}, ControlNet ${CONTROL_STRENGTH}/${CONTROL_END})`
+  );
 
   if (dryRun) {
     const j = jobber[0];
@@ -174,7 +204,7 @@ async function main() {
   }
   console.log(`  ${poseRefs.size} skjeletter i ComfyUIs input.`);
 
-  const leaseToken = await acquireGpuLeaseWithRetry(token, 1);
+  const leaseToken = await acquireGpuLeaseWithRetry(token, 1, LEASE_FORSØK);
   const start = Date.now();
   let ok = 0;
   let feil = 0;
@@ -190,6 +220,7 @@ async function main() {
         const wf = buildAstridFluxPoseWorkflow(j.prompt, j.seed, j.filnavn, j.poseRef, {
           controlStrength: CONTROL_STRENGTH,
           controlEnd: CONTROL_END,
+          loraStrength: LORA_STRENGTH,
           width: j.lerret.width,
           height: j.lerret.height,
         });
