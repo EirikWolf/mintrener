@@ -48,8 +48,15 @@ async function finnEgenLease(token: string): Promise<string | null> {
     });
     if (!res.ok) return null;
     const data = (await res.json()) as { leases?: { token: string; requester: string }[] };
-    // Bare VÅR egen. Å overta en annens ville stjålet GPU-en midt i deres batch.
-    return data.leases?.find((l) => l.requester === REQUESTER)?.token ?? null;
+    // Bare VÅRE egne. Å overta en annens ville stjålet GPU-en midt i deres batch.
+    const våre = (data.leases ?? []).filter((l) => l.requester === REQUESTER);
+    if (våre.length > 1) {
+      console.warn(
+        `⚠ ${våre.length} leaser står på ${REQUESTER}. Vi overtar én; resten må frigis for hånd ` +
+          `(kitor-arbiter release <token>): ${våre.slice(1).map((l) => l.token).join(', ')}`
+      );
+    }
+    return våre[0]?.token ?? null;
   } catch {
     return null;
   }
@@ -78,7 +85,25 @@ export async function acquireGpuLeaseWithRetry(
 ): Promise<string> {
   const retryMs = opts.retryMs ?? 10000;
   console.log('📡 Forespør GPU-lease fra Arbiter v1...');
+  // Sant når et tidligere forsøk feilet på nettverksnivå, altså der vi ikke vet
+  // om leasen ble opprettet.
+  let tvetydig = false;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    // Etter en TVETYDIG feil sjekker vi før neste forsøk også, ikke bare i
+    // catch-grenen. Første utgave sjekket kun etterpå, og da rakk løkken å
+    // opprette en lease til før den oppdaget den første — 2026-09-02 sto to
+    // foreldreløse leaser på mintrener samtidig, og bare én ble frigitt.
+    //
+    // Kun etter tvetydighet: et HTTP-avslag betyr at serveren HAR svart og at
+    // ingen lease ble laget. Å slå opp status da ville doblet trafikken mot en
+    // delt tjeneste uten å kunne finne noe.
+    if (tvetydig) {
+      const alt = await finnEgenLease(token);
+      if (alt) {
+        console.log('✅ Vi holder allerede en lease — bruker den i stedet for å be om en ny.');
+        return alt;
+      }
+    }
     try {
       const res = await fetch(`${KITOR_HOST}${ARBITER_PATH}/acquire`, {
         method: 'POST',
@@ -103,6 +128,7 @@ export async function acquireGpuLeaseWithRetry(
       console.warn(`Forsøk ${attempt}/${maxRetries} feilet (${res.status}): ${txt}`);
     } catch (err: any) {
       console.warn(`Nettverksforsøk ${attempt}/${maxRetries} feilet:`, err.message || err);
+      tvetydig = true;
       const egen = await finnEgenLease(token);
       if (egen) {
         console.log('✅ Svaret gikk tapt, men leasen ble opprettet — overtar den.');
@@ -176,11 +202,26 @@ export async function waitForCompletion(token: string, promptId: string, maxWait
       });
       if (res.ok) {
         const historyData = await res.json() as Record<string, any>;
-        if (historyData[promptId]?.outputs?.["10"]?.images?.[0]) {
-          return historyData[promptId].outputs["10"].images[0];
+        const oppf = historyData[promptId];
+        if (oppf?.outputs?.["10"]?.images?.[0]) {
+          return oppf.outputs["10"].images[0];
+        }
+        // ComfyUI melder kjørefeil i status, ikke ved å utebli. Uten denne
+        // grenen ventet vi hele timeouten på et resultat som aldri kom, og
+        // meldte «Generering tok for lang tid» om en feil serveren rapporterte
+        // umiddelbart — 2026-09-02 kostet det ti minutter og en feilslutning.
+        if (oppf?.status?.status_str === 'error') {
+          const melding = (oppf.status.messages ?? [])
+            .filter((m: any[]) => String(m[0]).includes('error'))
+            .map((m: any[]) => `${m[1]?.node_type ?? '?'}: ${m[1]?.exception_message ?? ''}`)
+            .join(' | ');
+          throw new Error(`ComfyUI feilet — ${melding || 'ukjent årsak'}`);
         }
       }
-    } catch {}
+    } catch (err) {
+      // Kjørefeil skal boble opp; nettverksglipp skal bare prøves på nytt.
+      if (err instanceof Error && err.message.startsWith('ComfyUI feilet')) throw err;
+    }
     await new Promise((r) => setTimeout(r, 4000));
   }
   throw new Error('Generering tok for lang tid');

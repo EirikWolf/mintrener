@@ -64,12 +64,43 @@ describe('acquireGpuLeaseWithRetry', () => {
   it('tar ikke over en lease som tilhører et annet prosjekt', async () => {
     // SynthIQ holdt leasen samtidig. Å «overta» den ville stjålet GPU-en fra
     // dem midt i deres egen batch.
-    fetchMock
-      .mockRejectedValueOnce(new Error('fetch failed'))
-      .mockResolvedValueOnce(svar({ leases: [{ token: 'deres', requester: 'synthiq' }] }))
-      .mockResolvedValueOnce(svar({ token: 'vår' }));
+    //
+    // Mocken svarer på URL, ikke i rekkefølge: etter en tvetydig feil slår
+    // klienten opp status både i catch-grenen OG før neste forsøk, og en fast
+    // sekvens ville brutt på antall kall i stedet for på oppførsel.
+    let førsteAcquire = true;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/status')) {
+        return svar({ leases: [{ token: 'deres', requester: 'synthiq' }] });
+      }
+      if (førsteAcquire) {
+        førsteAcquire = false;
+        throw new Error('fetch failed');
+      }
+      return svar({ token: 'vår' });
+    });
 
     await expect(acquireGpuLeaseWithRetry('t', 1, 3, { retryMs: 0 })).resolves.toBe('vår');
+  });
+
+  it('varsler når flere leaser står på oss, så de kan ryddes for hånd', async () => {
+    // 2026-09-02: sju feilede forsøk etterlot TO leaser på mintrener. Vi
+    // overtar én; den andre må frigis manuelt, og da må noen få vite det.
+    const advarsel = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/status')) {
+        return svar({
+          leases: [
+            { token: 'en', requester: REQUESTER },
+            { token: 'to', requester: REQUESTER },
+          ],
+        });
+      }
+      throw new Error('fetch failed');
+    });
+
+    await expect(acquireGpuLeaseWithRetry('t', 1, 3, { retryMs: 0 })).resolves.toBe('en');
+    expect(advarsel.mock.calls.flat().join(' ')).toMatch(/to/);
   });
 
   it('spør ikke om egen lease når serveren svarte med et avslag', async () => {
