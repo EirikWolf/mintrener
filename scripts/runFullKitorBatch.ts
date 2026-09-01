@@ -32,7 +32,51 @@ function getToken(): string {
   return getKitorToken();
 }
 
-export async function acquireGpuLeaseWithRetry(token: string, durationH: number = 2, maxRetries: number = 5): Promise<string> {
+/** Navnet arbiter kjenner oss under. Må matche `requester` i acquire. */
+const REQUESTER = 'mintrener';
+
+/**
+ * Slår opp om vi allerede står oppført med en lease.
+ *
+ * Finnes fordi `acquire` ikke er idempotent: et tapt svar kan bety at leasen ER
+ * opprettet. Se acquireGpuLeaseWithRetry.
+ */
+async function finnEgenLease(token: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${KITOR_HOST}${ARBITER_PATH}/status`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { leases?: { token: string; requester: string }[] };
+    // Bare VÅR egen. Å overta en annens ville stjålet GPU-en midt i deres batch.
+    return data.leases?.find((l) => l.requester === REQUESTER)?.token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reserverer GPU-en, og tåler at svaret blir borte på veien.
+ *
+ * HENDELSEN 2026-09-01, 20:07: klienten fikk «fetch failed» og gikk i
+ * gjenforsøk. På serveren hadde forespørselen landet — mintrener sto med en
+ * eksklusiv image-lease til 20:53 mens skriptet trodde det ikke hadde noen. Ni
+ * jobber fra andre prosjekter sto i kø bak en lease ingen brukte, og vi hadde
+ * ikke tokenet til å frigi den.
+ *
+ * Feilen var ikke nettverket, men at løkken behandlet en ikke-idempotent
+ * operasjon som om den var idempotent. Skillet som mangler:
+ *
+ * - HTTP-avslag  → serveren HAR svart, ingen lease finnes. Prøv igjen.
+ * - Nettverksfeil → svaret er borte, leasen KAN finnes. Slå opp først.
+ */
+export async function acquireGpuLeaseWithRetry(
+  token: string,
+  durationH: number = 2,
+  maxRetries: number = 5,
+  opts: { retryMs?: number } = {}
+): Promise<string> {
+  const retryMs = opts.retryMs ?? 10000;
   console.log('📡 Forespør GPU-lease fra Arbiter v1...');
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -59,8 +103,13 @@ export async function acquireGpuLeaseWithRetry(token: string, durationH: number 
       console.warn(`Forsøk ${attempt}/${maxRetries} feilet (${res.status}): ${txt}`);
     } catch (err: any) {
       console.warn(`Nettverksforsøk ${attempt}/${maxRetries} feilet:`, err.message || err);
+      const egen = await finnEgenLease(token);
+      if (egen) {
+        console.log('✅ Svaret gikk tapt, men leasen ble opprettet — overtar den.');
+        return egen;
+      }
     }
-    await new Promise((r) => setTimeout(r, 10000));
+    await new Promise((r) => setTimeout(r, retryMs));
   }
   throw new Error('Klarte ikke å reservere GPU etter gjentatte forsøk.');
 }
