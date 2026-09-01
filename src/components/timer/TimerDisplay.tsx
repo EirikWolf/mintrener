@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { TimerState, WorkoutTemplate, IntervalPhase } from '../../types/workout';
 import { CircularProgress } from './CircularProgress';
 import { UserMenu } from '../auth/UserMenu';
+import { PwaInstallPromptModal } from '../pwa/PwaInstallPromptModal';
 import { SensorStatusModal } from '../sensors/SensorStatusModal';
 import { HeartRateWidget } from '../sensors/HeartRateWidget';
 import { HeartRateLiveGraph } from '../sensors/HeartRateLiveGraph';
@@ -553,6 +554,12 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
 
           {/* Høyre: Puls (hvis tilkoblet), Aktiv stemmestyring, Lyd og Lås */}
           <div className="flex items-center gap-1.5">
+            {/* Installer appen. Komponenten lå i repoet uten å rendres noe
+                sted — bygget, aldri koblet inn. Den tåler plass i topplinja
+                fordi den fjerner seg selv: returnerer null når appen allerede
+                kjører installert. */}
+            <PwaInstallPromptModal />
+
             {/* Heart Rate Widget (vises diskret når tilkoblet) */}
             <HeartRateWidget onHeartRateUpdate={setCurrentHeartRate} />
 

@@ -166,3 +166,39 @@ describe('Startskjermen — verktøyene er rangert, ikke stablet', () => {
     expect(screen.queryByRole('button', { name: /Flere verktøy/i })).not.toBeInTheDocument();
   });
 });
+
+describe('Startskjermen — installer appen', () => {
+  it('tilbyr å installere appen når den kjører i nettleser', () => {
+    // PwaInstallPromptModal lå i repoet og ble rendret INGEN steder — bygget,
+    // aldri koblet inn. Den fanger `beforeinstallprompt` og forklarer den
+    // manuelle veien på iOS, der eventet ikke finnes.
+    renderIdle();
+    expect(
+      screen.getByRole('button', { name: /Installer appen på hjemskjerm/i })
+    ).toBeInTheDocument();
+  });
+
+  it('skjuler den når appen allerede kjører installert', () => {
+    // Selvbegrensende rot: knappen forsvinner for godt når den er brukt, og
+    // det er grunnen til at den tåler en plass i topplinja.
+    const original = window.matchMedia;
+    window.matchMedia = ((q: string) =>
+      ({
+        matches: q.includes('standalone'),
+        media: q,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        onchange: null,
+        dispatchEvent: () => false,
+      }) as unknown as MediaQueryList) as typeof window.matchMedia;
+
+    renderIdle();
+    expect(
+      screen.queryByRole('button', { name: /Installer appen på hjemskjerm/i })
+    ).not.toBeInTheDocument();
+
+    window.matchMedia = original;
+  });
+});

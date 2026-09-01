@@ -3,6 +3,7 @@ import { PRESET_WORKOUTS, TABATA_WORKOUT } from './data/mockWorkouts';
 import { WorkoutTemplate } from './types/workout';
 import { useIntervalTimer } from './hooks/useIntervalTimer';
 import { useWorkoutExitGuard } from './hooks/useWorkoutExitGuard';
+import { useTabBackNavigation } from './hooks/useTabBackNavigation';
 import { defaultSoundLevelForProfiles } from './services/soundLevelService';
 import { STORAGE_KEYS } from './constants/storageKeys';
 import { TimerDisplay } from './components/timer/TimerDisplay';
@@ -155,6 +156,15 @@ export function App() {
   const exitGuard = useWorkoutExitGuard({
     isActive: state.status === 'running' || state.status === 'paused',
     onConfirmExit: resetWorkout,
+  });
+
+  // Vakten over dekker bare tiden en økt kjører. Utenfor økt forlot tilbake
+  // hele nettsiden fra enhver annen fane enn forsiden. Her spør vi ikke —
+  // tilbake fra Historikk til forsiden er nettopp det brukeren ber om.
+  useTabBackNavigation({
+    isAway: activeTab !== 'timer',
+    onBack: () => setActiveTab('timer'),
+    suspendert: state.status === 'running' || state.status === 'paused',
   });
 
   const handleStartWorkoutDirectly = (tpl: WorkoutTemplate) => {

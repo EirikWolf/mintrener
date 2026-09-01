@@ -155,6 +155,11 @@ export const PwaInstallPromptModal: React.FC = () => {
       {/* Diskré installer-knapp i topplinjen */}
       <button
         onClick={() => (deferredPrompt ? handleInstallClick() : setIsOpen(true))}
+        // Teksten «Installer» skjules av CSS på smale skjermer. Uten et
+        // eksplisitt navn står da bare ikonet igjen, og title er ikke et
+        // pålitelig navn for skjermlesere. Den synlige teksten inngår i
+        // navnet (WCAG 2.5.3).
+        aria-label="Installer appen på hjemskjerm"
         title="Installer appen på hjemskjerm"
         className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-800/80 text-[10px] font-bold text-emerald-400 hover:bg-emerald-900 transition-all flex items-center gap-1 shadow-sm active:scale-95"
       >
