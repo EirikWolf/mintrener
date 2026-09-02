@@ -74,6 +74,8 @@ export const STORAGE_KEYS = {
   ORGANIZATION: 'mintrener_organization',
   /** Internt QA-verktøy, ikke brukerdata. Med i registeret for slettingens skyld. */
   CURATOR_FEEDBACK: 'mintrener_image_curator_feedback',
+  /** Valgt kandidatbilde per øvelsesfase. Samme klasse som CURATOR_FEEDBACK. */
+  CURATOR_VALG: 'mintrener_image_curator_valg',
 } as const;
 
 /**
