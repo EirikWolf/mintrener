@@ -25,6 +25,7 @@ import { SettingsMoreView } from './components/settings/SettingsMoreView';
 import { BottomNav, AppTab } from './components/navigation/BottomNav';
 import { ErrorToast } from './components/feedback/ErrorToast';
 import { showErrorToast } from './services/errorToastService';
+import { registrerFullførtFerdighetsøkt } from './services/skillTreeService';
 import { getSharedWorkoutFromUrl } from './services/shareWorkoutService';
 import { useAuth } from './contexts/AuthContext';
 import { saveCompletedWorkout } from './services/firestoreService';
@@ -115,6 +116,13 @@ export function App() {
   useEffect(() => {
     if (state.status === 'completed' && !hasSavedRef.current) {
       hasSavedRef.current = true;
+
+      // Kommer økta fra et ferdighetstre, skal treet vite at nivået er gjort.
+      // Uten dette registrerte mestringsøkta ingenting: id-en `skill-<tre>-lvl-<n>`
+      // ble bygget i SkillTreeModal og lest av ingen, så eneste vei til
+      // progresjon var å skrive et tall i en boks etterpå.
+      registrerFullførtFerdighetsøkt(selectedWorkout.id);
+
       saveCompletedWorkout(user?.uid, {
         workoutId: selectedWorkout.id,
         workoutName: selectedWorkout.name,
