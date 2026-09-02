@@ -121,6 +121,20 @@ function byggWorkflow(
      * har ikke det problemet.
      */
     mykKant = 0,
+    /**
+     * Legg personens dybde på et SYNTETISK GULV i stedet for svart.
+     *
+     * Svart bakgrunn betyr «uendelig langt unna» overalt — også der hun ligger.
+     * Målt 2026-09-02: med hard personmaske og svart bakgrunn hadde modellen
+     * ingen bakke å plassere henne mot, og hun endte svevende i lufta. For en
+     * liggende øvelse er underlaget en del av informasjonen.
+     *
+     * Gulvet bygges av stablede bånd, lysere mot bunnen — Depth Anything koder
+     * nært som lyst, og et gulv sett fra lav kameravinkel er nærmest nederst i
+     * bildet. Ingen gradient-node finnes, men fire bånd holder: ControlNet
+     * trenger et plausibelt underlag, ikke en presis dybdemodell av rommet.
+     */
+    syntetiskGulv = false,
   } = {}
 ) {
   const maskerer = personMaske || maskeTerskel > 0;
@@ -182,10 +196,30 @@ function byggWorkflow(
       class_type: 'FeatherMask',
     },
 
-    '26': { inputs: { width: BREDDE, height: HØYDE, batch_size: 1, color: 0 }, class_type: 'EmptyImage' },
+    // Bakgrunnen. Svart = uendelig langt unna; mørkegrå = en fjern vegg.
+    '26': {
+      inputs: {
+        width: BREDDE,
+        height: HØYDE,
+        batch_size: 1,
+        color: syntetiskGulv ? 0x1e1e1e : 0,
+      },
+      class_type: 'EmptyImage',
+    },
+
+    // Gulvbånd, lysere (nærmere) mot bunnen. Hvert bånd rekker fra sin egen
+    // y-verdi og ned, og legges oppå det forrige.
+    '32': { inputs: { width: BREDDE, height: HØYDE - 500, batch_size: 1, color: 0x3c3c3c }, class_type: 'EmptyImage' },
+    '33': { inputs: { width: BREDDE, height: HØYDE - 620, batch_size: 1, color: 0x5a5a5a }, class_type: 'EmptyImage' },
+    '34': { inputs: { width: BREDDE, height: HØYDE - 730, batch_size: 1, color: 0x787878 }, class_type: 'EmptyImage' },
+    '35': { inputs: { width: BREDDE, height: HØYDE - 820, batch_size: 1, color: 0x969696 }, class_type: 'EmptyImage' },
+    '36': { inputs: { destination: ['26', 0], source: ['32', 0], x: 0, y: 500, resize_source: false }, class_type: 'ImageCompositeMasked' },
+    '37': { inputs: { destination: ['36', 0], source: ['33', 0], x: 0, y: 620, resize_source: false }, class_type: 'ImageCompositeMasked' },
+    '38': { inputs: { destination: ['37', 0], source: ['34', 0], x: 0, y: 730, resize_source: false }, class_type: 'ImageCompositeMasked' },
+    '39': { inputs: { destination: ['38', 0], source: ['35', 0], x: 0, y: 820, resize_source: false }, class_type: 'ImageCompositeMasked' },
     '27': {
       inputs: {
-        destination: ['26', 0],
+        destination: syntetiskGulv ? ['39', 0] : ['26', 0],
         source: ['21', 0],
         x: 0,
         y: 0,
@@ -260,11 +294,11 @@ async function main() {
    * spørsmål som allerede er besvart.
    */
   const varianter = [
-    // Hard maskekant. Myk kant ga glorie ved 0,9 — mellomliggende dybdeverdier
-    // mellom kropp og svart bakgrunn leses som en ekte flate.
-    { navn: 'hard90', personMaske: true, mykKant: 0, maskeTerskel: 0, controlStrength: 0.9, controlEnd: 0.65 },
-    { navn: 'hard80', personMaske: true, mykKant: 0, maskeTerskel: 0, controlStrength: 0.8, controlEnd: 0.6 },
-  ];  console.log(`Øvelse: ${ØVELSE} fase ${FASE}  ·  seed ${seed}  ·  LoRA ${LORA_STYRKE}`);
+    // Syntetisk gulv i stedet for svart. Svart bakgrunn ga henne ingen bakke
+    // å ligge på; med gulv skal både rommet og bakkekontakten være vår.
+    { navn: 'gulv90', personMaske: true, syntetiskGulv: true, mykKant: 0, maskeTerskel: 0, controlStrength: 0.9, controlEnd: 0.65 },
+    { navn: 'gulv80', personMaske: true, syntetiskGulv: true, mykKant: 0, maskeTerskel: 0, controlStrength: 0.8, controlEnd: 0.6 },
+  ]; console.log(`Øvelse: ${ØVELSE} fase ${FASE}  ·  seed ${seed}  ·  LoRA ${LORA_STYRKE}`);
   console.log(`Referanse: ${REFERANSE} (free-exercise-db, Unlicense)`);
   console.log(`Varianter: ${varianter.map((v) => v.navn).join(', ')}\n`);
 
@@ -291,6 +325,7 @@ async function main() {
       try {
         const wf = byggWorkflow(prompt, seed, filnavn, refNavn, 'depth', {
           personMaske: v.personMaske,
+          syntetiskGulv: v.syntetiskGulv,
           mykKant: v.mykKant,
           maskeTerskel: v.maskeTerskel,
           controlStrength: v.controlStrength,

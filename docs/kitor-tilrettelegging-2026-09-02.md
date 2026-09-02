@@ -226,3 +226,33 @@ dybde komponert på en enkel gradient som leser som et underlag, i stedet for
 Ingenting av dette er kritikk av leveransen — modellen gjør presis det den
 skulle. Notert her fordi runbooken ber om det, og fordi neste prosjekt som
 maskerer et dybdekart vil gå i samme felle.
+
+### Syntetisk gulv — løste bakkekontakten
+
+Bygget et gulv av fire stablede bånd i `EmptyImage`, lysere mot bunnen (Depth
+Anything koder nært som lyst), og komponerte personens dybde på det i stedet for
+på svart. Ingen gradient-node finnes i ComfyUI, men fire bånd holder — ControlNet
+trenger et plausibelt underlag, ikke en presis dybdemodell av rommet.
+
+**Virket.** Hun ligger nå på matte på tregulv, i vårt eget lyse rom, på magen med
+svai rygg og løftede bein. Ingen glorie, ingen svevning, ingen stativer.
+
+### Det som står igjen, og som ikke er en parameterfeil
+
+Antrekket er fortsatt galt: toppen ser ut til å skli av, og buksa er løs i stedet
+for tights. Årsaken er strukturell, ikke en innstilling.
+
+**Dybdekartet koder referansepersonens KLESSILHUETT.** Mannen i kildefotoet har
+løs singlet og joggebukse. Den formen ligger i dybdekartet, ControlNet gjengir
+den, og Flux maler våre grå farger på feil plaggform. En maske til personen
+beholder personen — inkludert klærne.
+
+Det lar seg ikke løse med kontrollstyrke. Det løses ved **valg av
+referansefoto**: kilder der modellen bærer tettsittende treningstøy. Det gjør
+kildekurering til en del av pipelinen, ikke en engangsjobb.
+
+### Oppsummert om leveransen
+
+BiRefNet gjorde presis det den ble bestilt for, og gjorde det billigere enn vi
+anslo. Tre av fire problemer er løst med den; det fjerde viste seg å ligge i
+kildematerialet, ikke i verktøyet.
