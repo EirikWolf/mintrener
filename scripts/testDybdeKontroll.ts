@@ -78,7 +78,33 @@ function byggWorkflow(
   filnavn: string,
   refBilde: string,
   modus: 'depth' | 'normal',
-  { controlStrength = 0.9, controlEnd = 0.65, loraStrength = LORA_STYRKE } = {}
+  {
+    controlStrength = 0.9,
+    controlEnd = 0.65,
+    loraStrength = LORA_STYRKE,
+    /**
+     * Klipp bort alt fjernere enn dette i dybdekartet, 0–1.
+     *
+     * VIRKER IKKE. Beholdt fordi målingen er verdt å ha dokumentert.
+     *
+     * Tanken var: dybdekartet bærer HELE scenen, ikke bare kroppen — første
+     * kjøring ga stativer og en vektstang i bakgrunnen enda prompten ba om «no
+     * gym equipment». Terskle dem bort, så bygger modellen vårt eget rom.
+     *
+     * Målt 2026-09-02 ved 0,35 og 0,55: rommet BLE rent, men kroppen ble
+     * ødelagt — to hoder ved 0,35, en umulig stående positur ved 0,55. Årsaken
+     * er at en terskel skjærer scenen i et AVSTANDSPLAN og ikke isolerer en
+     * person: hodet ligger nærmere kamera enn føttene, så planet går tvers
+     * gjennom kroppen og etterlater frittstående flekker som ControlNet leser
+     * som separate kropper.
+     *
+     * Riktig verktøy er en personsegmentering. `RemoveBackground` finnes på
+     * kitor, men modell-listen er tom — ingen modell er installert.
+     *
+     * Null = ingen maskering, og det er det som gjelder inntil videre.
+     */
+    maskeTerskel = 0,
+  } = {}
 ) {
   const preprocessor =
     modus === 'depth'
@@ -110,6 +136,32 @@ function byggWorkflow(
     },
     '21': { inputs: preprocessor.inputs, class_type: preprocessor.class_type },
 
+    // Maskering av dybdekartet. Nodene finnes uansett i grafen, men brukes bare
+    // når maskeTerskel > 0 — se hvilken node '14' henter bildet fra.
+    '22': { inputs: { image: ['21', 0], channel: 'red' }, class_type: 'ImageToMask' },
+    '23': { inputs: { mask: ['22', 0], value: maskeTerskel }, class_type: 'ThresholdMask' },
+    // Litt vekst og mykning: en hard terskelkant gir en silhuett med trappetrinn,
+    // og ControlNet gjengir trappetrinnene.
+    '24': { inputs: { mask: ['23', 0], expand: 6, tapered_corners: true }, class_type: 'GrowMask' },
+    '25': {
+      inputs: { mask: ['24', 0], left: 8, top: 8, right: 8, bottom: 8 },
+      class_type: 'FeatherMask',
+    },
+    // Svart = uendelig langt unna. Alt utenfor masken blir dermed noe modellen
+    // står fritt til å finne på, styrt av prompten.
+    '26': { inputs: { width: BREDDE, height: HØYDE, batch_size: 1, color: 0 }, class_type: 'EmptyImage' },
+    '27': {
+      inputs: {
+        destination: ['26', 0],
+        source: ['21', 0],
+        x: 0,
+        y: 0,
+        resize_source: false,
+        mask: ['25', 0],
+      },
+      class_type: 'ImageCompositeMasked',
+    },
+
     '12': { inputs: { control_net_name: 'flux1-dev-controlnet-union-pro-2.0.safetensors' }, class_type: 'ControlNetLoader' },
     '13': { inputs: { control_net: ['12', 0], type: modus }, class_type: 'SetUnionControlNetType' },
     '14': {
@@ -117,7 +169,7 @@ function byggWorkflow(
         positive: ['7', 0],
         negative: ['5', 0],
         control_net: ['13', 0],
-        image: ['21', 0],
+        image: maskeTerskel > 0 ? ['27', 0] : ['21', 0],
         // Flux-ControlNet krever VAE. Uten den feiler KSampler med
         // «This Controlnet needs a VAE but none was provided» — og
         // kontrollbildet blir laget likevel, så feilen ser ut som en timeout.
@@ -139,7 +191,15 @@ function byggWorkflow(
     '9': { inputs: { samples: ['8', 0], vae: ['3', 0] }, class_type: 'VAEDecode' },
     '10': { inputs: { filename_prefix: `mintrener/${filnavn}`, images: ['9', 0] }, class_type: 'SaveImage' },
     // Kontrollbildet lagres også — vi må kunne SE hva modellen faktisk ble styrt av.
-    '11': { inputs: { filename_prefix: `mintrener/${filnavn}_kontroll`, images: ['21', 0] }, class_type: 'SaveImage' },
+    '11': {
+      inputs: {
+        filename_prefix: `mintrener/${filnavn}_kontroll`,
+        // Det MASKERTE bildet når vi maskerer. Lagret vi råkartet, ville vi sett
+        // på noe annet enn det modellen ble styrt av.
+        images: maskeTerskel > 0 ? ['27', 0] : ['21', 0],
+      },
+      class_type: 'SaveImage',
+    },
   };
 }
 
@@ -159,14 +219,31 @@ async function main() {
   );
   if (!fs.existsSync(refSti)) throw new Error(`Fant ikke referansen: ${refSti}`);
 
-  const moduser: ('depth' | 'normal')[] = ['depth', 'normal'];
+  /**
+   * Variantene, og hva hver av dem skal svare på.
+   *
+   * Normalkart er ute: målingen 2026-09-02 ga liggende på RYGGEN med samme seed
+   * der dybde ga riktig positur. Å kjøre den om igjen ville brukt GPU-tid på et
+   * spørsmål som allerede er besvart.
+   */
+  const varianter = [
+    // Løser maskering rom-forurensningen?
+    { navn: 'maske35', maskeTerskel: 0.35, controlStrength: 0.9, controlEnd: 0.65 },
+    { navn: 'maske55', maskeTerskel: 0.55, controlStrength: 0.9, controlEnd: 0.65 },
+    // Kontroll: holder det å svekke ControlNet, uten maskering? Uten denne vet
+    // vi ikke om maskeringen gjorde jobben eller om en løsere tøyle var nok.
+    { navn: 'svak', maskeTerskel: 0, controlStrength: 0.55, controlEnd: 0.45 },
+  ];
+
   console.log(`Øvelse: ${ØVELSE} fase ${FASE}  ·  seed ${seed}  ·  LoRA ${LORA_STYRKE}`);
   console.log(`Referanse: ${REFERANSE} (free-exercise-db, Unlicense)`);
-  console.log(`Moduser: ${moduser.join(', ')}\n`);
+  console.log(`Varianter: ${varianter.map((v) => v.navn).join(', ')}\n`);
 
   if (dryRun) {
     console.log('Prompt:\n' + prompt);
-    const wf = byggWorkflow(prompt, seed, 'test', 'ref.jpg', 'depth') as Record<string, { class_type: string }>;
+    const wf = byggWorkflow(prompt, seed, 'test', 'ref.jpg', 'depth', {
+      maskeTerskel: 0.35,
+    }) as Record<string, { class_type: string }>;
     console.log('\nNoder: ' + Object.values(wf).map((n) => n.class_type).join(' → '));
     console.log('\n[tørrkjøring] Ingen GPU brukt.');
     return;
@@ -180,17 +257,21 @@ async function main() {
   const start = Date.now();
 
   try {
-    for (const modus of moduser) {
-      const filnavn = `${ØVELSE}_f${FASE}_${modus}`;
+    for (const v of varianter) {
+      const filnavn = `${ØVELSE}_f${FASE}_${v.navn}`;
       try {
-        const wf = byggWorkflow(prompt, seed, filnavn, refNavn, modus);
+        const wf = byggWorkflow(prompt, seed, filnavn, refNavn, 'depth', {
+          maskeTerskel: v.maskeTerskel,
+          controlStrength: v.controlStrength,
+          controlEnd: v.controlEnd,
+        });
         const promptId = await submitPrompt(token, wf);
         const bilde = await waitForCompletion(token, promptId, 300);
         if (!bilde?.filename) throw new Error('ingen filreferanse');
         await downloadImage(token, bilde, path.join(UT_DIR, `${filnavn}.png`));
-        console.log(`✓ ${modus}`);
+        console.log(`✓ ${v.navn}`);
       } catch (err) {
-        console.warn(`✗ ${modus}: ${(err as Error).message}`);
+        console.warn(`✗ ${v.navn}: ${(err as Error).message}`);
       }
     }
   } finally {
