@@ -158,3 +158,40 @@ observasjon.
 
 [anker-2](bilder/dybdekontroll-2026-09-02/9-anker-to-hoder-likevel.png) viser
 feilmodusen som ikke lot seg fjerne: hode i begge ender, med ankeret aktivt.
+
+---
+
+## Skala-test: 1-av-3 var en superman-egenskap, ikke metodens rate
+
+**Målt 2026-09-02, fem øvelser med verifiserte referanser, tre seeds hver.**
+
+[Kontaktark, alle 15](bilder/dybdekontroll-2026-09-02/10-skalatest-fem-ovelser.png)
+
+| Øvelse | Brukbare |
+|---|---|
+| Knebøy | 3 av 3 |
+| Planke | 3 av 3 |
+| Mountain climbers | 3 av 3 |
+| Sideplanke | 3 av 3 |
+| Katte-ku | 1 av 3 (én riktig katt, én ku, én mellomting) |
+| **Totalt** | **13 av 15** |
+
+Superman ga 1 av 3. Fire andre øvelser ga 3 av 3. **Feilraten er ikke en
+egenskap ved metoden — den er en egenskap ved den posituren.**
+
+Det gir symmetri-hypotesen delvis oppreisning, med et forbehold: den forutsier
+riktig HVOR feilen oppstår. Superman er vannrett og nesten symmetrisk fra ende
+til ende; knebøy er loddrett, planken har en tydelig hodeende, mountain
+climbers har ett bein fram, sideplanken er rotert. Men positur-ankeret, som
+skulle gi nettopp den forankringen, FIKSET den ikke. Hypotesen forklarer
+fordelingen uten å gi en løsning.
+
+Katte-ku feiler på noe annet: fasen. Riktig plassering på alle fire hver gang,
+men den krumme «katt»-ryggen ble til svai «ku» i to av tre. Ryggkrumning bæres
+dårligere av dybdekartet enn orientering gjør.
+
+### Konsistensen holder på tvers
+
+Alle 15 viser samme person, samme grå antrekk, samme lyse rom med tregulv.
+Kravet om at biblioteket skal se ut som én fotoserie er innfridd — det var
+aldri i tvil for enkeltbilder, men det er det først når man ser femten sammen.

@@ -329,27 +329,44 @@ function byggWorkflow(
  */
 const JOBBER = [
   /**
-   * ÉN variabel om gangen. Første forsøk endret seks ting samtidig — revisors
-   * tre tiltak pluss kontrollstyrke, vindu og maskeparametre — og ga 0 av 4.
-   * To av endringene (myk kant 12 px, maskevekst 30 px) gjeninnførte feilmoduser
-   * vi allerede hadde målt bort: glorie og kildens rom.
+   * SKALA-TEST. Spørsmålet Beslutning 49 nå hviler på er om 1-av-3 er en
+   * egenskap ved superman eller ved metoden. Fem øvelser med verifiserte
+   * referanser, tre seeds hver — 15 bilder gir en ærlig rate på tvers.
    *
-   * Her er alt tilbake til det kjent gode oppsettet, og det ENESTE nye er
-   * positur-ankeret (tiltak A) pluss romlig prompt (tiltak C, som er gratis).
-   * Fire seeds: kjent grunnlinje er 1 av 3.
+   * Oppsettet er det som virket: dybdekart, BiRefNet-personmaske med hard
+   * kant, syntetisk gulv, styrke 0,9 og vindu 0,35. Ingen positur-anker —
+   * det ble målt til ikke å hjelpe.
    */
-  { øvelse: 'rygghev-superman', fase: 1, ref: 'superman-1.jpg', navn: 'anker-0', seedTillegg: 0,
-    controlEnd: 0.35, posAnker: 'superman-pose.png', posStyrke: 0.3, maskeVekst: 2,
-    romlig: 'exactly one person with a single head, both arms stretched forward past the head, legs together extending to the opposite end of the body, no duplicate limbs' },
-  { øvelse: 'rygghev-superman', fase: 1, ref: 'superman-1.jpg', navn: 'anker-1', seedTillegg: 1,
-    controlEnd: 0.35, posAnker: 'superman-pose.png', posStyrke: 0.3, maskeVekst: 2,
-    romlig: 'exactly one person with a single head, both arms stretched forward past the head, legs together extending to the opposite end of the body, no duplicate limbs' },
-  { øvelse: 'rygghev-superman', fase: 1, ref: 'superman-1.jpg', navn: 'anker-2', seedTillegg: 2,
-    controlEnd: 0.35, posAnker: 'superman-pose.png', posStyrke: 0.3, maskeVekst: 2,
-    romlig: 'exactly one person with a single head, both arms stretched forward past the head, legs together extending to the opposite end of the body, no duplicate limbs' },
-  { øvelse: 'rygghev-superman', fase: 1, ref: 'superman-1.jpg', navn: 'anker-3', seedTillegg: 3,
-    controlEnd: 0.35, posAnker: 'superman-pose.png', posStyrke: 0.3, maskeVekst: 2,
-    romlig: 'exactly one person with a single head, both arms stretched forward past the head, legs together extending to the opposite end of the body, no duplicate limbs' },
+  { øvelse: 'kneboy', fase: 1, ref: 'ref-Bodyweight_Squat-1.jpg', navn: 'kneboy-s0', seedTillegg: 0,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'kneboy', fase: 1, ref: 'ref-Bodyweight_Squat-1.jpg', navn: 'kneboy-s1', seedTillegg: 1,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'kneboy', fase: 1, ref: 'ref-Bodyweight_Squat-1.jpg', navn: 'kneboy-s2', seedTillegg: 2,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'planke', fase: 0, ref: 'ref-Plank-1.jpg', navn: 'planke-s0', seedTillegg: 0,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'planke', fase: 0, ref: 'ref-Plank-1.jpg', navn: 'planke-s1', seedTillegg: 1,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'planke', fase: 0, ref: 'ref-Plank-1.jpg', navn: 'planke-s2', seedTillegg: 2,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'mountain-climbers', fase: 1, ref: 'ref-Mountain_Climbers-1.jpg', navn: 'mountain-climbers-s0', seedTillegg: 0,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'mountain-climbers', fase: 1, ref: 'ref-Mountain_Climbers-1.jpg', navn: 'mountain-climbers-s1', seedTillegg: 1,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'mountain-climbers', fase: 1, ref: 'ref-Mountain_Climbers-1.jpg', navn: 'mountain-climbers-s2', seedTillegg: 2,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'sideplanke', fase: 0, ref: 'ref-Side_Bridge-1.jpg', navn: 'sideplanke-s0', seedTillegg: 0,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'sideplanke', fase: 0, ref: 'ref-Side_Bridge-1.jpg', navn: 'sideplanke-s1', seedTillegg: 1,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'sideplanke', fase: 0, ref: 'ref-Side_Bridge-1.jpg', navn: 'sideplanke-s2', seedTillegg: 2,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'katte-ku', fase: 1, ref: 'ref-Cat_Stretch-1.jpg', navn: 'katte-ku-s0', seedTillegg: 0,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'katte-ku', fase: 1, ref: 'ref-Cat_Stretch-1.jpg', navn: 'katte-ku-s1', seedTillegg: 1,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'katte-ku', fase: 1, ref: 'ref-Cat_Stretch-1.jpg', navn: 'katte-ku-s2', seedTillegg: 2,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
 ];
 
 async function main() {
