@@ -97,3 +97,42 @@ export function resetSkillProgress(skillId: SkillCategory): void {
   };
   saveUserSkillProgress(prog);
 }
+
+/**
+ * Id-en `SkillTreeModal` gir mestringsøkta. Formatet er kontrakten mellom
+ * treet og timeren, og den var tidligere ikke lest av noen.
+ */
+const FERDIGHETSØKT = /^skill-([a-z]+)-lvl-(\d+)$/;
+
+/**
+ * Registrerer at en mestringsøkt fra et ferdighetstre er fullført.
+ *
+ * DETTE MANGLET. `SkillTreeModal` bygde en økt med id `skill-<tre>-lvl-<n>` og
+ * sendte den til timeren, men ingen leste id-en tilbake. Å gjøre økta treet ga
+ * deg registrerte altså ingenting — eneste vei til progresjon var å komme
+ * tilbake og skrive et tall i en boks. Det ser ut som manglende lagring, men
+ * lagringen virket hele tiden; det var koblingen som manglet.
+ *
+ * At økta er FULLFØRT er beviset: økta bygges med nivåets mestringskrav som
+ * mål, så kommer du til enden har du gjort det som kreves. Avbryter du,
+ * havner timeren aldri i `completed`.
+ *
+ * Returnerer `null` for økter som ikke kommer fra et tre, og for id-er som
+ * peker på et tre eller nivå som ikke finnes — en omdøpt øvelse skal gi et
+ * signal, ikke stille ingenting.
+ */
+export function registrerFullførtFerdighetsøkt(
+  workoutId: string
+): ReturnType<typeof recordSkillLevelTest> | null {
+  const treff = FERDIGHETSØKT.exec(workoutId ?? '');
+  if (!treff) return null;
+
+  const skillId = treff[1] as SkillCategory;
+  const nivå = Number(treff[2]);
+
+  const tre = SKILL_TREES.find((t) => t.id === skillId);
+  const nivåData = tre?.levels.find((l) => l.level === nivå);
+  if (!tre || !nivåData) return null;
+
+  return recordSkillLevelTest(skillId, nivå, nivåData.masteryRequirement.target);
+}
