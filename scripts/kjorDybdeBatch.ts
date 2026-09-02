@@ -64,11 +64,17 @@ const ROMLIG = 'exactly one person with a single head, no duplicate limbs';
 const seedsIdx = process.argv.indexOf('--seeds');
 const ANTALL_SEEDS = seedsIdx !== -1 && process.argv[seedsIdx + 1] ? Number(process.argv[seedsIdx + 1]) : 3;
 
-type Jobb = { nøkkel: string; øvelse: string; fase: number; ref: string; navn: string; seed: number };
+type Jobb = { nøkkel: string; øvelse: string; fase: number; ref: string; navn: string; seed: number; speil: boolean };
 
 export function byggJobber(antallSeeds = ANTALL_SEEDS): Jobb[] {
   const jobber: Jobb[] = [];
-  for (const nøkkel of Object.keys(REFERANSER)) {
+  // --bare kjører om igjen et utvalg uten å røre resten. Da koster en rettelse
+  // fire minutter i stedet for trettitre, og de andre kandidatene beholdes.
+  const bare = process.argv.includes('--bare')
+    ? process.argv[process.argv.indexOf('--bare') + 1].split(',')
+    : null;
+  for (const [nøkkel, def] of Object.entries(REFERANSER)) {
+    if (bare && !bare.some((b) => nøkkel.startsWith(b))) continue;
     const m = /^(.*)-(\d)$/.exec(nøkkel);
     if (!m) throw new Error(`Ugyldig referansenøkkel: ${nøkkel}`);
     const [, øvelse, fase] = m;
@@ -85,6 +91,9 @@ export function byggJobber(antallSeeds = ANTALL_SEEDS): Jobb[] {
         // Seeden hører til øvelsen; tillegget skiller kandidatene. Da får fase 0
         // og fase 1 av samme øvelse samme person i samme rom.
         seed: seedForExercise(øvelse) + s,
+        // Speilingen bor i referansetabellen, ikke her: den er en egenskap ved
+        // koblingen mellom vår øvelse og basens foto.
+        speil: def.speil === true,
       });
     }
   }
@@ -145,6 +154,7 @@ async function main() {
           personMaske: true,
           syntetiskGulv: true,
           mykKant: 0,
+          speil: j.speil,
           maskeVekst: 2,
           controlStrength: 0.9,
           controlEnd: 0.35,
