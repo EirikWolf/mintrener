@@ -35,6 +35,7 @@ const UTENFOR_EKSPORT: Partial<Record<keyof typeof STORAGE_KEYS, string>> = {
   LEGACY_CUSTOM_EXERCISES: 'Migreringsnøkkel, leses som fallback i eksporten.',
   LEGACY_STRENGTH_LOGS: 'Migreringsnøkkel, leses som fallback i eksporten.',
   CURATOR_FEEDBACK: 'Internt QA-verktøy, ikke brukerdata.',
+  CURATOR_VALG: 'Internt QA-verktøy: valgt kandidatbilde, ikke brukerdata.',
   INTERRUPTED_SESSION: 'Flyktig UI-tilstand, ikke treningsdata.',
   ONBOARDING: 'Flagg for om onboarding er vist. Ingen informasjonsverdi for bruker.',
   ACCOUNT_PROMPT: 'Flagg for om kontoprompt er avvist.',
