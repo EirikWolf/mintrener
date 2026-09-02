@@ -19,7 +19,30 @@ export const ASTRID_FLUX_BASE_STYLE =
  * Et smil hører hjemme på et forsidebilde. En instruksjon skal vise arbeidet.
  */
 export const ASTRID_FLUX_DEMO_STYLE =
-  'fitness instruction photography, full body completely visible within frame including hands and feet, calm focused expression with a faint natural smile, engaged core, precise exercise form, warm natural lighting that keeps skin tones rich and sun-tanned, sharp focus';
+  'fitness instruction photography, engaged core, precise exercise form, warm natural lighting that keeps skin tones rich and sun-tanned, sharp focus';
+
+/**
+ * Innramming og ansiktsuttrykk — AVHENGIG AV KAMERAVINKEL.
+ *
+ * Sto tidligere som fast tekst i ASTRID_FLUX_DEMO_STYLE og motsa hver eneste
+ * sideprofil-bestilling: «including hands and feet» kan ikke oppfylles fra
+ * siden, der den bortre armen og det bortre beinet ER skjult bak de nærmeste.
+ * Modellen løste konflikten ved å rotere kameraet til tre kvart — det kuratoren
+ * beskrev som «generert skrått forfra».
+ *
+ * Kuratering 2026-09-01: sideprofil traff 21 % (7 av 33), øvrige vinkler 48 %
+ * (11 av 23). Alle fjorten vinkel-anmerkningene lå på prompter som ALLEREDE sa
+ * «side profile» — feilen var ikke utydelighet, den var motsigelse.
+ *
+ * Sideprofilen får derfor beskjed om at okklusjon er ØNSKET, ikke en mangel.
+ * Front og skrå står urørt: de fungerer, og de er kontrollen i forsøket.
+ */
+export function framingClauseFor(viewAngle?: 'front' | 'side' | 'skrå'): string {
+  if (viewAngle === 'side') {
+    return 'full body within frame from head to feet, camera strictly perpendicular to the body, near-side arm and leg clearly readable, far-side limbs naturally occluded behind the near side, calm focused expression seen in profile';
+  }
+  return 'full body completely visible within frame including hands and feet, calm focused expression with a faint natural smile';
+}
 
 /**
  * Astrids utseende — identiteten, ikke handlingen.
@@ -164,7 +187,9 @@ export function buildComfyPromptJob(
   // At handlingen kan flyttes bakover, er nytt: ControlNet holder posituren nå,
   // så prompten trenger ikke lenger slåss for den. Da er det identiteten som
   // trenger plassen foran.
-  const positivePrompt = `ASTRID, ${ASTRID_APPEARANCE}, ${ASTRID_FLUX_OUTFIT_STYLE}, ${specificAction}, ${angleStr}, ${ASTRID_FLUX_DEMO_STYLE}, ${ASTRID_SETTING}`;
+  // Innrammingen kommer RETT ETTER vinkelen, ikke i den generelle stilen bakerst.
+  // Sto den bakerst, overkjørte den vinkelen den skulle tjene.
+  const positivePrompt = `ASTRID, ${ASTRID_APPEARANCE}, ${ASTRID_FLUX_OUTFIT_STYLE}, ${specificAction}, ${angleStr}, ${framingClauseFor(viewAngle)}, ${ASTRID_FLUX_DEMO_STYLE}, ${ASTRID_SETTING}`;
 
   return {
     exerciseId: exercise.id,
