@@ -160,7 +160,11 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     },
     sensorProfil: 'ingen',
     bildePrompt: {
-      '0': 'full body captured from side profile at the bottom of a burpee with chest and thighs resting flat on gym mat, palms placed flat under shoulders ready to push up, toes tucked on floor',
+      // Fase 0 er STARTEN. Her beskrev vi bunnposisjonen — brystet flatt på
+      // matta — og fikk følgelig en planke der en stående start skulle vært.
+      // Kurering 2026-09-02: «Burpees fase 1 viser plankeposisjon i stedet for
+      // stående start.» Bildet var riktig; det var bestillingen som var feil.
+      '0': 'full body captured from side profile standing tall and upright at the start of a burpee, feet shoulder-width apart, arms relaxed at sides, weight on whole foot, ready to drop into the movement',
       '1': 'full body captured from side profile in an explosive high vertical leap at top of burpee, arms extended straight overhead towards ceiling, feet leaving the floor with toes pointed down, dynamic airborne athletic jump',
     },
     bildeVinkel: 'side',
