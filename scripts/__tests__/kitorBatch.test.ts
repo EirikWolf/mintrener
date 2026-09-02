@@ -12,6 +12,7 @@ import { exportBatchFiles } from '../exportComfyUiBatch';
 import { runFullBatch } from '../runFullKitorBatch';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
 /**
  * Antallet øvelser er ikke en invariant — katalogen skal kunne vokse.
@@ -93,11 +94,15 @@ describe('Kitor Batch Infrastructure & øvelsesdekning', () => {
   });
 
   it('exportBatchFiles eksporterer batch JSON-filer uten feil', () => {
-    exportBatchFiles();
+    // Til en midlertidig mappe, ikke inn i repoet. Testen skrev tidligere rett
+    // i `scripts/`, så hver kjøring gjorde tre sporede filer skitne — og før
+    // eller siden blir de med på lasset i en urelatert commit.
+    const utDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mintrener-batch-'));
+    exportBatchFiles(utDir);
 
-    const payloadPath = path.resolve(process.cwd(), 'scripts', 'comfyui_batch_payload.json');
-    const fluxPath = path.resolve(process.cwd(), 'scripts', 'comfyui_flux_workflows.json');
-    const wanPath = path.resolve(process.cwd(), 'scripts', 'comfyui_wan_workflows.json');
+    const payloadPath = path.join(utDir, 'comfyui_batch_payload.json');
+    const fluxPath = path.join(utDir, 'comfyui_flux_workflows.json');
+    const wanPath = path.join(utDir, 'comfyui_wan_workflows.json');
 
     expect(fs.existsSync(payloadPath)).toBe(true);
     expect(fs.existsSync(fluxPath)).toBe(true);
