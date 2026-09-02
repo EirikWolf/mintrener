@@ -13,12 +13,10 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 
+import { INITIAL_CURATION_FEEDBACK, FeedbackEntry } from '../../data/curatorFeedback';
+
 interface FeedbackMap {
-  [exerciseIdPhase: string]: {
-    feedback: string;
-    status: 'mangler' | 'generert' | 'godkjent' | 'regenerer';
-    updatedAt: string;
-  };
+  [exerciseIdPhase: string]: FeedbackEntry;
 }
 
 const STORAGE_KEY = 'mintrener_image_curator_feedback';
@@ -33,14 +31,26 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
   const { user } = useAuth();
   const [exercises] = useState<ExerciseItem[]>(EXERCISE_LIBRARY);
   const [selectedCategory, setSelectedCategory] = useState<string>('alle');
-  const [feedbackMap, setFeedbackMap] = useState<FeedbackMap>({});
+  const [feedbackMap, setFeedbackMap] = useState<FeedbackMap>(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        return { ...INITIAL_CURATION_FEEDBACK, ...JSON.parse(raw) };
+      }
+    } catch {}
+    return INITIAL_CURATION_FEEDBACK;
+  });
   const [reordering, setReordering] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setFeedbackMap(JSON.parse(raw));
+      if (raw) {
+        setFeedbackMap({ ...INITIAL_CURATION_FEEDBACK, ...JSON.parse(raw) });
+      } else {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_CURATION_FEEDBACK));
+      }
     } catch {}
   }, []);
 
@@ -78,6 +88,68 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
       setReordering(null);
       setSuccessMsg(null);
     }, 2000);
+  };
+
+  /**
+   * Eksporterer kureringen som JSON.
+   *
+   * Tilbakemeldingene bodde bare i localStorage, i den nettleseren de ble
+   * skrevet i. Kurerte du på telefonen, ble de liggende på telefonen — og den
+   * som skulle bruke dem til å rette promptene kom aldri til dem.
+   *
+   * Eksporten tar med ØVELSENS NÅVÆRENDE PROMPT og kameravinkel ved siden av
+   * kommentaren. Uten det må mottakeren slå opp hver enkelt for å se hva som
+   * faktisk ble bestilt, og det er nettopp der forskjellen mellom «modellen
+   * bommet» og «vi ba om feil ting» ligger.
+   */
+  const byggEksport = () => {
+    const rader = exercises.flatMap((ex) =>
+      [0, 1].map((fase) => {
+        const post = feedbackMap[`${ex.id}-${fase}`];
+        return {
+          øvelse: ex.id,
+          navn: ex.navn.nb,
+          fase,
+          status: post?.status ?? 'ubehandlet',
+          kommentar: post?.feedback ?? '',
+          vurdertAt: post?.updatedAt ?? null,
+          kameravinkel: ex.bildeVinkel ?? 'side',
+          nåværendePrompt: ex.bildePrompt?.[String(fase)] ?? null,
+        };
+      })
+    );
+    return {
+      eksportertAt: new Date().toISOString(),
+      antall: rader.length,
+      godkjent: rader.filter((r) => r.status === 'godkjent').length,
+      tilRegenerering: rader.filter((r) => r.status === 'regenerer').length,
+      rader,
+    };
+  };
+
+  const handleEksporter = () => {
+    const blob = new Blob([JSON.stringify(byggEksport(), null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `kurering-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setSuccessMsg('Kurering eksportert som JSON.');
+    setTimeout(() => setSuccessMsg(null), 2500);
+  };
+
+  const handleKopier = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(byggEksport(), null, 2));
+      setSuccessMsg('Kurering kopiert til utklippstavlen.');
+    } catch {
+      // Utklippstavlen kan være blokkert. Da er nedlastingsknappen veien.
+      setSuccessMsg('Kunne ikke kopiere — bruk «Last ned» i stedet.');
+    }
+    setTimeout(() => setSuccessMsg(null), 2500);
   };
 
   const categories = ['alle', 'kroppsvekt', 'kettlebell', 'frivekt', 'mobilitet', 'kondisjon'];
@@ -134,6 +206,24 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
               Kuratér, gi tilbakemelding og bestill regenerering fra Kitor
             </p>
           </div>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          {/* Eksport, fordi kureringen ellers bare bor i denne nettleseren. */}
+          <button
+            onClick={handleEksporter}
+            title="Last ned kureringen som JSON, med hver øvelses nåværende prompt ved siden av kommentaren"
+            className="px-2.5 py-1.5 rounded-2xl bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all"
+          >
+            Last ned
+          </button>
+          <button
+            onClick={handleKopier}
+            title="Kopiér kureringen til utklippstavlen"
+            className="px-2.5 py-1.5 rounded-2xl bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all"
+          >
+            Kopiér
+          </button>
         </div>
 
         <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-2xl text-xs">
