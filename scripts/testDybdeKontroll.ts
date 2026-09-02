@@ -51,7 +51,7 @@ const FASE = Number(process.env.DYBDE_FASE ?? 1);
 const BREDDE = 1152;
 const HØYDE = 896;
 
-async function uploadRef(token: string, filePath: string, name: string): Promise<string> {
+export async function uploadRef(token: string, filePath: string, name: string): Promise<string> {
   const form = new FormData();
   form.append('image', new Blob([fs.readFileSync(filePath)]), name);
   form.append('overwrite', 'true');
@@ -73,7 +73,7 @@ async function uploadRef(token: string, filePath: string, name: string): Promise
  * skaleres til lerretet, og en preprocessor lager kontrollbildet. ControlNet
  * Union Pro 2.0 er den SAMME modellen — bare `type` byttes fra `openpose`.
  */
-function byggWorkflow(
+export function byggWorkflow(
   prompt: string,
   seed: number,
   filnavn: string,
@@ -456,7 +456,12 @@ async function main() {
   console.log(`\nFerdig: ${ok}/${JOBBER.length} på ${((Date.now() - start) / 60000).toFixed(1)} min → ${UT_DIR}`);
 }
 
-main().catch((err) => {
-  console.error('Testen feilet:', err);
-  process.exit(1);
-});
+// Kjør bare når fila kalles direkte. Uten denne vakta ville produksjons-
+// skriptet, som importerer byggWorkflow herfra, satt i gang HELE testkjøringen
+// bare ved å laste modulen — og tatt en GPU-lease på veien.
+if (process.argv[1]?.includes('testDybdeKontroll')) {
+  main().catch((err) => {
+    console.error('Testen feilet:', err);
+    process.exit(1);
+  });
+}

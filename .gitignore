@@ -51,3 +51,10 @@ audio/raw-cache/
 # TypeScript inkrementell byggeinfo — genereres av `tsc -b`, og var sporet.
 # Den ble skitten ved hver typecheck og støyet i hver `git status`.
 *.tsbuildinfo
+
+# Referansefoto og mellomresultater fra bildepipelinen.
+# Andres fotografier (Unlicense) som vi avleder geometri fra — ikke vare a
+# distribuere videre. Hentes med scripts/hentReferanser.ts.
+pipeline/referanser/
+pipeline/candidates/
+pipeline/tmp/
