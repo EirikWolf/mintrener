@@ -294,3 +294,40 @@ klær og overflate males i de siste.
 
 Alle fem er løst med det som nå står på kitor. BiRefNet var det siste manglende
 leddet.
+
+### Tre øvelser til — ett gjennombrudd og én alvorlig svakhet
+
+Kjørte katte-ku og sideplanke med samme oppsett, pluss superman med tre seeds
+for å få vekk en anatomifeil i hendene. `staende-ryggvri` måtte utgå:
+free-exercise-db har ingen stående vridning uten redskap.
+
+| Bilde | Resultat |
+|---|---|
+| **sideplanke** | ✅ **Korrekt sideplanke.** Kroppen rotert om lengdeaksen, hoften løftet, føttene stablet |
+| superman seed 0 | ✅ Korrekt, men hendene fortsatt svake |
+| superman seed +1 | ❌ To hoder, figuren svever |
+| superman seed +2 | ❌ To kropper smeltet sammen |
+| katte-ku «katt» | ❌ Kom ut som KU — hodet bakover, svai rygg |
+
+**Gjennombruddet:** sideplanken er den andre av tre øvelser 2D-skjelettet ikke
+kunne uttrykke. Rotasjon om kroppsaksen — som COCO-18 er blind for — kommer nå
+ut riktig fra et dybdekart.
+
+**Svakheten, og den er alvorlig:** ÉN av tre seeds ga et brukbart superman-bilde.
+De to andre ga tohodede figurer. Det er ikke uflaks; det er sannsynligvis fordi
+den maskerte kroppen ligger som en isolert flekk på et syntetisk gulv, uten
+omgivelser som forankrer hva som er hode og hva som er føtter. En vannrett
+figur med armer ut den ene veien og bein ut den andre er nesten symmetrisk, og
+modellen leser den som to kropper som møtes på midten.
+
+For ett testbilde er det håndterbart. For et bibliotek på 150 betyr det at hvert
+eneste bilde må kureres manuelt, og da er «datadrevet» en sannhet med
+modifikasjoner.
+
+**Katte-ku feilet på fasen, ikke på orienteringen.** Hun er riktig plassert på
+alle fire, men den krumme katteryggen kom ut som svai ku-rygg. Enten er
+`Cat_Stretch-1` en annen fase enn vi antok, eller så bærer ikke dybdekartet
+ryggkrumning like godt som det bærer orientering.
+
+**Hendene ble ikke bedre.** Seed-variasjon var feil verktøy: den eneste seeden
+som gir en brukbar figur er den vi allerede hadde.

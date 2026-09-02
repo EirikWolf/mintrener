@@ -10,6 +10,7 @@ import {
 import {
   acquireGpuLeaseWithRetry,
   releaseGpuLease,
+  sendHeartbeat,
   submitPrompt,
   waitForCompletion,
   downloadImage,
@@ -270,87 +271,104 @@ function byggWorkflow(
   };
 }
 
+/**
+ * Jobbene. Hver linje er én øvelse, én fase, ett referansefoto.
+ *
+ * Referansene er valgt fra free-exercise-db (Unlicense) og sjekket for at de
+ * viser ÉN person: flere av mageøvelsene der har en hjelper i bildet, og to
+ * kropper i dybdekartet ville gitt to kropper i resultatet.
+ *
+ * `staende-ryggvri` står ikke her. Basen har ingen stående vridning uten
+ * redskap — nærmeste treff er sittende (Russian Twist) eller med vektskive
+ * (Plate Twist). Den øvelsen må vente på en annen kilde.
+ */
+const JOBBER = [
+  // Superman på nytt: hendene pekte feil vei. Tre seeds ved end 0,35, som var
+  // punktet der både positur og antrekk holdt. Seed-variasjon er det billigste
+  // kvalitetstiltaket som finnes (vedlegg A § A.10) — en lokal anatomifeil i
+  // hendene er nettopp det den er til for.
+  { øvelse: 'rygghev-superman', fase: 1, ref: 'superman-1.jpg', navn: 'superman-a', seedTillegg: 0, controlEnd: 0.35 },
+  { øvelse: 'rygghev-superman', fase: 1, ref: 'superman-1.jpg', navn: 'superman-b', seedTillegg: 1, controlEnd: 0.35 },
+  { øvelse: 'rygghev-superman', fase: 1, ref: 'superman-1.jpg', navn: 'superman-c', seedTillegg: 2, controlEnd: 0.35 },
+
+  // Katte-ku: den andre øvelsen 2D-skjelettet ikke kunne uttrykke — katt og ku
+  // ga identiske skjeletter fordi COCO-18 ikke har ledd i ryggen.
+  { øvelse: 'katte-ku', fase: 0, ref: 'ref-Cat_Stretch-0.jpg', navn: 'katteku-ku', seedTillegg: 0, controlEnd: 0.35 },
+  { øvelse: 'katte-ku', fase: 1, ref: 'ref-Cat_Stretch-1.jpg', navn: 'katteku-katt', seedTillegg: 0, controlEnd: 0.35 },
+
+  // Sideplanke: rotasjon om kroppsaksen, som et 2D-skjelett heller ikke bærer.
+  { øvelse: 'sideplanke', fase: 0, ref: 'ref-Side_Bridge-1.jpg', navn: 'sideplanke', seedTillegg: 0, controlEnd: 0.35 },
+];
+
 async function main() {
   const dryRun = process.argv.includes('--dry-run');
   const token = getKitorToken(ROOT);
-
-  const ex = EXERCISE_LIBRARY.find((e) => e.id === ØVELSE);
-  if (!ex) throw new Error(`Ukjent øvelse: ${ØVELSE}`);
-  const prompt = buildComfyPromptJob(ex, FASE).positivePrompt;
-  const seed = seedForExercise(ØVELSE);
-
-  const refSti = path.join(
+  const refDir =
     process.env.DYBDE_REF_DIR ??
-      'C:/Users/EIRIKW~1/AppData/Local/Temp/claude/C--dev-Trening/a06a4570-b34b-4ef5-8020-bb7c038fb38e/scratchpad',
-    REFERANSE
-  );
-  if (!fs.existsSync(refSti)) throw new Error(`Fant ikke referansen: ${refSti}`);
+    'C:/Users/EIRIKW~1/AppData/Local/Temp/claude/C--dev-Trening/a06a4570-b34b-4ef5-8020-bb7c038fb38e/scratchpad';
 
-  /**
-   * Variantene, og hva hver av dem skal svare på.
-   *
-   * Normalkart er ute: målingen 2026-09-02 ga liggende på RYGGEN med samme seed
-   * der dybde ga riktig positur. Å kjøre den om igjen ville brukt GPU-tid på et
-   * spørsmål som allerede er besvart.
-   */
-  const varianter = [
-    /**
-     * TIDLIG SLIPP. Klessilhuetten fra kildefotoet følger med fordi ControlNet
-     * fortsatt er aktiv når modellen maler plaggdetaljene. Vi har ikke funnet
-     * noen solo-superman med tettsittende tøy i free-exercise-db — bildene er
-     * fra én gym-fotografering med løse klær, og flere mageøvelser har hjelper
-     * i bildet. Så i stedet for å bytte kilde: hold styrken oppe så posituren
-     * låses, men slipp tidligere så detaljfasen er prompten sin.
-     */
-    { navn: 'tidlig35', personMaske: true, syntetiskGulv: true, mykKant: 0, maskeTerskel: 0, controlStrength: 0.9, controlEnd: 0.35 },
-    { navn: 'tidlig25', personMaske: true, syntetiskGulv: true, mykKant: 0, maskeTerskel: 0, controlStrength: 0.95, controlEnd: 0.25 },
-  ];console.log(`Øvelse: ${ØVELSE} fase ${FASE}  ·  seed ${seed}  ·  LoRA ${LORA_STYRKE}`);
-  console.log(`Referanse: ${REFERANSE} (free-exercise-db, Unlicense)`);
-  console.log(`Varianter: ${varianter.map((v) => v.navn).join(', ')}\n`);
+  console.log(`${JOBBER.length} bilder · LoRA ${LORA_STYRKE} · personmaske + syntetisk gulv
+`);
 
   if (dryRun) {
-    console.log('Prompt:\n' + prompt);
-    const wf = byggWorkflow(prompt, seed, 'test', 'ref.jpg', 'depth', {
-      maskeTerskel: 0.35,
-    }) as Record<string, { class_type: string }>;
-    console.log('\nNoder: ' + Object.values(wf).map((n) => n.class_type).join(' → '));
+    for (const j of JOBBER) {
+      const ex = EXERCISE_LIBRARY.find((e) => e.id === j.øvelse);
+      console.log(`${j.navn.padEnd(14)} ${j.øvelse} f${j.fase}  ←  ${j.ref}  ${ex ? '' : '⚠ UKJENT ØVELSE'}`);
+    }
     console.log('\n[tørrkjøring] Ingen GPU brukt.');
     return;
   }
 
-  const refNavn = await uploadRef(token, refSti, `superman-ref.jpg`);
-  console.log(`Referanse lastet opp: ${refNavn}`);
+  // Alle referansene lastes opp FØR leasen tas — opplasting bruker ingen GPU,
+  // og en lease som venter på nettverket blokkerer andre prosjekter.
+  const refNavn = new Map<string, string>();
+  for (const fil of [...new Set(JOBBER.map((j) => j.ref))]) {
+    const sti = path.join(refDir, fil);
+    if (!fs.existsSync(sti)) throw new Error(`Fant ikke referansen: ${sti}`);
+    refNavn.set(fil, await uploadRef(token, sti, fil));
+  }
+  console.log(`${refNavn.size} referanser lastet opp.`);
 
   fs.mkdirSync(UT_DIR, { recursive: true });
   const leaseToken = await acquireGpuLeaseWithRetry(token, 1, 200);
   const start = Date.now();
+  let ok = 0;
 
   try {
-    for (const v of varianter) {
-      const filnavn = `${ØVELSE}_f${FASE}_${v.navn}`;
+    for (const [i, j] of JOBBER.entries()) {
+      const ex = EXERCISE_LIBRARY.find((e) => e.id === j.øvelse);
+      if (!ex) {
+        console.warn(`✗ ${j.navn}: ukjent øvelse ${j.øvelse}`);
+        continue;
+      }
+      const prompt = buildComfyPromptJob(ex, j.fase).positivePrompt;
+      const seed = seedForExercise(j.øvelse) + j.seedTillegg;
+
       try {
-        const wf = byggWorkflow(prompt, seed, filnavn, refNavn, 'depth', {
-          personMaske: v.personMaske,
-          syntetiskGulv: v.syntetiskGulv,
-          mykKant: v.mykKant,
-          maskeTerskel: v.maskeTerskel,
-          controlStrength: v.controlStrength,
-          controlEnd: v.controlEnd,
+        const wf = byggWorkflow(prompt, seed, j.navn, refNavn.get(j.ref)!, 'depth', {
+          personMaske: true,
+          syntetiskGulv: true,
+          mykKant: 0,
+          controlStrength: 0.9,
+          controlEnd: j.controlEnd,
         });
         const promptId = await submitPrompt(token, wf);
         const bilde = await waitForCompletion(token, promptId, 300);
         if (!bilde?.filename) throw new Error('ingen filreferanse');
-        await downloadImage(token, bilde, path.join(UT_DIR, `${filnavn}.png`));
-        console.log(`✓ ${v.navn}`);
+        await downloadImage(token, bilde, path.join(UT_DIR, `${j.navn}.png`));
+        ok++;
+        console.log(`[${i + 1}/${JOBBER.length}] ✓ ${j.navn}`);
       } catch (err) {
-        console.warn(`✗ ${v.navn}: ${(err as Error).message}`);
+        console.warn(`[${i + 1}/${JOBBER.length}] ✗ ${j.navn}: ${(err as Error).message}`);
       }
+
+      if (i % 5 === 4) await sendHeartbeat(token, leaseToken);
     }
   } finally {
     await releaseGpuLease(token, leaseToken);
   }
 
-  console.log(`\nFerdig på ${((Date.now() - start) / 60000).toFixed(1)} min → ${UT_DIR}`);
+  console.log(`\nFerdig: ${ok}/${JOBBER.length} på ${((Date.now() - start) / 60000).toFixed(1)} min → ${UT_DIR}`);
 }
 
 main().catch((err) => {
