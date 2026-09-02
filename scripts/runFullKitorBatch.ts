@@ -247,11 +247,30 @@ export async function runFullBatch(argv: string[] = process.argv.slice(2)) {
   const exerciseIdx = argv.indexOf('--exercise');
   const targetExerciseId = exerciseIdx !== -1 && argv[exerciseIdx + 1] ? argv[exerciseIdx + 1] : undefined;
 
+  // --exercises tar en kommaliste. Et forsøk er sjelden én øvelse: skal vi måle
+  // om en promptendring virker, trenger vi flere øvelser med samme egenskap.
+  const flereIdx = argv.indexOf('--exercises');
+  const flereIder = flereIdx !== -1 && argv[flereIdx + 1] ? argv[flereIdx + 1].split(',').map((x) => x.trim()) : undefined;
+
+  // --out lar et forsøk skrive et annet sted enn public/images/exercises.
+  // Uten den overskriver enhver prøve bildene som ligger i appen, og da er det
+  // ingen veg tilbake om prøven ble dårligere enn det vi hadde.
+  const outIdx = argv.indexOf('--out');
+  const outArg = outIdx !== -1 && argv[outIdx + 1] ? argv[outIdx + 1] : undefined;
+
   let exercises = EXERCISE_LIBRARY;
   if (targetExerciseId) {
     exercises = exercises.filter((e) => e.id === targetExerciseId);
     if (exercises.length === 0) {
       console.error(`❌ Fant ingen øvelse med id "${targetExerciseId}"`);
+      return;
+    }
+  }
+  if (flereIder) {
+    exercises = exercises.filter((e) => flereIder.includes(e.id));
+    const ukjente = flereIder.filter((id) => !EXERCISE_LIBRARY.some((e) => e.id === id));
+    if (ukjente.length > 0) {
+      console.error(`❌ Ukjente øvelses-id-er: ${ukjente.join(', ')}`);
       return;
     }
   }
@@ -297,7 +316,9 @@ export async function runFullBatch(argv: string[] = process.argv.slice(2)) {
       if (leaseToken) sendHeartbeat(token, leaseToken);
     }, 3 * 60 * 1000);
 
-    const outputDir = path.resolve(process.cwd(), 'public', 'images', 'exercises');
+    const outputDir = outArg
+      ? path.resolve(process.cwd(), outArg)
+      : path.resolve(process.cwd(), 'public', 'images', 'exercises');
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
     let total = 0;
@@ -327,7 +348,7 @@ export async function runFullBatch(argv: string[] = process.argv.slice(2)) {
 
         const imgInfo = await waitForCompletion(token, promptId, 120);
         await downloadImage(token, imgInfo, targetPath);
-        console.log(`   ✨ Lagret bilde til: public/images/exercises/${exercise.id}-${phaseIdx}.png`);
+        console.log(`   ✨ Lagret bilde til: ${path.relative(process.cwd(), targetPath)}`);
       }
     }
 
