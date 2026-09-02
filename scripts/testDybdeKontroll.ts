@@ -104,8 +104,26 @@ function byggWorkflow(
      * Null = ingen maskering, og det er det som gjelder inntil videre.
      */
     maskeTerskel = 0,
+    /**
+     * Maskér dybdekartet til PERSONEN med BiRefNet.
+     *
+     * Levert av kitor-eier 2026-09-02 etter bestilling. Dette er det terskelen
+     * ikke kunne: en segmentering finner kroppen uansett hvor i dybdeplanet
+     * delene av den ligger, i stedet for å skjære scenen i et avstandsplan.
+     */
+    personMaske = false,
+    /**
+     * Myk maskekant i piksler.
+     *
+     * Var 6, og ga en synlig GLORIE rundt figuren ved kontrollstyrke 0,9: en
+     * myket kant lager mellomliggende dybdeverdier mellom kroppen og den svarte
+     * bakgrunnen, og ControlNet gjengir dem som en ekte flate. Hard kant (0)
+     * har ikke det problemet.
+     */
+    mykKant = 0,
   } = {}
 ) {
+  const maskerer = personMaske || maskeTerskel > 0;
   const preprocessor =
     modus === 'depth'
       ? { class_type: 'DepthAnythingV2Preprocessor', inputs: { image: ['20', 0], resolution: 1024 } }
@@ -149,6 +167,21 @@ function byggWorkflow(
     },
     // Svart = uendelig langt unna. Alt utenfor masken blir dermed noe modellen
     // står fritt til å finne på, styrt av prompten.
+    // BiRefNet: personmaske rett fra referansefotoet, ikke fra dybdekartet.
+    '28': {
+      inputs: { bg_removal_name: 'birefnet.safetensors' },
+      class_type: 'LoadBackgroundRemovalModel',
+    },
+    '29': {
+      inputs: { bg_removal_model: ['28', 0], image: ['20', 0] },
+      class_type: 'RemoveBackground',
+    },
+    '30': { inputs: { mask: ['29', 0], expand: 2, tapered_corners: true }, class_type: 'GrowMask' },
+    '31': {
+      inputs: { mask: ['30', 0], left: mykKant, top: mykKant, right: mykKant, bottom: mykKant },
+      class_type: 'FeatherMask',
+    },
+
     '26': { inputs: { width: BREDDE, height: HØYDE, batch_size: 1, color: 0 }, class_type: 'EmptyImage' },
     '27': {
       inputs: {
@@ -157,7 +190,7 @@ function byggWorkflow(
         x: 0,
         y: 0,
         resize_source: false,
-        mask: ['25', 0],
+        mask: personMaske ? ['31', 0] : ['25', 0],
       },
       class_type: 'ImageCompositeMasked',
     },
@@ -169,7 +202,7 @@ function byggWorkflow(
         positive: ['7', 0],
         negative: ['5', 0],
         control_net: ['13', 0],
-        image: maskeTerskel > 0 ? ['27', 0] : ['21', 0],
+        image: maskerer ? ['27', 0] : ['21', 0],
         // Flux-ControlNet krever VAE. Uten den feiler KSampler med
         // «This Controlnet needs a VAE but none was provided» — og
         // kontrollbildet blir laget likevel, så feilen ser ut som en timeout.
@@ -196,7 +229,7 @@ function byggWorkflow(
         filename_prefix: `mintrener/${filnavn}_kontroll`,
         // Det MASKERTE bildet når vi maskerer. Lagret vi råkartet, ville vi sett
         // på noe annet enn det modellen ble styrt av.
-        images: maskeTerskel > 0 ? ['27', 0] : ['21', 0],
+        images: maskerer ? ['27', 0] : ['21', 0],
       },
       class_type: 'SaveImage',
     },
@@ -227,15 +260,11 @@ async function main() {
    * spørsmål som allerede er besvart.
    */
   const varianter = [
-    // Løser maskering rom-forurensningen?
-    { navn: 'maske35', maskeTerskel: 0.35, controlStrength: 0.9, controlEnd: 0.65 },
-    { navn: 'maske55', maskeTerskel: 0.55, controlStrength: 0.9, controlEnd: 0.65 },
-    // Kontroll: holder det å svekke ControlNet, uten maskering? Uten denne vet
-    // vi ikke om maskeringen gjorde jobben eller om en løsere tøyle var nok.
-    { navn: 'svak', maskeTerskel: 0, controlStrength: 0.55, controlEnd: 0.45 },
-  ];
-
-  console.log(`Øvelse: ${ØVELSE} fase ${FASE}  ·  seed ${seed}  ·  LoRA ${LORA_STYRKE}`);
+    // Hard maskekant. Myk kant ga glorie ved 0,9 — mellomliggende dybdeverdier
+    // mellom kropp og svart bakgrunn leses som en ekte flate.
+    { navn: 'hard90', personMaske: true, mykKant: 0, maskeTerskel: 0, controlStrength: 0.9, controlEnd: 0.65 },
+    { navn: 'hard80', personMaske: true, mykKant: 0, maskeTerskel: 0, controlStrength: 0.8, controlEnd: 0.6 },
+  ];  console.log(`Øvelse: ${ØVELSE} fase ${FASE}  ·  seed ${seed}  ·  LoRA ${LORA_STYRKE}`);
   console.log(`Referanse: ${REFERANSE} (free-exercise-db, Unlicense)`);
   console.log(`Varianter: ${varianter.map((v) => v.navn).join(', ')}\n`);
 
@@ -261,6 +290,8 @@ async function main() {
       const filnavn = `${ØVELSE}_f${FASE}_${v.navn}`;
       try {
         const wf = byggWorkflow(prompt, seed, filnavn, refNavn, 'depth', {
+          personMaske: v.personMaske,
+          mykKant: v.mykKant,
           maskeTerskel: v.maskeTerskel,
           controlStrength: v.controlStrength,
           controlEnd: v.controlEnd,

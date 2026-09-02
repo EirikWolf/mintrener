@@ -139,9 +139,90 @@ forsøket lykkes, bør Beslutning 49 revurderes. Om det ikke lykkes, står den.
 - Vi installerer den ikke selv. Å legge filer i `/srv/kitor/` er en konfigendring
   på en delt vert, og den beslutningen er kitor-eiers.
 
+## Svar fra kitor-eier (2026-09-02)
+
+**Status: LEVERT.** `birefnet.safetensors` (444 MB, MIT — verifisert mot
+Comfy-Org/BiRefNet på HF) ligger i
+`/srv/kitor/models/comfyui/background_removal/`, og modellen er **verifisert
+synlig i `object_info` nå** — dere kan bruke `LoadBackgroundRemovalModel` →
+`RemoveBackground` i `/comfy-mintrener`-grafen umiddelbart.
+
+Én teknisk korreksjon til bestillingen: `background_removal` var ikke en
+nøkkel i `extra_model_paths.yaml`, så mappa dere foreslo ville ikke blitt
+skannet. Løst i to lag: (1) symlink fra default-mappa
+`/opt/comfyui/models/background_removal/` → NVMe-stien gir synlighet uten
+ComfyUI-restart, (2) [kitor-infra#83](https://github.com/EirikWolf/kitor-infra/pull/83)
+legger nøkkelen permanent i `extra_model_paths.yaml` (aktiveres ved neste
+naturlige restart; symlinken er harmløs og kan bli liggende).
+
+VRAM-anslaget deres (1–2 GB) verifiseres enklest av dere i første reelle
+kjøring under lease — mål gjerne og noter i dette dokumentet.
+
+Ros for formen: kapasitets-merkingen, de tre kriteriene og «vi installerer
+ikke selv» er nøyaktig slik runbooken vil ha det.
+
 ## Referanser
 
 - [Bestille kitor-tilgang](../../homelab-vault/03-Runbooks/Bestille-kitor-tilgang.md) — malen denne følger
 - [ComfyUI: Remove Image Background with BiRefNet](https://docs.comfy.org/tutorials/utility/remove-background-birefnet) — offisiell oppsettsdokumentasjon
 - `docs/DECISIONS.md` — Beslutning 48 (Flux-lisensen) og 49 (illustrasjonssporet)
 - `scripts/testDybdeKontroll.ts` — testen som produserte målingene over
+
+## Målt VRAM og første resultater (Min Trener, 2026-09-02)
+
+### VRAM — anslaget var for høyt
+
+Samplet `nvidia-smi` hvert 2. sekund gjennom en hel kjøring under lease:
+
+| Tid | VRAM | Hva skjer |
+|---|---|---|
+| 0–20 s | 22 237 MiB | vLLM kjører |
+| 24 s | **338 MiB** | Arbiter stoppet vLLM — GPU tom |
+| 28 s | **870 MiB** | Preprosessorene lastet |
+| 32–44 s | 6 160 → 22 864 MiB | Flux + ControlNet lastes, topp |
+| 112 s | 426 MiB | Lease frigitt |
+
+**BiRefNet + Depth Anything V2 (vitl) bruker til sammen rundt 0,5 GB over
+tomgang.** Vi anslo 1–2 GB for BiRefNet alene; det var for høyt. Forbeholdet er
+at 2 sekunders sampling ikke skiller de to preprosessorene, så tallet er felles
+for begge — men størrelsesordenen er klar, og BiRefNet er billigere enn vi sa.
+
+Et tall til, som gjelder oss og ikke BiRefNet: **toppen under lease var 22 864
+MiB av 24 576 — 93 %.** Flux fp8 + ControlNet Union Pro er trangt i seg selv.
+Det er verdt å vite hvis noen vurderer å kjøre noe samtidig i `image`-kategorien.
+
+### Resultater — masken løser rommet, men fjerner gulvet
+
+Testen: superman, liggende på magen, som 2D-skjelettet aldri fikk til.
+
+| Variant | Orientering | Rom | Antrekk | Bakkekontakt |
+|---|---|---|---|---|
+| Dybde 0,9, umaskert | ✅ mage | ❌ stativer, vektstang | ❌ joggebukse | ✅ |
+| Dybde 0,55, umaskert | ✅ mage | ✅ | ✅ | ✅ |
+| BiRefNet 0,9, myk kant | ✅ mage | ✅ | ~ | ✅ |
+| BiRefNet 0,7, myk kant | ✅ mage | ✅ | ✅ | ✅ |
+| BiRefNet 0,9, hard kant | ✅ mage | ✅ | ~ | ❌ **svever** |
+| BiRefNet 0,8, hard kant | ❌ rygg | ✅ | ✅ | ✅ |
+
+**BiRefNet gjør jobben den ble bestilt for:** kildefotoets rom forsvinner helt.
+Ingen stativer, ingen vektstang — vårt eget lyse studio hver gang.
+
+**To nye funn:**
+
+1. **Myk maskekant gir glorie.** Ved kontrollstyrke 0,9 ble den mykede kanten en
+   synlig gjennomsiktig kontur rundt figuren. Årsaken er at mykningen lager
+   mellomliggende dybdeverdier mellom kroppen og den svarte bakgrunnen, og
+   ControlNet gjengir dem som en ekte flate. Hard kant fjerner glorien.
+
+2. **Hard maske fjerner gulvet, og gulvet er bærende.** Maskerer man til KUN
+   personen, forsvinner også matta hun ligger på. Modellen fikk ingen bakke å
+   plassere henne mot, og hun endte svevende i lufta. For en liggende øvelse er
+   underlaget en del av informasjonen.
+
+Neste steg er derfor ikke svart bakgrunn, men et **syntetisk gulv**: personens
+dybde komponert på en enkel gradient som leser som et underlag, i stedet for
+`EmptyImage(color=0)`. Da beholder vi både rommet vårt og bakkekontakten.
+
+Ingenting av dette er kritikk av leveransen — modellen gjør presis det den
+skulle. Notert her fordi runbooken ber om det, og fordi neste prosjekt som
+maskerer et dybdekart vil gå i samme felle.
