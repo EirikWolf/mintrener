@@ -20,6 +20,18 @@ interface FeedbackMap {
 }
 
 const STORAGE_KEY = 'mintrener_image_curator_feedback';
+/**
+ * Valgt kandidat per bilde, atskilt fra tilbakemeldingene.
+ *
+ * Et seed-valg og en tekstlig anmerkning er to ulike ting: valget sier hvilken
+ * av tre genereringer som skal inn i appen, anmerkningen sier hva som er galt
+ * med den som ligger der nå. Å blande dem i én nøkkel ville gjort det umulig å
+ * si «denne kandidaten er valgt, men den har fortsatt en feil».
+ */
+const VALG_KEY = 'mintrener_image_curator_valg';
+
+/** Skrives av scripts/publiserKandidater.ts. Nøkkel → tilgjengelige seeds. */
+type Kandidatmanifest = Record<string, string[]>;
 
 interface ExerciseImageCuratorViewProps {
   onNavigateToTimer?: () => void;
@@ -29,6 +41,35 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
   onNavigateToTimer,
 }) => {
   const { user } = useAuth();
+  const [kandidater, setKandidater] = useState<Kandidatmanifest>({});
+  const [valg, setValg] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(VALG_KEY) ?? '{}');
+    } catch {
+      return {};
+    }
+  });
+
+  // Manifestet er valgfritt: har man ikke kjørt publiserKandidater, skal siden
+  // fungere nøyaktig som før i stedet for å feile.
+  useEffect(() => {
+    fetch('/images/kandidater/manifest.json')
+      .then((r) => (r.ok ? r.json() : {}))
+      .then(setKandidater)
+      .catch(() => setKandidater({}));
+  }, []);
+
+  const velgKandidat = (nøkkel: string, seed: string) => {
+    const neste = { ...valg };
+    // Klikk på det valgte fjerner valget. Uten det kan man ikke ombestemme seg
+    // til «ingen av dem duger» etter først å ha valgt en.
+    if (neste[nøkkel] === seed) delete neste[nøkkel];
+    else neste[nøkkel] = seed;
+    setValg(neste);
+    localStorage.setItem(VALG_KEY, JSON.stringify(neste));
+    setSuccessMsg(neste[nøkkel] ? `${nøkkel}: valgte ${seed}` : `${nøkkel}: valg fjernet`);
+    setTimeout(() => setSuccessMsg(null), 2000);
+  };
   const [exercises] = useState<ExerciseItem[]>(EXERCISE_LIBRARY);
   const [selectedCategory, setSelectedCategory] = useState<string>('alle');
   const [feedbackMap, setFeedbackMap] = useState<FeedbackMap>(() => {
@@ -114,6 +155,7 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
           kommentar: post?.feedback ?? '',
           vurdertAt: post?.updatedAt ?? null,
           kameravinkel: ex.bildeVinkel ?? 'side',
+          valgtKandidat: valg[`${ex.id}-${fase}`] ?? null,
           nåværendePrompt: ex.bildePrompt?.[String(fase)] ?? null,
         };
       })
@@ -320,6 +362,53 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
                         className="w-full h-full"
                       />
                     </div>
+
+                    {/* Kandidater fra dybdebatchen — synlige bare der de finnes */}
+                    {(kandidater[key]?.length ?? 0) > 0 && (
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-zinc-400 flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-sky-400" />
+                          Velg kandidat ({kandidater[key].length} seeds)
+                        </span>
+                        <div
+                          className="grid grid-cols-3 gap-1.5"
+                          role="group"
+                          aria-label={`Kandidatbilder for ${exercise.navn.nb}, fase ${phaseIdx + 1}`}
+                        >
+                          {kandidater[key].map((seed) => {
+                            const valgt = valg[key] === seed;
+                            return (
+                              <button
+                                key={seed}
+                                type="button"
+                                onClick={() => velgKandidat(key, seed)}
+                                aria-pressed={valgt}
+                                aria-label={`${exercise.navn.nb}, fase ${phaseIdx + 1}, kandidat ${seed}${valgt ? ' (valgt)' : ''}`}
+                                className={`relative rounded-lg overflow-hidden border-2 transition-all ${
+                                  valgt
+                                    ? 'border-sky-400 ring-2 ring-sky-500/40'
+                                    : 'border-zinc-800 hover:border-zinc-600'
+                                }`}
+                              >
+                                <img
+                                  src={`/images/kandidater/${key}-${seed}.png`}
+                                  alt=""
+                                  loading="lazy"
+                                  className="w-full h-20 object-cover"
+                                />
+                                <span
+                                  className={`absolute bottom-0 inset-x-0 text-[9px] font-bold py-0.5 ${
+                                    valgt ? 'bg-sky-500 text-white' : 'bg-black/70 text-zinc-300'
+                                  }`}
+                                >
+                                  {valgt ? `✓ ${seed}` : seed}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Tilbakemeldingsfelt */}
                     <div className="space-y-1">
