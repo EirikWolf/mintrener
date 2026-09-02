@@ -32,7 +32,7 @@ const BASIS = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/e
  * viser start på 0 og slutt på 1, men for øvelser der vår fase 0 er en hvile-
  * eller forberedelsesstilling, kan riktig kilde ligge i det andre bildet.
  */
-export const REFERANSER: Record<string, { mappe: string; bilde: 0 | 1 }> = {
+export const REFERANSER: Record<string, { mappe: string; bilde: 0 | 1; speil?: true }> = {
   'planke-0': { mappe: 'Plank', bilde: 0 },
   'planke-1': { mappe: 'Plank', bilde: 1 },
   'push-ups-0': { mappe: 'Pushups', bilde: 0 },
@@ -43,14 +43,18 @@ export const REFERANSER: Record<string, { mappe: string; bilde: 0 | 1 }> = {
   'rygghev-superman-0': { mappe: 'Superman', bilde: 0 },
   'rygghev-superman-1': { mappe: 'Superman', bilde: 1 },
   // Sideplanke finnes som tre øvelser hos oss (nøytral, høyre, venstre), men
-  // er én positur speilvendt. Samme kilde til alle tre — speilingen er en
-  // egenskap ved øvelsen, ikke ved referansen.
+  // er én positur speilvendt. Basen har bare høyre side — verifisert ved å se
+  // på fotoet: mannen ligger på HØYRE underarm.
+  //
+  // Første kjøring koblet samme referanse til alle tre og lot prompten («left
+  // forearm») ordne resten. Den taper: dybdekartet bestemmer siden, så alle
+  // seks venstre-bildene kom ut som høyre sideplanke. Derfor speiles kilden.
   'sideplanke-0': { mappe: 'Side_Bridge', bilde: 0 },
   'sideplanke-1': { mappe: 'Side_Bridge', bilde: 1 },
   'sideplanke-hoyre-0': { mappe: 'Side_Bridge', bilde: 0 },
   'sideplanke-hoyre-1': { mappe: 'Side_Bridge', bilde: 1 },
-  'sideplanke-venstre-0': { mappe: 'Side_Bridge', bilde: 0 },
-  'sideplanke-venstre-1': { mappe: 'Side_Bridge', bilde: 1 },
+  'sideplanke-venstre-0': { mappe: 'Side_Bridge', bilde: 0, speil: true },
+  'sideplanke-venstre-1': { mappe: 'Side_Bridge', bilde: 1, speil: true },
   // FASENE ER FORSKJØVET mot basens. Deres bilde 0 er et oppreist utfall med
   // hendene ledige; vår fase 0 krever begge håndflater i gulvet innenfor
   // fremre fot. Det er deres bilde 1 som viser den stillingen. Oppdaget ved å

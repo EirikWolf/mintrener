@@ -114,6 +114,15 @@ export function byggWorkflow(
      */
     personMaske = false,
     /**
+     * Speilvend referansen vannrett.
+     *
+     * Sideplanke finnes hos oss som høyre og venstre variant, og de skal være
+     * speilbilder av hverandre. Basen har bare ÉN side. Uten speiling får begge
+     * variantene samme støttearm — dybdekartet bestemmer siden, og prompten
+     * («right forearm» / «left forearm») taper mot den.
+     */
+    speil = false,
+    /**
      * Myk maskekant i piksler.
      *
      * Var 6, og ga en synlig GLORIE rundt figuren ved kontrollstyrke 0,9: en
@@ -178,8 +187,17 @@ export function byggWorkflow(
     '19': { inputs: { image: refBilde }, class_type: 'LoadImage' },
     // Beskjæres mot midten: kontrollbildet må ha samme sideforhold som latenten,
     // ellers forskyves posituren (vedlegg A § A.6).
+    ...(speil
+      ? { '19b': { inputs: { image: ['19', 0], flip_method: 'y-axis: horizontally' }, class_type: 'ImageFlip' } }
+      : {}),
     '20': {
-      inputs: { image: ['19', 0], upscale_method: 'lanczos', width: BREDDE, height: HØYDE, crop: 'center' },
+      inputs: {
+        image: speil ? ['19b', 0] : ['19', 0],
+        upscale_method: 'lanczos',
+        width: BREDDE,
+        height: HØYDE,
+        crop: 'center',
+      },
       class_type: 'ImageScale',
     },
     '21': { inputs: preprocessor.inputs, class_type: preprocessor.class_type },
