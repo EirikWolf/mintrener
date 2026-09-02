@@ -105,3 +105,56 @@ Dette er ikke «sunk cost» — det er en vellykket teknisk iterasjon fra en fei
 
 ### Konklusjon
 Bygg ferdig denne batchen. Dere er ett skript og én natts GPU-kjøring unna et komplett, høykvalitets og visuelt konsistent øvelsesbibliotek.
+
+---
+
+## Vårt svar tilbake: tiltakene er testet, og 85 %-påstanden holder ikke
+
+**Målt 2026-09-02, etter revisjonen.**
+
+### VRAM-innvendingen vår var ubegrunnet
+
+Vi antok at to ControlNet ikke ville få plass med 1,7 GB ledig. Målt topp:
+**22 736 MiB med to, mot 22 864 MiB med én.** ComfyUI deler den lastede
+modellen mellom to `SetUnionControlNetType`-noder. Tiltak A er gratis i VRAM.
+
+### Første forsøk var vår metodefeil, ikke revisorens
+
+Vi kjørte alle tre tiltakene samtidig og endret i tillegg kontrollstyrke og
+vindu — seks variabler på én gang. Resultat: **0 av 4**. To av endringene
+(myk kant 12 px, maskevekst 30 px) gjeninnførte feilmoduser vi allerede hadde
+målt bort: glorie og kildens rom. Betongveggen fra kildefotoets gym kom rett
+tilbake.
+
+### Ren enkeltvariabel-test: ankeret hjelper ikke
+
+Alt tilbake til kjent godt oppsett, eneste nye er positur-ankeret (0,30) og
+romlig prompt.
+
+| Oppsett | Treff |
+|---|---|
+| Grunnlinje, uten anker | 1 av 3 |
+| Alle tre tiltak + endrede parametre | 0 av 4 |
+| **Kun anker + romlig prompt** | **1 av 4** |
+
+Ankeret flyttet ikke treffraten. Seed 1 og 2 gir tohodede figurer med og uten
+det; seed 0 virker med og uten.
+
+### Det betyr at hypotesen vår trolig er feil
+
+Revisor kalte symmetri-hypotesen «100 % presis og matematisk velfundert». Men
+et OpenPose-skjelett gir nøyaktig den semantiske forankringen hypotesen sier
+mangler — hvor hodet er og hvor føttene er — og **det endret ingenting**.
+
+Da er forklaringen sannsynligvis en annen. Vi vet ikke hvilken.
+
+### Én ting ble bedre
+
+[anker-0](bilder/dybdekontroll-2026-09-02/8-anker-vellykket.png) er det beste
+bildet i hele forsøksrekken: korrekt superman, bakkekontakt, vårt rom, og for
+første gang **tettsittende antrekk** i stedet for kildens joggebukse. Om det
+skyldes den romlige prompten eller tilfeldighet vet vi ikke — det er én
+observasjon.
+
+[anker-2](bilder/dybdekontroll-2026-09-02/9-anker-to-hoder-likevel.png) viser
+feilmodusen som ikke lot seg fjerne: hode i begge ender, med ankeret aktivt.

@@ -136,6 +136,21 @@ function byggWorkflow(
      * trenger et plausibelt underlag, ikke en presis dybdemodell av rommet.
      */
     syntetiskGulv = false,
+    /**
+     * Svakt OpenPose-skjelett i parallell med dybden.
+     *
+     * Revisors tiltak A, og det som treffer symmetrihypotesen direkte. Et
+     * 2D-skjelett kan ikke uttrykke orientering — det var hele grunnen til at
+     * vi forlot det. Men som SVAKT tilleggssignal gjør det den ene tingen
+     * dybdekartet ikke gjør: sier hvor hodet er og hvor føttene er. En vannrett
+     * figur med armer ut den ene veien og bein ut den andre er nesten
+     * symmetrisk, og modellen leste den som to kropper.
+     *
+     * Skjelettene fra kroppsmodellen er dermed ikke bortkastet likevel.
+     */
+    posAnker = '',
+    posStyrke = 0.3,
+    maskeVekst = 2,
   } = {}
 ) {
   const maskerer = personMaske || maskeTerskel > 0;
@@ -191,7 +206,10 @@ function byggWorkflow(
       inputs: { bg_removal_model: ['28', 0], image: ['20', 0] },
       class_type: 'RemoveBackground',
     },
-    '30': { inputs: { mask: ['29', 0], expand: 2, tapered_corners: true }, class_type: 'GrowMask' },
+    // Tiltak B: masken dilateres kraftig. Da følger kildens gulvdybde RUNDT
+    // kontaktpunktene med, og med den kontaktskyggen som forteller modellen at
+    // hun hviler mot noe. Hard maske på 2 px ga en figur som svevde.
+    '30': { inputs: { mask: ['29', 0], expand: maskeVekst, tapered_corners: true }, class_type: 'GrowMask' },
     '31': {
       inputs: { mask: ['30', 0], left: mykKant, top: mykKant, right: mykKant, bottom: mykKant },
       class_type: 'FeatherMask',
@@ -249,10 +267,37 @@ function byggWorkflow(
       class_type: 'ControlNetApplyAdvanced',
     },
 
+    // Positur-ankeret. Samme ControlNetLoader ('12') mates inn i en ANNEN
+    // SetUnionControlNetType — hvis ComfyUI deler den lastede modellen, koster
+    // dette ingen ekstra VRAM. Toppen lå på 22 864 av 24 576 MiB fra før, så
+    // det er verdt å måle om den antakelsen holder.
+    '40': { inputs: { image: posAnker }, class_type: 'LoadImage' },
+    '41': {
+      inputs: { image: ['40', 0], upscale_method: 'lanczos', width: BREDDE, height: HØYDE, crop: 'center' },
+      class_type: 'ImageScale',
+    },
+    '42': { inputs: { control_net: ['12', 0], type: 'openpose' }, class_type: 'SetUnionControlNetType' },
+    '43': {
+      inputs: {
+        positive: ['14', 0],
+        negative: ['14', 1],
+        control_net: ['42', 0],
+        image: ['41', 0],
+        vae: ['3', 0],
+        strength: posStyrke,
+        start_percent: 0.0,
+        end_percent: controlEnd,
+      },
+      class_type: 'ControlNetApplyAdvanced',
+    },
+
     '8': {
       inputs: {
         seed, steps: 24, cfg: 1.0, sampler_name: 'euler', scheduler: 'simple', denoise: 1.0,
-        model: ['4', 0], positive: ['14', 0], negative: ['14', 1], latent_image: ['6', 0],
+        model: ['4', 0],
+        positive: posAnker ? ['43', 0] : ['14', 0],
+        negative: posAnker ? ['43', 1] : ['14', 1],
+        latent_image: ['6', 0],
       },
       class_type: 'KSampler',
     },
@@ -283,21 +328,28 @@ function byggWorkflow(
  * (Plate Twist). Den øvelsen må vente på en annen kilde.
  */
 const JOBBER = [
-  // Superman på nytt: hendene pekte feil vei. Tre seeds ved end 0,35, som var
-  // punktet der både positur og antrekk holdt. Seed-variasjon er det billigste
-  // kvalitetstiltaket som finnes (vedlegg A § A.10) — en lokal anatomifeil i
-  // hendene er nettopp det den er til for.
-  { øvelse: 'rygghev-superman', fase: 1, ref: 'superman-1.jpg', navn: 'superman-a', seedTillegg: 0, controlEnd: 0.35 },
-  { øvelse: 'rygghev-superman', fase: 1, ref: 'superman-1.jpg', navn: 'superman-b', seedTillegg: 1, controlEnd: 0.35 },
-  { øvelse: 'rygghev-superman', fase: 1, ref: 'superman-1.jpg', navn: 'superman-c', seedTillegg: 2, controlEnd: 0.35 },
-
-  // Katte-ku: den andre øvelsen 2D-skjelettet ikke kunne uttrykke — katt og ku
-  // ga identiske skjeletter fordi COCO-18 ikke har ledd i ryggen.
-  { øvelse: 'katte-ku', fase: 0, ref: 'ref-Cat_Stretch-0.jpg', navn: 'katteku-ku', seedTillegg: 0, controlEnd: 0.35 },
-  { øvelse: 'katte-ku', fase: 1, ref: 'ref-Cat_Stretch-1.jpg', navn: 'katteku-katt', seedTillegg: 0, controlEnd: 0.35 },
-
-  // Sideplanke: rotasjon om kroppsaksen, som et 2D-skjelett heller ikke bærer.
-  { øvelse: 'sideplanke', fase: 0, ref: 'ref-Side_Bridge-1.jpg', navn: 'sideplanke', seedTillegg: 0, controlEnd: 0.35 },
+  /**
+   * ÉN variabel om gangen. Første forsøk endret seks ting samtidig — revisors
+   * tre tiltak pluss kontrollstyrke, vindu og maskeparametre — og ga 0 av 4.
+   * To av endringene (myk kant 12 px, maskevekst 30 px) gjeninnførte feilmoduser
+   * vi allerede hadde målt bort: glorie og kildens rom.
+   *
+   * Her er alt tilbake til det kjent gode oppsettet, og det ENESTE nye er
+   * positur-ankeret (tiltak A) pluss romlig prompt (tiltak C, som er gratis).
+   * Fire seeds: kjent grunnlinje er 1 av 3.
+   */
+  { øvelse: 'rygghev-superman', fase: 1, ref: 'superman-1.jpg', navn: 'anker-0', seedTillegg: 0,
+    controlEnd: 0.35, posAnker: 'superman-pose.png', posStyrke: 0.3, maskeVekst: 2,
+    romlig: 'exactly one person with a single head, both arms stretched forward past the head, legs together extending to the opposite end of the body, no duplicate limbs' },
+  { øvelse: 'rygghev-superman', fase: 1, ref: 'superman-1.jpg', navn: 'anker-1', seedTillegg: 1,
+    controlEnd: 0.35, posAnker: 'superman-pose.png', posStyrke: 0.3, maskeVekst: 2,
+    romlig: 'exactly one person with a single head, both arms stretched forward past the head, legs together extending to the opposite end of the body, no duplicate limbs' },
+  { øvelse: 'rygghev-superman', fase: 1, ref: 'superman-1.jpg', navn: 'anker-2', seedTillegg: 2,
+    controlEnd: 0.35, posAnker: 'superman-pose.png', posStyrke: 0.3, maskeVekst: 2,
+    romlig: 'exactly one person with a single head, both arms stretched forward past the head, legs together extending to the opposite end of the body, no duplicate limbs' },
+  { øvelse: 'rygghev-superman', fase: 1, ref: 'superman-1.jpg', navn: 'anker-3', seedTillegg: 3,
+    controlEnd: 0.35, posAnker: 'superman-pose.png', posStyrke: 0.3, maskeVekst: 2,
+    romlig: 'exactly one person with a single head, both arms stretched forward past the head, legs together extending to the opposite end of the body, no duplicate limbs' },
 ];
 
 async function main() {
@@ -327,7 +379,12 @@ async function main() {
     if (!fs.existsSync(sti)) throw new Error(`Fant ikke referansen: ${sti}`);
     refNavn.set(fil, await uploadRef(token, sti, fil));
   }
-  console.log(`${refNavn.size} referanser lastet opp.`);
+  // Skjelettene lastes opp på samme måte som referansene.
+  const posNavn = new Map<string, string>();
+  for (const fil of [...new Set(JOBBER.map((j) => j.posAnker).filter(Boolean))]) {
+    posNavn.set(fil, await uploadRef(token, path.join(ROOT, 'pipeline', 'poses', 'rygghev-superman', '1_pose.png'), fil));
+  }
+  console.log(`${refNavn.size} referanser og ${posNavn.size} skjeletter lastet opp.`);
 
   fs.mkdirSync(UT_DIR, { recursive: true });
   const leaseToken = await acquireGpuLeaseWithRetry(token, 1, 200);
@@ -341,7 +398,15 @@ async function main() {
         console.warn(`✗ ${j.navn}: ukjent øvelse ${j.øvelse}`);
         continue;
       }
-      const prompt = buildComfyPromptJob(ex, j.fase).positivePrompt;
+      /**
+       * Tiltak C: romlig forankring i prompten.
+       *
+       * Formulert om ÉN kropp, ikke om venstre/høyre. Feilmodusen vår er to
+       * hoder, ikke et speilvendt hode — så det som må sies er at det finnes
+       * ett hode, at armene strekker seg FORBI det, og at beina går motsatt vei.
+       */
+      const prompt =
+        buildComfyPromptJob(ex, j.fase).positivePrompt + (j.romlig ? `, ${j.romlig}` : '');
       const seed = seedForExercise(j.øvelse) + j.seedTillegg;
 
       try {
@@ -349,8 +414,11 @@ async function main() {
           personMaske: true,
           syntetiskGulv: true,
           mykKant: 0,
+          maskeVekst: j.maskeVekst,
           controlStrength: 0.9,
           controlEnd: j.controlEnd,
+          posAnker: j.posAnker ? posNavn.get(j.posAnker)! : '',
+          posStyrke: j.posStyrke,
         });
         const promptId = await submitPrompt(token, wf);
         const bilde = await waitForCompletion(token, promptId, 300);
