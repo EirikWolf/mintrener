@@ -2,8 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { EXERCISE_LIBRARY } from '../src/data/exercises';
 import {
-  ASTRID_FLUX_BASE_STYLE,
-  ASTRID_FLUX_OUTFIT_STYLE,
+  buildComfyPromptJob,
+  seedForExercise,
   formatViewAngle,
   buildAstridFluxWorkflow,
   buildAstridWanVideoWorkflow,
@@ -271,16 +271,10 @@ export async function runFullBatch(argv: string[] = process.argv.slice(2)) {
     let validatedCount = 0;
     for (const exercise of exercises) {
       for (const phaseIdx of [0, 1]) {
-        const phaseKey = phaseIdx.toString();
-        const specificAction =
-          exercise.bildePrompt && exercise.bildePrompt[phaseKey]
-            ? exercise.bildePrompt[phaseKey]
-            : `${exercise.navn.en || exercise.navn.nb} step ${phaseIdx + 1}`;
-
         const viewAngleStr = formatViewAngle(exercise.bildeVinkel);
-        const promptText = `${ASTRID_FLUX_BASE_STYLE}, ${specificAction}, ${ASTRID_FLUX_OUTFIT_STYLE}, ${viewAngleStr}`;
+        const promptText = buildComfyPromptJob(exercise, phaseIdx).positivePrompt;
         const filenamePrefix = `${exercise.id}_step${phaseIdx}`;
-        const workflow = buildAstridFluxWorkflow(promptText, 42, filenamePrefix);
+        const workflow = buildAstridFluxWorkflow(promptText, seedForExercise(exercise.id), filenamePrefix);
 
         if (!workflow["5"]?.inputs?.text || !workflow["10"]?.inputs?.filename_prefix) {
           throw new Error(`Ugyldig workflow for ${exercise.id} fase ${phaseIdx}`);
@@ -318,18 +312,15 @@ export async function runFullBatch(argv: string[] = process.argv.slice(2)) {
           continue;
         }
 
-        const phaseKey = phaseIdx.toString();
-        const specificAction =
-          exercise.bildePrompt && exercise.bildePrompt[phaseKey]
-            ? exercise.bildePrompt[phaseKey]
-            : `${exercise.navn.en || exercise.navn.nb} step ${phaseIdx + 1}`;
-
-        const viewAngleStr = formatViewAngle(exercise.bildeVinkel);
-        const promptText = `${ASTRID_FLUX_BASE_STYLE}, ${specificAction}, ${ASTRID_FLUX_OUTFIT_STYLE}, ${viewAngleStr}`;
-        const seed = 200 + total * 888;
+        const promptText = buildComfyPromptJob(exercise, phaseIdx).positivePrompt;
+        // Seeden hører til ØVELSEN, ikke bildet. `200 + total * 888` ga fase 0 og
+        // fase 1 hver sin seed, og dermed ulik person i ulikt rom for start og
+        // slutt av samme øvelse — den mekaniske grunnen til at parene ikke hang
+        // sammen. seedForExercise er determinisk over øvelses-id-en.
+        const seed = seedForExercise(exercise.id);
         const filenamePrefix = `${exercise.id}_step${phaseIdx}`;
 
-        console.log(`\n▶️ [${total}/${totalJobs}] ${exercise.navn.nb} (Fase ${phaseIdx + 1}, ${viewAngleStr})...`);
+        console.log(`\n▶️ [${total}/${totalJobs}] ${exercise.navn.nb} (Fase ${phaseIdx + 1}, ${formatViewAngle(exercise.bildeVinkel)})...`);
         const workflow = buildAstridFluxWorkflow(promptText, seed, filenamePrefix);
         const promptId = await submitPrompt(token, workflow);
         console.log(`   ComfyUI ID: ${promptId}`);

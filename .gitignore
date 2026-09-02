@@ -47,3 +47,7 @@ playwright-report/
 # Rå-cache for TTS-nedlastinger (permanent lokalt, aldri i repoet)
 audio/raw-cache/
 .superpowers/
+
+# TypeScript inkrementell byggeinfo — genereres av `tsc -b`, og var sporet.
+# Den ble skitten ved hver typecheck og støyet i hver `git status`.
+*.tsbuildinfo
