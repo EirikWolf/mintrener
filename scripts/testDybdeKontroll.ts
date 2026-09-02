@@ -294,11 +294,17 @@ async function main() {
    * spørsmål som allerede er besvart.
    */
   const varianter = [
-    // Syntetisk gulv i stedet for svart. Svart bakgrunn ga henne ingen bakke
-    // å ligge på; med gulv skal både rommet og bakkekontakten være vår.
-    { navn: 'gulv90', personMaske: true, syntetiskGulv: true, mykKant: 0, maskeTerskel: 0, controlStrength: 0.9, controlEnd: 0.65 },
-    { navn: 'gulv80', personMaske: true, syntetiskGulv: true, mykKant: 0, maskeTerskel: 0, controlStrength: 0.8, controlEnd: 0.6 },
-  ]; console.log(`Øvelse: ${ØVELSE} fase ${FASE}  ·  seed ${seed}  ·  LoRA ${LORA_STYRKE}`);
+    /**
+     * TIDLIG SLIPP. Klessilhuetten fra kildefotoet følger med fordi ControlNet
+     * fortsatt er aktiv når modellen maler plaggdetaljene. Vi har ikke funnet
+     * noen solo-superman med tettsittende tøy i free-exercise-db — bildene er
+     * fra én gym-fotografering med løse klær, og flere mageøvelser har hjelper
+     * i bildet. Så i stedet for å bytte kilde: hold styrken oppe så posituren
+     * låses, men slipp tidligere så detaljfasen er prompten sin.
+     */
+    { navn: 'tidlig35', personMaske: true, syntetiskGulv: true, mykKant: 0, maskeTerskel: 0, controlStrength: 0.9, controlEnd: 0.35 },
+    { navn: 'tidlig25', personMaske: true, syntetiskGulv: true, mykKant: 0, maskeTerskel: 0, controlStrength: 0.95, controlEnd: 0.25 },
+  ];console.log(`Øvelse: ${ØVELSE} fase ${FASE}  ·  seed ${seed}  ·  LoRA ${LORA_STYRKE}`);
   console.log(`Referanse: ${REFERANSE} (free-exercise-db, Unlicense)`);
   console.log(`Varianter: ${varianter.map((v) => v.navn).join(', ')}\n`);
 

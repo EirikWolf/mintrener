@@ -256,3 +256,41 @@ kildekurering til en del av pipelinen, ikke en engangsjobb.
 BiRefNet gjorde presis det den ble bestilt for, og gjorde det billigere enn vi
 anslo. Tre av fire problemer er løst med den; det fjerde viste seg å ligge i
 kildematerialet, ikke i verktøyet.
+
+### Klessilhuetten løst — men ikke slik vi trodde
+
+Oppgaven var å finne et kildefoto med tettsittende tøy. **Det finnes ikke i
+free-exercise-db** for denne øvelsen: bildene er fra én gym-fotografering med
+løse klær, og flere av mageøvelsene har en hjelper med i bildet, som ville gitt
+to kropper i dybdekartet. Nærmeste treff med kompresjonstopp
+(`Hip_Circles_prone`) er en annen positur.
+
+Løsningen lå i mekanismen i stedet. Klessilhuetten følger med fordi ControlNet
+fortsatt er aktiv når modellen maler plaggdetaljene. Hold styrken oppe så
+posituren låses tidlig, og **slipp før detaljfasen**:
+
+| `end_percent` | Positur | Antrekk |
+|---|---|---|
+| 0,65 | ✅ eksakt | ❌ kildens joggebukse |
+| **0,35** | ✅ armene fram | ~ nesten riktig |
+| 0,25 | ~ armene langs siden | ✅ **tights og topp riktig** |
+
+`0,35` er punktet der begge holder. Ved `0,25` er antrekket perfekt, men armene
+har drevet fra superman-strekket til å ligge langs kroppen.
+
+Merk at kontroll**styrken** er høy i begge (0,9 og 0,95). Det er ikke en løsere
+tøyle som løser det — det er en KORTERE. Posituren settes i de første stegene;
+klær og overflate males i de siste.
+
+### Full kjede, målt
+
+| Problem | Løsning |
+|---|---|
+| 2D kan ikke uttrykke orientering | Dybdekart |
+| Dybdekartet importerte kildens rom | BiRefNet-personmaske |
+| Myk maskekant ga glorie | Hard kant |
+| Hard maske fjernet gulvet | Syntetisk gulv av stablede bånd |
+| Kildens klessilhuett fulgte med | Kortere kontrollvindu (`end 0,25–0,35`) |
+
+Alle fem er løst med det som nå står på kitor. BiRefNet var det siste manglende
+leddet.
