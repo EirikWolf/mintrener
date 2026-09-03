@@ -85,6 +85,13 @@ const SUFFIKS = process.argv.includes('--suffiks')
   ? process.argv[process.argv.indexOf('--suffiks') + 1]
   : '';
 
+/**
+ * Første seed-nummer. Finnes s0–s2 fra før, gir `--seed-fra 3` nye kandidater
+ * i stedet for å lage de samme på nytt: samme seed og samme innstilling gir
+ * identisk bilde, så en gjentakelse er ren GPU-tid uten utbytte.
+ */
+const SEED_FRA = tallflagg('--seed-fra', 0);
+
 const seedsIdx = process.argv.indexOf('--seeds');
 const ANTALL_SEEDS = seedsIdx !== -1 && process.argv[seedsIdx + 1] ? Number(process.argv[seedsIdx + 1]) : 3;
 
@@ -105,7 +112,7 @@ export function byggJobber(antallSeeds = ANTALL_SEEDS): Jobb[] {
     if (!EXERCISE_LIBRARY.some((e) => e.id === øvelse)) {
       throw new Error(`Ukjent øvelse i REFERANSER: ${øvelse}`);
     }
-    for (let s = 0; s < antallSeeds; s++) {
+    for (let s = SEED_FRA; s < SEED_FRA + antallSeeds; s++) {
       jobber.push({
         nøkkel,
         øvelse,
