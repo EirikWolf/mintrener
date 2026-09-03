@@ -104,7 +104,7 @@ export const KETTLEBELL_EXERCISES: ExerciseInput[] = [
     sensorProfil: 'ingen',
     bildePrompt: {
       '0': 'standing tall in front view holding a black kettlebell upside down by the horns in front of the chest, braced core',
-      '1': 'captured in front-diagonal angle rotating the upside-down kettlebell closely around the back of the neck and head, elbows bent tight, head upright and still, shoulder mobility action',
+      '1': 'full body standing tall and upright, feet hip-width apart on gym floor, both hands holding an upside-down black kettlebell circled directly behind the nape of the neck, elbows bent high beside head, head upright looking forward, core braced, active shoulder mobility',
     },
     bildeVinkel: 'front',
     bildeStatus: 'mangler',

@@ -28,4 +28,12 @@ export const AVVISTE: Record<string, string> = {
   'planke-0-s1': 'Samme.',
   'planke-0-s2': 'Samme.',
   'sideplanke-0-s9': 'En pølle er dukket opp under hoften. Sideplanken har ingen rekvisitt.',
+  'bord-roing-0-s0': 'To kropper og flette som går inn i armen. Dobbeltkropp-artefakt.',
+  'bord-roing-0-s2': 'Armene henger fritt i lufta uten grep om stang, ekstra person i bakgrunnen.',
+  'dips-pa-stol-0-s0': 'Posekjole/sengetøy istedenfor treningsklær, hendene berører knapt benken.',
+  'dips-pa-stol-0-s2': 'Hånd henger i løse luften bak en frittstående stang/stolpe uten benk.',
+  'dips-pa-stol-1-s1': 'Hender plassert bak ryggen i lufta uten kontakt med benk.',
+  'dips-pa-stol-1-s2': 'Holder en løs rund gjenstand i luften uten støtte på benk/stol.',
+  'kettlebell-row-1-s0': 'Kulen svever mellom to hender, usammenhengende grep.',
+  'kettlebell-row-1-s1': 'To kettlebells dukket opp, én i hver hånd.',
 };

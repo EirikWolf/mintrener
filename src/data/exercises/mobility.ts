@@ -319,8 +319,8 @@ export const MOBILITY_EXERCISES: ExerciseInput[] = [
     },
     sensorProfil: 'ingen',
     bildePrompt: {
-      '0': 'full body standing in side-diagonal view with one hand on belly and one on chest, shoulders relaxed',
-      '1': 'full body captured in side-diagonal view taking a deep belly inhale, abdomen visibly expanded beneath lower hand while upper chest stays calm and relaxed, shoulders dropped',
+      '0': 'full body standing in three-quarter view, calm upright posture, left hand gently resting flat on lower ribcage and right hand on upper chest, shoulders lowered and relaxed, looking straight ahead',
+      '1': 'full body captured in three-quarter view in a calm standing breathing pose, upright natural posture, with left palm placed flat on stomach below navel and right hand on chest, relaxed shoulders, peaceful focused expression, gentle deep breath',
     },
     bildeVinkel: 'skrå',
     bildeStatus: 'mangler',

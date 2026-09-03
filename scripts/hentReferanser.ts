@@ -104,6 +104,12 @@ export const REFERANSER: Record<
    */
   'pull-ups-0': { mappe: 'Pullups', bilde: 0, gulv: false },
   'pull-ups-1': { mappe: 'Pullups', bilde: 1, gulv: false },
+  'bord-roing-0': { mappe: 'Inverted_Row', bilde: 0, gulv: false },
+  'bord-roing-1': { mappe: 'Inverted_Row', bilde: 1, gulv: false },
+  'dips-pa-stol-0': { mappe: 'Bench_Dips', bilde: 0, gulv: false },
+  'dips-pa-stol-1': { mappe: 'Bench_Dips', bilde: 1, gulv: false },
+  'kettlebell-row-0': { mappe: 'One-Arm_Kettlebell_Row', bilde: 0 },
+  'kettlebell-row-1': { mappe: 'One-Arm_Kettlebell_Row', bilde: 1 },
 };
 
 /**
