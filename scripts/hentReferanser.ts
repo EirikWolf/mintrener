@@ -33,7 +33,6 @@ const BASIS = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/e
  * eller forberedelsesstilling, kan riktig kilde ligge i det andre bildet.
  */
 export const REFERANSER: Record<string, { mappe: string; bilde: 0 | 1; speil?: true }> = {
-  'planke-0': { mappe: 'Plank', bilde: 0 },
   'planke-1': { mappe: 'Plank', bilde: 1 },
   'push-ups-0': { mappe: 'Pushups', bilde: 0 },
   'push-ups-1': { mappe: 'Pushups', bilde: 1 },
@@ -80,6 +79,11 @@ export const REFERANSER: Record<string, { mappe: string; bilde: 0 | 1; speil?: t
  */
 export const UTEN_KILDE = [
   'hulekroppshold-1',
+  // Basens bilde 0 er en halvknelende forberedelse med hånden på kneet. Vår
+  // fase 0 er en plankeforberedelse på underarmer og knær. Alle tre
+  // genereringene ble trofast mot referansen og dermed feil for oss — modellen
+  // gjorde jobben sin, koblingen var gal. Basen har ingen slik forberedelse.
+  'planke-0',
   // Fase 1 er en full brystryggsrotasjon med én arm rett opp. Basen har ingen
   // utfallsvridning: nærmeste treff er Russian Twist (sittende) og Windmills
   // (stående, uten utfall). Begge ville styrt modellen bestemt til feil kropp.
