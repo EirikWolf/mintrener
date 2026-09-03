@@ -61,10 +61,34 @@ const UT_DIR = path.join(ROOT, 'pipeline', 'candidates', 'dybdebatch');
  */
 const ROMLIG = 'exactly one person with a single head, no duplicate limbs';
 
+/** Leser et tallflagg fra kommandolinja, med fallback. */
+function tallflagg(navn: string, standard: number): number {
+  const i = process.argv.indexOf(navn);
+  return i !== -1 && process.argv[i + 1] ? Number(process.argv[i + 1]) : standard;
+}
+
+/**
+ * De to skruene som styrer HVOR MYE av kilden som følger med.
+ *
+ * controlEnd er hvor lenge dybdekartet styrer, målt i andel av stegene.
+ * loraStrength er hvor hardt Astrid-identiteten presses på.
+ *
+ * De er skilt ut som flagg fordi de skal måles ÉN OM GANGEN. Sist jeg endret
+ * seks variabler samtidig ble resultatet 0 av 4, og ingenting kunne tilskrives
+ * noe. Én skrue, to seeds, sammenlign.
+ */
+const CONTROL_END = process.argv.includes('--control-end')
+  ? tallflagg('--control-end', 0.35)
+  : null;
+const LORA = tallflagg('--lora', 0);
+const SUFFIKS = process.argv.includes('--suffiks')
+  ? process.argv[process.argv.indexOf('--suffiks') + 1]
+  : '';
+
 const seedsIdx = process.argv.indexOf('--seeds');
 const ANTALL_SEEDS = seedsIdx !== -1 && process.argv[seedsIdx + 1] ? Number(process.argv[seedsIdx + 1]) : 3;
 
-type Jobb = { nøkkel: string; øvelse: string; fase: number; ref: string; navn: string; seed: number; speil: boolean };
+type Jobb = { nøkkel: string; øvelse: string; fase: number; ref: string; navn: string; seed: number; speil: boolean; vindu: number };
 
 export function byggJobber(antallSeeds = ANTALL_SEEDS): Jobb[] {
   const jobber: Jobb[] = [];
@@ -87,13 +111,15 @@ export function byggJobber(antallSeeds = ANTALL_SEEDS): Jobb[] {
         øvelse,
         fase: Number(fase),
         ref: `${nøkkel}.jpg`,
-        navn: `${nøkkel}-s${s}`,
+        navn: `${nøkkel}-s${s}${SUFFIKS}`,
         // Seeden hører til øvelsen; tillegget skiller kandidatene. Da får fase 0
         // og fase 1 av samme øvelse samme person i samme rom.
         seed: seedForExercise(øvelse) + s,
         // Speilingen bor i referansetabellen, ikke her: den er en egenskap ved
         // koblingen mellom vår øvelse og basens foto.
         speil: def.speil === true,
+        // Vinduet hører til øvelsen. --control-end overstyrer for måling.
+        vindu: CONTROL_END ?? def.vindu ?? 0.35,
       });
     }
   }
@@ -157,7 +183,8 @@ async function main() {
           speil: j.speil,
           maskeVekst: 2,
           controlStrength: 0.9,
-          controlEnd: 0.35,
+          controlEnd: j.vindu,
+          ...(LORA > 0 ? { loraStrength: LORA } : {}),
           posAnker: '',
           posStyrke: 0.3,
         });

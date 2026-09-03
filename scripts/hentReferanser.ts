@@ -32,7 +32,31 @@ const BASIS = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/e
  * viser start på 0 og slutt på 1, men for øvelser der vår fase 0 er en hvile-
  * eller forberedelsesstilling, kan riktig kilde ligge i det andre bildet.
  */
-export const REFERANSER: Record<string, { mappe: string; bilde: 0 | 1; speil?: true }> = {
+/**
+ * `vindu` er hvor lenge dybdekartet styrer, som andel av stegene.
+ *
+ * MÅLT 2026-09-02 på sideplanke høyre, én skrue om gangen, to seeds hver:
+ *
+ *   vindu 0,35 (standard)  løse joggebukser, kraftigere kropp, strak arm
+ *   vindu 0,20             tights, atletisk kropp, underarm
+ *   LoRA 1,0 i stedet      ingen forskjell fra standard
+ *
+ * Årsaken er at dybdekartet bærer KILDENS silhuett, ikke bare posituren.
+ * Referansemannen går i vide collegebukser, og jo lenger kartet styrer, jo mer
+ * av den formen blir bakt inn — enten som løse bukser eller som kroppsmasse.
+ * At LoRA ikke hjalp, er selve beviset: formen settes av styringen, ikke av
+ * identiteten.
+ *
+ * Men et kort vindu koster posituren. Samme kjøring viste superman vri seg ut
+ * av mageleie og katte-ku fase 1 komme ut som «ku» ved 0,20. Der orienteringen
+ * eller ryggkrumningen ER øvelsen, må vinduet være langt.
+ *
+ * Derfor per øvelse: kort der stillingen er utvetydig, langt der den ikke er.
+ */
+export const REFERANSER: Record<
+  string,
+  { mappe: string; bilde: 0 | 1; speil?: true; vindu?: number }
+> = {
   'planke-1': { mappe: 'Plank', bilde: 1 },
   'push-ups-0': { mappe: 'Pushups', bilde: 0 },
   'push-ups-1': { mappe: 'Pushups', bilde: 1 },
@@ -48,12 +72,12 @@ export const REFERANSER: Record<string, { mappe: string; bilde: 0 | 1; speil?: t
   // Første kjøring koblet samme referanse til alle tre og lot prompten («left
   // forearm») ordne resten. Den taper: dybdekartet bestemmer siden, så alle
   // seks venstre-bildene kom ut som høyre sideplanke. Derfor speiles kilden.
-  'sideplanke-0': { mappe: 'Side_Bridge', bilde: 0 },
-  'sideplanke-1': { mappe: 'Side_Bridge', bilde: 1 },
-  'sideplanke-hoyre-0': { mappe: 'Side_Bridge', bilde: 0 },
-  'sideplanke-hoyre-1': { mappe: 'Side_Bridge', bilde: 1 },
-  'sideplanke-venstre-0': { mappe: 'Side_Bridge', bilde: 0, speil: true },
-  'sideplanke-venstre-1': { mappe: 'Side_Bridge', bilde: 1, speil: true },
+  'sideplanke-0': { mappe: 'Side_Bridge', bilde: 0, vindu: 0.2 },
+  'sideplanke-1': { mappe: 'Side_Bridge', bilde: 1, vindu: 0.2 },
+  'sideplanke-hoyre-0': { mappe: 'Side_Bridge', bilde: 0, vindu: 0.2 },
+  'sideplanke-hoyre-1': { mappe: 'Side_Bridge', bilde: 1, vindu: 0.2 },
+  'sideplanke-venstre-0': { mappe: 'Side_Bridge', bilde: 0, speil: true, vindu: 0.2 },
+  'sideplanke-venstre-1': { mappe: 'Side_Bridge', bilde: 1, speil: true, vindu: 0.2 },
   // FASENE ER FORSKJØVET mot basens. Deres bilde 0 er et oppreist utfall med
   // hendene ledige; vår fase 0 krever begge håndflater i gulvet innenfor
   // fremre fot. Det er deres bilde 1 som viser den stillingen. Oppdaget ved å
