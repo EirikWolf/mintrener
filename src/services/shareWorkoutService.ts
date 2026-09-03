@@ -1,10 +1,10 @@
-import { WorkoutTemplate, IntervalItem } from '../types/workout';
+import { WorkoutTemplate } from '../types/workout';
 import { WorkoutTemplateSchema } from '../schemas/workoutSchema';
+import { kodKompakt, dekodKompakt } from './shareCodec';
 import { recordShareLinkOpen } from './telemetryService';
 import { showErrorToast } from './errorToastService';
 import { PRESET_WORKOUTS } from '../data/mockWorkouts';
 import { TRAINING_PROGRAMS } from '../data/programs';
-import { EXERCISE_LIBRARY } from '../data/exercises';
 
 /**
  * Delingslenker som får plass i en QR-kode.
@@ -26,11 +26,6 @@ import { EXERCISE_LIBRARY } from '../data/exercises';
  *    utledbare fra øvelses-ID-en, og utgjorde mesteparten av payloaden.
  */
 
-/** Feltskille i det kompakte formatet. Ikke prosentkodet av URLSearchParams. */
-const SEP = '~';
-const ITEM_SEP = ':';
-const KOMPAKT_VERSJON = '1';
-
 /** Alle økter som kan deles med ren ID. */
 function katalogØkter(): WorkoutTemplate[] {
   return [...PRESET_WORKOUTS, ...TRAINING_PROGRAMS.map((p) => p.workout)];
@@ -40,82 +35,7 @@ function finnKatalogØkt(id: string): WorkoutTemplate | undefined {
   return katalogØkter().find((w) => w.id === id);
 }
 
-/** `~` overlever ikke feltskillet, og encodeURIComponent rører den ikke. */
-function kodFelt(s: string): string {
-  return encodeURIComponent(s).replace(/~/g, '%7E');
-}
 
-function dekodFelt(s: string): string {
-  return decodeURIComponent(s);
-}
-
-/**
- * Kompakt form: `1~navn~klargjøring~runder~rundepause~id:arbeid:pause~…`
- *
- * En øvelse som ikke finnes i biblioteket bærer navn og kategori som fjerde og
- * femte felt. Uten det mister mottakeren begge — og kategorien er nettopp det
- * en tidligere feil avviste builder-økter på (BLOCKER-regresjonen).
- */
-function kodKompakt(workout: WorkoutTemplate): string {
-  const kjente = new Set(EXERCISE_LIBRARY.map((e) => e.id));
-  const deler = [
-    KOMPAKT_VERSJON,
-    kodFelt(workout.name),
-    String(workout.prepareDurationSeconds),
-    String(workout.rounds),
-    String(workout.roundRestDurationSeconds),
-    ...workout.items.map((i) => {
-      const base = [i.exercise.id, i.workDurationSeconds, i.restDurationSeconds].join(ITEM_SEP);
-      if (kjente.has(i.exercise.id)) return base;
-      return [base, kodFelt(i.exercise.name), kodFelt(i.exercise.category ?? '')].join(ITEM_SEP);
-    }),
-  ];
-  return deler.join(SEP);
-}
-
-function dekodKompakt(rå: string): WorkoutTemplate | null {
-  const deler = rå.split(SEP);
-  if (deler.length < 6 || deler[0] !== KOMPAKT_VERSJON) return null;
-
-  const [, navn, klargjøring, runder, rundepause, ...itemDeler] = deler;
-  const items: IntervalItem[] = [];
-
-  for (const [idx, d] of itemDeler.entries()) {
-    const [exId, arbeid, pause, egetNavn, egenKategori] = d.split(ITEM_SEP);
-    if (!exId) return null;
-    const fra = EXERCISE_LIBRARY.find((e) => e.id === exId);
-    items.push({
-      id: `delt-${idx}`,
-      exercise: fra
-        ? {
-            id: fra.id,
-            name: fra.navn.nb,
-            nameEn: fra.navn.en,
-            category: fra.kategori,
-          }
-        : {
-            id: exId,
-            name: egetNavn ? dekodFelt(egetNavn) : exId,
-            ...(egenKategori ? { category: dekodFelt(egenKategori) } : {}),
-          },
-      workDurationSeconds: Number(arbeid),
-      restDurationSeconds: Number(pause),
-    });
-  }
-
-  return {
-    id: `shared-${Date.now()}`,
-    name: dekodFelt(navn),
-    description: '',
-    type: 'custom',
-    prepareDurationSeconds: Number(klargjøring),
-    rounds: Number(runder),
-    roundRestDurationSeconds: Number(rundepause),
-    items,
-  };
-}
-
-/** Bygger delelenken — kort nok til en QR-kode. */
 export function generateShareUrl(workout: WorkoutTemplate): string {
   try {
     const url = new URL(window.location.origin + window.location.pathname);
