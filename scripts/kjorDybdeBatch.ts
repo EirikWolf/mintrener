@@ -95,7 +95,7 @@ const SEED_FRA = tallflagg('--seed-fra', 0);
 const seedsIdx = process.argv.indexOf('--seeds');
 const ANTALL_SEEDS = seedsIdx !== -1 && process.argv[seedsIdx + 1] ? Number(process.argv[seedsIdx + 1]) : 3;
 
-type Jobb = { nøkkel: string; øvelse: string; fase: number; ref: string; navn: string; seed: number; speil: boolean; vindu: number };
+type Jobb = { nøkkel: string; øvelse: string; fase: number; ref: string; navn: string; seed: number; speil: boolean; vindu: number; gulv: boolean };
 
 export function byggJobber(antallSeeds = ANTALL_SEEDS): Jobb[] {
   const jobber: Jobb[] = [];
@@ -127,6 +127,8 @@ export function byggJobber(antallSeeds = ANTALL_SEEDS): Jobb[] {
         speil: def.speil === true,
         // Vinduet hører til øvelsen. --control-end overstyrer for måling.
         vindu: CONTROL_END ?? def.vindu ?? 0.35,
+        // Syntetisk gulv gir bakkekontakt. For hengende øvelser er det feil.
+        gulv: def.gulv !== false,
       });
     }
   }
@@ -185,7 +187,7 @@ async function main() {
       try {
         const wf = byggWorkflow(prompt, j.seed, j.navn, refNavn.get(j.ref)!, 'depth', {
           personMaske: true,
-          syntetiskGulv: true,
+          syntetiskGulv: j.gulv,
           mykKant: 0,
           speil: j.speil,
           maskeVekst: 2,
