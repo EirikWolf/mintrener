@@ -8,10 +8,13 @@ import { test, expect } from '@playwright/test';
 test('førstegangsbruker: onboarding → persona → ukesmål → førsteside', async ({ page }) => {
   await page.goto('/');
 
-  // Steg 1: persona-rutenettet. «Velg Jossa» (ikke /Jossa/): kortet og
-  // ▶-knappen («Forhåndshør Jossa») ville ellers kollidert i strict mode.
+  // Steg 1: persona-rutenettet. «Velg Axel» (ikke /Axel/): kortet og
+  // ▶-knappen («Forhåndshør Axel») ville ellers kollidert i strict mode.
+  //
+  // Jossa (haugesund) og Ola (romsdal) ble fjernet i fb1ca55 2026-08-31.
+  // Testen valgte Jossa og har feilet siden — se PR #18.
   await expect(page.getByRole('heading', { name: 'Hvem skal trene deg?' })).toBeVisible();
-  await page.getByRole('button', { name: 'Velg Jossa' }).click();
+  await page.getByRole('button', { name: 'Velg Axel' }).click();
   await page.getByRole('button', { name: 'Videre' }).click();
 
   // Steg 2: ukesmål (3 forhåndsvalgt beholdes)
@@ -32,7 +35,7 @@ test('førstegangsbruker: onboarding → persona → ukesmål → førsteside', 
 
   // Persona-valget er persistert — treneren er i ørene ved første START
   const persona = await page.evaluate(() => localStorage.getItem('mintrener_coach_persona'));
-  expect(persona).toBe('haugesund');
+  expect(persona).toBe('hardcore');
 
   // START er faktisk klikkbar: økta går i gang med klargjøringsfasen
   await page.getByRole('button', { name: 'START', exact: true }).click();
