@@ -220,9 +220,15 @@ function generateOfficeHabitChallenge(): ChallengeItem {
       items: isRest
         ? []
         : [
-            { id: `o-${day}-1`, exercise: { id: 'skulder-dislocates', name: 'Skulderrulling', category: 'mobility' }, workDurationSeconds: 40, restDurationSeconds: 10 },
-            { id: `o-${day}-2`, exercise: { id: 'kneboy', name: 'Knebøy til stol', category: 'bodyweight' }, workDurationSeconds: 40, restDurationSeconds: 10 },
-            { id: `o-${day}-3`, exercise: { id: 'katte-ku', name: 'Stående ryggvri', category: 'mobility' }, workDurationSeconds: 40, restDurationSeconds: 0 },
+            // Navnene er katalogens, ikke våre egne. Fram til 2026-09-01 skrev
+            // denne økta sitt eget `name` ved siden av ID-en, og alle tre pekte
+            // på en annen øvelse enn de lovet: «Skulderrulling» var
+            // skulder-dislocates (krever strikk), «Knebøy til stol» var vanlig
+            // kneboy selv om stol-kneboy fantes, og «Stående ryggvri» var
+            // katte-ku — på alle fire, på kontorgulvet.
+            { id: `o-${day}-1`, exercise: { id: 'seated-skulder-rull', name: 'Sittende skulder- og nakkeavspenning', category: 'mobility' }, workDurationSeconds: 40, restDurationSeconds: 10 },
+            { id: `o-${day}-2`, exercise: { id: 'stol-kneboy', name: 'Knebøy til stol (Box Squat)', category: 'bodyweight' }, workDurationSeconds: 40, restDurationSeconds: 10 },
+            { id: `o-${day}-3`, exercise: { id: 'staende-ryggvri', name: 'Stående ryggvri', category: 'mobility' }, workDurationSeconds: 40, restDurationSeconds: 0 },
           ],
     };
 

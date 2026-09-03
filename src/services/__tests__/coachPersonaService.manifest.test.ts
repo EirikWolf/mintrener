@@ -13,7 +13,7 @@ import {
 } from '../coachPersonaService';
 import { audioBufferEngine } from '../audioBufferEngine';
 
-// Kun hardcore i mock-manifestet: romsdal/haugesund/boyband tester fallbacken.
+// Kun hardcore i mock-manifestet: boyband tester fallbacken til cuesPath.
 vi.mock('../../data/personaAudioManifest.json', () => ({
   default: {
     hardcore: {
@@ -54,8 +54,8 @@ describe('coachPersonaService – manifestoppslag (β5)', () => {
   });
 
   it('persona UTENFOR manifestet faller tilbake til cuesPath-konvensjonen', () => {
-    expect(getPersonaClipKey('go-2', 'romsdal')).toBe('/audio/personas/romsdal/go-2.mp3');
-    expect(getPersonaCueUrl('intro', 'romsdal')).toBe('/audio/personas/romsdal/intro.mp3');
+    expect(getPersonaClipKey('go-2', 'boyband')).toBe('/audio/personas/boyband/go-2.mp3');
+    expect(getPersonaCueUrl('intro', 'boyband')).toBe('/audio/personas/boyband/intro.mp3');
   });
 
   it('standard (uten cuesPath og utenfor manifestet) gir fortsatt null', () => {
@@ -89,12 +89,12 @@ describe('coachPersonaService – manifestoppslag (β5)', () => {
   it('preloadPersonaAudio uten manifest-oppføring preloader kjerne-cuene etter konvensjonen', () => {
     const preloadSpy = vi.spyOn(audioBufferEngine, 'preload').mockResolvedValue(undefined);
 
-    preloadPersonaAudio('romsdal');
+    preloadPersonaAudio('boyband');
 
     expect(preloadSpy).toHaveBeenCalledTimes(1);
     const keys = preloadSpy.mock.calls[0][0];
-    expect(keys).toContain('/audio/personas/romsdal/intro.mp3');
-    expect(keys).toContain('/audio/personas/romsdal/start_321.mp3');
+    expect(keys).toContain('/audio/personas/boyband/intro.mp3');
+    expect(keys).toContain('/audio/personas/boyband/start_321.mp3');
   });
 
   it('preloadPersonaAudio for standard preloader ingenting', () => {
@@ -114,8 +114,8 @@ describe('coachPersonaService – manifestoppslag (β5)', () => {
     const keys = evictSpy.mock.calls[0][0];
     // Personaene utenfor mock-manifestet evikteres etter cuesPath-konvensjonen —
     // samme URL-sett som preloadPersonaAudio varmer (settene MÅ speile hverandre)
-    expect(keys).toContain('/audio/personas/romsdal/intro.mp3');
-    expect(keys).toContain('/audio/personas/haugesund/start_321.mp3');
+    expect(keys).toContain('/audio/personas/boyband/intro.mp3');
+    expect(keys).toContain('/audio/personas/boyband/start_321.mp3');
     expect(keys).toContain('/audio/personas/boyband/finish.mp3');
     // Den valgte personaens buffere beholdes (re-valg = varm cache)
     expect(keys.some((k) => k.startsWith('/cdn/hc/'))).toBe(false);
@@ -133,8 +133,8 @@ describe('coachPersonaService – manifestoppslag (β5)', () => {
     // Manifest-personaen evikteres via manifest-URL-ene sine …
     expect(keys).toContain('/cdn/hc/intro.v2.mp3');
     expect(keys).toContain('/cdn/hc/exercise-kneboy.v2.mp3');
-    // … og konvensjons-personaene via cuesPath-settet
-    expect(keys).toContain('/audio/personas/romsdal/intro.mp3');
+    // … og konvensjons-personaen via cuesPath-settet
+    expect(keys).toContain('/audio/personas/boyband/intro.mp3');
   });
 
   it('playPersonaCue spiller manifest-URL-en (bufret sti)', async () => {

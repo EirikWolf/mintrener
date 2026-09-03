@@ -1,6 +1,35 @@
 import { CompletedWorkoutLog } from '../types/models';
 import { CustomExerciseItem } from './customExercisesService';
 import { WorkoutTemplate } from '../types/workout';
+import { STORAGE_KEYS } from '../constants/storageKeys';
+
+export interface FullExportPayload {
+  exportedAt: string;
+  appName: string;
+  version: string;
+  userProfile?: any;
+  history: CompletedWorkoutLog[];
+  customExercises: CustomExerciseItem[];
+  customWorkouts: WorkoutTemplate[];
+  strengthLogs: any[];
+  personalRecords?: any;
+  badges?: any;
+  weeklyGoal?: any;
+  coachPersona?: any;
+  // Lagt til etter revisjon B2: eksporten dekket 9 av 32 registernøkler, og
+  // Beslutning 40 kalte den likevel «fullstendig». Fødselsår er eksplisitt
+  // merket «Personopplysning» i registeret og manglet.
+  birthYear?: any;
+  userProfiles?: any;
+  userSettings?: any;
+  preferredLanguage?: any;
+  favoriteProgramIds?: any;
+  weeklyGoalLog?: any;
+  strengthExerciseLogs?: any;
+  skillTreeProgress?: any;
+  programOverrides?: any;
+  activeChallengeId?: any;
+}
 
 /**
  * Eksporterer alle treningsdata til en formatert JSON-fil for nedlasting
@@ -9,9 +38,10 @@ export function exportAllDataAsJson(
   history: CompletedWorkoutLog[],
   customExercises?: CustomExerciseItem[],
   customWorkouts?: WorkoutTemplate[],
-  strengthLogs?: any[]
+  strengthLogs?: any[],
+  additionalData?: Partial<FullExportPayload>
 ): void {
-  const exportPayload = {
+  const exportPayload: FullExportPayload = {
     exportedAt: new Date().toISOString(),
     appName: 'Min Trener',
     version: '1.0',
@@ -19,6 +49,7 @@ export function exportAllDataAsJson(
     customExercises: customExercises || [],
     customWorkouts: customWorkouts || [],
     strengthLogs: strengthLogs || [],
+    ...additionalData,
   };
 
   const jsonStr = JSON.stringify(exportPayload, null, 2);
@@ -34,32 +65,107 @@ export function exportAllDataAsJson(
   URL.revokeObjectURL(url);
 }
 
+import { getUserWorkoutHistory } from './firestoreService';
+
 /**
- * Henter alle data fra lokal lagring og eksporterer som JSON
+ * Henter alle data fra lokal lagring (og eventuelt Firestore) og eksporterer som JSON (GDPR Art. 20).
+ * Hvis userId er oppgitt, synkes historikk fra Firestore først slik at en ny enhet ikke får tom fil.
  */
-export async function exportFullUserDataset(_userId?: string | null): Promise<void> {
+export async function exportFullUserDataset(userId?: string | null): Promise<void> {
   let history: CompletedWorkoutLog[] = [];
   let customExercises: CustomExerciseItem[] = [];
   let customWorkouts: WorkoutTemplate[] = [];
   let strengthLogs: any[] = [];
+  let userProfile: any = null;
+  let personalRecords: any = null;
+  let badges: any = null;
+  let weeklyGoal: any = null;
+  let coachPersona: any = null;
+  let birthYear: any = null;
+  let userProfiles: any = null;
+  let userSettings: any = null;
+  let preferredLanguage: any = null;
+  let favoriteProgramIds: any = null;
+  let weeklyGoalLog: any = null;
+  let strengthExerciseLogs: any = null;
+  let skillTreeProgress: any = null;
+  let programOverrides: any = null;
+  let activeChallengeId: any = null;
+
+  /** Leser og parser en JSON-nøkkel; null hvis den mangler eller er korrupt. */
+  const lesJson = (nøkkel: string): any => {
+    try {
+      const rå = localStorage.getItem(nøkkel);
+      return rå ? JSON.parse(rå) : null;
+    } catch {
+      return null;
+    }
+  };
 
   try {
-    const rawHist = localStorage.getItem('mintrener_local_workout_history');
-    if (rawHist) history = JSON.parse(rawHist);
+    if (userId) {
+      history = await getUserWorkoutHistory(userId);
+    } else {
+      const rawHist = localStorage.getItem(STORAGE_KEYS.WORKOUT_HISTORY);
+      if (rawHist) history = JSON.parse(rawHist);
+    }
 
-    const rawEx = localStorage.getItem('mintrener_custom_exercises');
+    const rawEx = localStorage.getItem(STORAGE_KEYS.CUSTOM_EXERCISES) || localStorage.getItem(STORAGE_KEYS.LEGACY_CUSTOM_EXERCISES);
     if (rawEx) customExercises = JSON.parse(rawEx);
 
-    const rawWo = localStorage.getItem('mintrener_custom_workouts');
+    const rawWo = localStorage.getItem(STORAGE_KEYS.CUSTOM_WORKOUTS) || localStorage.getItem(STORAGE_KEYS.LEGACY_CUSTOM_WORKOUTS);
     if (rawWo) customWorkouts = JSON.parse(rawWo);
 
-    const rawStr = localStorage.getItem('mintrener_strength_logs');
+    const rawStr = localStorage.getItem(STORAGE_KEYS.STRENGTH_LOGS) || localStorage.getItem(STORAGE_KEYS.LEGACY_STRENGTH_LOGS);
     if (rawStr) strengthLogs = JSON.parse(rawStr);
+
+    const rawProf = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+    if (rawProf) userProfile = JSON.parse(rawProf);
+
+    const rawPr = localStorage.getItem(STORAGE_KEYS.PERSONAL_RECORDS);
+    if (rawPr) personalRecords = JSON.parse(rawPr);
+
+    const rawBadges = localStorage.getItem(STORAGE_KEYS.BADGES);
+    if (rawBadges) badges = JSON.parse(rawBadges);
+
+    const rawGoal = localStorage.getItem(STORAGE_KEYS.WEEKLY_GOAL);
+    if (rawGoal) weeklyGoal = JSON.parse(rawGoal);
+
+    coachPersona = localStorage.getItem(STORAGE_KEYS.COACH_PERSONA) || 'standard';
+
+    // Resten av registeret. Alt som ikke er med her, skal stå i
+    // UTENFOR_EKSPORT i exportDataService.dekning.test.ts med en grunn.
+    birthYear = localStorage.getItem(STORAGE_KEYS.USER_BIRTH_YEAR);
+    preferredLanguage = localStorage.getItem(STORAGE_KEYS.PREFERRED_LANGUAGE);
+    activeChallengeId = localStorage.getItem(STORAGE_KEYS.ACTIVE_CHALLENGE_ID);
+    userProfiles = lesJson(STORAGE_KEYS.USER_PROFILES);
+    userSettings = lesJson(STORAGE_KEYS.USER_SETTINGS);
+    favoriteProgramIds = lesJson(STORAGE_KEYS.FAVORITE_PROGRAM_IDS);
+    weeklyGoalLog = lesJson(STORAGE_KEYS.WEEKLY_GOAL_LOG);
+    strengthExerciseLogs = lesJson(STORAGE_KEYS.STRENGTH_EXERCISE_LOGS);
+    skillTreeProgress = lesJson(STORAGE_KEYS.SKILL_TREE_PROGRESS);
+    programOverrides = lesJson(STORAGE_KEYS.PROGRAM_OVERRIDES);
   } catch (e) {
-    console.warn('Feil ved lesing av lokaldata for eksport:', e);
+    console.warn('Feil ved lesing av data for eksport:', e);
   }
 
-  exportAllDataAsJson(history, customExercises, customWorkouts, strengthLogs);
+  exportAllDataAsJson(history, customExercises, customWorkouts, strengthLogs, {
+    userProfile,
+    personalRecords,
+    badges,
+    weeklyGoal,
+    coachPersona,
+    birthYear,
+    userProfiles,
+    userSettings,
+    preferredLanguage,
+    favoriteProgramIds,
+    weeklyGoalLog,
+    strengthExerciseLogs,
+    skillTreeProgress,
+    programOverrides,
+    activeChallengeId,
+  });
 }
 
 /**

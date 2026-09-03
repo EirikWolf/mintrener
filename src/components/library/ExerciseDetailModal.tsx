@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ExerciseItem } from '../../schemas/exerciseSchema';
 import { ExerciseIllustration } from '../exercises/ExerciseIllustration';
 import { MuscleIcon } from '../icons/MuscleIcon';
+import { MuscleMap } from '../exercises/MuscleMap';
 import { EquipmentIcon } from '../icons/EquipmentIcon';
 import { X, CheckCircle2, AlertTriangle, Target } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface ExerciseDetailModalProps {
   exercise: ExerciseItem;
@@ -16,15 +18,8 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   onClose,
 }) => {
   const [activePhase, setActivePhase] = useState<number>(0);
-
-  // WCAG: Lukk ved trykk på Escape-tast
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, { onClose });
 
   const modal = (
     <div
@@ -34,10 +29,12 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
       className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="exercise-detail-title"
-        className="w-full max-w-md max-h-[90vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col overflow-hidden space-y-3.5 relative z-[101]"
+        className="w-full max-w-md max-h-[90vh] bg-zinc-900 border border-zinc-800 rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col overflow-hidden space-y-3.5 relative z-[101] focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-start justify-between border-b border-zinc-800 pb-2.5 shrink-0">
@@ -144,6 +141,22 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                 Type: {exercise.type === 'reps' ? 'Repetisjoner' : 'Tid'}
               </p>
             </div>
+          </div>
+
+          {/* Muskelkart i full bredde.
+              Sto først inne i «Muskler»-kolonnen, og da ble hver figur under
+              90 px bred — for smal til at en region kunne leses. Kartet svarer
+              «hvor på kroppen», og det svaret krever plass.
+
+              Etikettene over blir stående. En figur kan ikke søkes, kopieres
+              eller leses av en skjermleser; kartet supplerer teksten, det
+              erstatter den ikke. */}
+          <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-3">
+            <div className="flex items-center gap-1.5 text-zinc-400 font-semibold uppercase text-[10px] mb-1.5">
+              <Target className="w-3.5 h-3.5 text-emerald-400" />
+              Hvor du kjenner det
+            </div>
+            <MuscleMap muskler={exercise.muskler} className="max-w-[280px] mx-auto" />
           </div>
 
           {/* Slik gjør du (Instruksjoner) */}

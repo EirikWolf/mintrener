@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { TimerState, WorkoutTemplate, IntervalPhase } from '../../types/workout';
 import { CircularProgress } from './CircularProgress';
 import { UserMenu } from '../auth/UserMenu';
+import { PwaInstallPromptModal } from '../pwa/PwaInstallPromptModal';
 import { SensorStatusModal } from '../sensors/SensorStatusModal';
 import { HeartRateWidget } from '../sensors/HeartRateWidget';
 import { HeartRateLiveGraph } from '../sensors/HeartRateLiveGraph';
@@ -28,6 +29,7 @@ import { getInterruptedSession, clearInterruptedSession, InterruptedSession } fr
 import { useFocusGestures } from '../../hooks/useFocusGestures';
 import { useIdleDim } from '../../hooks/useIdleDim';
 import { checkAdaptiveProgression, ProgressionSuggestion } from '../../services/adaptiveProgressionService';
+import { WORKOUT_HISTORY_KEY } from '../../services/workoutHistoryStorage';
 import {
   Play,
   Pause,
@@ -54,9 +56,124 @@ import {
   TrendingUp,
   ShieldAlert,
   Tv,
+  Wand2,
+  ChevronDown,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { shareWorkout } from '../../services/shareWorkoutService';
-import { calculateWeeklyProgress, WeeklyGoalProgress } from '../../services/weeklyGoalService';
+import { calculateWeeklyProgress, makeGoalForWeek, WeeklyGoalProgress } from '../../services/weeklyGoalService';
+import { computeWeekStreak, WeekStreakResult } from '../../services/streakService';
+import { StreakDetailSheet } from '../streak/StreakDetailSheet';
+
+/**
+ * Verktøyene på startskjermen, i prioritert rekkefølge.
+ *
+ * `primary` avgjør hva som står framme når raden er kollapset. Rangeringen er
+ * revisjon As: de fire første hører til planleggingen av en treningsøkt, de
+ * øvrige er egne moduser man oppsøker bevisst.
+ *
+ * Storskjermvisningen står bevisst IKKE her. Den hadde tidligere én inngang i
+ * toppbaren OG én i matrisen, med hver sin ordlyd i aria-label, slik at
+ * skjermlesere leste dem som to ulike funksjoner (revisjon A, spørsmål B).
+ * Toppbaren eier den nå alene.
+ */
+type StartScreenToolId =
+  | 'utfordring'
+  | 'styrke'
+  | 'skaansom'
+  | 'coach'
+  | 'generator'
+  | 'micro'
+  | 'ferdighet'
+  | 'gruppe'
+  | 'gps';
+
+interface StartScreenTool {
+  id: StartScreenToolId;
+  label: string;
+  ariaLabel: string;
+  icon: LucideIcon;
+  iconClass: string;
+  primary: boolean;
+}
+
+const START_SCREEN_TOOLS: StartScreenTool[] = [
+  {
+    id: 'utfordring',
+    label: 'Utfordring',
+    ariaLabel: '28 og 30 dagers treningsutfordringer',
+    icon: Trophy,
+    iconClass: 'text-amber-400',
+    primary: true,
+  },
+  {
+    id: 'styrke',
+    label: 'Styrke',
+    ariaLabel: 'Styrketrening med dobbel progresjon',
+    icon: Dumbbell,
+    iconClass: 'text-emerald-400',
+    primary: true,
+  },
+  {
+    id: 'skaansom',
+    label: 'Skånsom',
+    ariaLabel: 'Skade- og smertefilter for trygg trening',
+    icon: ShieldAlert,
+    iconClass: 'text-rose-400',
+    primary: true,
+  },
+  // De to AI-inngangene hadde samme Sparkles-ikon, begge navn på «AI», og lå
+  // som naboer i matrisen (revisjon A, tilleggsfunn 3). De skilles nå på både
+  // navn og ikon: Astrid svarer på spørsmål, generatoren lager en økt.
+  {
+    id: 'coach',
+    label: 'Astrid',
+    ariaLabel: 'Astrid AI-trener',
+    icon: Sparkles,
+    iconClass: 'text-emerald-400',
+    primary: true,
+  },
+  {
+    id: 'generator',
+    label: 'Lag økt',
+    ariaLabel: 'Lag økt med AI-generator',
+    icon: Wand2,
+    iconClass: 'text-indigo-400',
+    primary: false,
+  },
+  {
+    id: 'micro',
+    label: 'Micro',
+    ariaLabel: 'Microtrening',
+    icon: Zap,
+    iconClass: 'text-amber-400',
+    primary: false,
+  },
+  {
+    id: 'ferdighet',
+    label: 'Ferdighet',
+    ariaLabel: 'Ferdighetstrær og mestringsstige',
+    icon: TrendingUp,
+    iconClass: 'text-purple-400',
+    primary: false,
+  },
+  {
+    id: 'gruppe',
+    label: 'Gruppe',
+    ariaLabel: 'Grupperom',
+    icon: Users,
+    iconClass: 'text-purple-400',
+    primary: false,
+  },
+  {
+    id: 'gps',
+    label: 'GPS',
+    ariaLabel: 'GPS utendørsøkt',
+    icon: Navigation,
+    iconClass: 'text-emerald-400',
+    primary: false,
+  },
+];
 
 interface FocusModeQuickControlsProps {
   soundEnabled: boolean;
@@ -181,6 +298,40 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   const [isSkillTreeModalOpen, setIsSkillTreeModalOpen] = useState(false);
   const [isAiWorkoutModalOpen, setIsAiWorkoutModalOpen] = useState(false);
   const [isPainFilterOpen, setIsPainFilterOpen] = useState(false);
+
+  // Verktøyraden åpner kollapset ved hvert besøk. Tilstanden lagres bevisst
+  // ikke: en utvidet rad er den gamle matrisen på nytt, og ett trykk er
+  // billigere enn en startskjerm som sakte fylles opp igjen.
+  const [showAllTools, setShowAllTools] = useState(false);
+  const toolRowRef = useRef<HTMLDivElement>(null);
+
+  // Utvidelsen legger to nye rader under skjermkanten, bak bunnmenyen. Uten
+  // dette ser trykket ut som om ingenting skjedde. Instant scroll (ingen
+  // 'smooth') respekterer prefers-reduced-motion uten egen sjekk.
+  const handleToggleTools = () => {
+    setShowAllTools((v) => {
+      if (!v) {
+        // scrollIntoView finnes ikke i jsdom — valgfritt kall holder testene grønne
+        requestAnimationFrame(() => toolRowRef.current?.scrollIntoView?.({ block: 'end' }));
+      }
+      return !v;
+    });
+  };
+
+  // Én åpner per verktøy. Record-typen er poenget: legges det til en id i
+  // START_SCREEN_TOOLS uten en åpner her, feiler typesjekken i stedet for at
+  // knappen blir stum.
+  const toolOpeners: Record<StartScreenToolId, () => void> = {
+    utfordring: () => setIsChallengesModalOpen(true),
+    styrke: () => setIsStrengthModalOpen(true),
+    skaansom: () => setIsPainFilterOpen(true),
+    coach: () => setIsAiCoachOpen(true),
+    generator: () => setIsAiWorkoutModalOpen(true),
+    micro: () => setIsMicroModalOpen(true),
+    ferdighet: () => setIsSkillTreeModalOpen(true),
+    gruppe: () => setIsGroupModalOpen(true),
+    gps: () => setIsGpsModalOpen(true),
+  };
   const [isVoiceControlActive, setIsVoiceControlActive] = useState<boolean>(() => voiceCommandService.getIsListening());
   const [activeMicroExercise, setActiveMicroExercise] = useState<ExerciseItem | null>(null);
   const [activeChallengeId, setActiveChallengeIdState] = useState<string | null>(() => getActiveChallengeId());
@@ -210,19 +361,31 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   const handleToggleVoiceControl = () => voiceCommandService.toggleListening();
 
   const [weeklyProgress, setWeeklyProgress] = useState<WeeklyGoalProgress | null>(null);
+  const [weekStreak, setWeekStreak] = useState<WeekStreakResult | null>(null);
+  const [showStreakSheet, setShowStreakSheet] = useState(false);
 
   React.useEffect(() => {
     try {
-      const raw = localStorage.getItem('mintrener_local_workout_history');
+      const raw = localStorage.getItem(WORKOUT_HISTORY_KEY);
       const hist = raw ? JSON.parse(raw) : [];
       const sug = checkAdaptiveProgression(workout, hist);
       setAdaptiveSuggestion(sug);
       setWeeklyProgress(calculateWeeklyProgress(hist));
+      // Kjent spenning (N4): pillen viser calculateWeeklyProgress mot GJELDENDE
+      // mål, mens streaken dømmer inneværende uke etter målet ved UKESTART
+      // (makeGoalForWeek). Rett etter en målendring kan de to derfor vise ulikt
+      // «X av Y» — bevisst valg: pillen skal speile det brukeren nettopp satte,
+      // streaken skal aldri re-dømme en påbegynt uke.
+      setWeekStreak(computeWeekStreak(hist, makeGoalForWeek()));
     } catch {
       setAdaptiveSuggestion(null);
       setWeeklyProgress(null);
+      setWeekStreak(null);
     }
-  }, [workout, state.status]);
+    // showStreakSheet er bevisst med i deps (B4): arket kan endre ukesmålet,
+    // og lukkingen må re-beregne pillens fremdrift/streak — ellers viser den
+    // stale mål til neste status-skifte.
+  }, [workout, state.status, showStreakSheet]);
 
   // Håndfri Stemmestyring Listener (Steg 1)
   React.useEffect(() => {
@@ -268,8 +431,8 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
     switch (phase) {
       case 'prepare':
         return {
-          bg: 'bg-zinc-950',
-          badgeBg: 'bg-amber-950/80 text-amber-300 border border-amber-800/80',
+          bg: 'bg-blue-950/30',
+          badgeBg: 'bg-blue-950/90 text-blue-300 border border-blue-700/80',
           badgeText: 'Klargjøring',
         };
       case 'work':
@@ -352,7 +515,14 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
         filter: isDimmed ? 'brightness(0.6)' : 'none',
         transition: 'filter 500ms ease, background-color 500ms ease',
       }}
-      className={`relative flex flex-col justify-between w-full h-full max-w-md mx-auto px-4 pt-1.5 pb-2 select-none overflow-hidden transition-colors duration-500 ${phaseStyle.bg}`}
+      // Under aktiv økt eier skjermen seg selv: ingen scroll, fullskjerm (kap. 4).
+      // I hvilemodus deler favorittlisten og timerseksjonen plass, og på lave
+      // viewporter (landskap, små nettbrett) får de ikke rom til begge. Da skal
+      // innholdet kunne blas — ikke klippes og legge seg oppå hverandre, slik
+      // det gjorde før (revisjon A, funn B1).
+      className={`relative flex flex-col justify-between w-full h-full max-w-md mx-auto px-4 pt-1.5 pb-2 select-none transition-colors duration-500 ${
+        state.status === 'idle' ? 'overflow-y-auto overscroll-contain' : 'overflow-hidden'
+      } ${phaseStyle.bg}`}
     >
       {/* Fokusmodus: minimal flytende stripe (lås + lyd + evt. stemmestyring) erstatter
           hele toppraden under aktiv økt, se FocusModeQuickControls over. */}
@@ -384,6 +554,12 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
 
           {/* Høyre: Puls (hvis tilkoblet), Aktiv stemmestyring, Lyd og Lås */}
           <div className="flex items-center gap-1.5">
+            {/* Installer appen. Komponenten lå i repoet uten å rendres noe
+                sted — bygget, aldri koblet inn. Den tåler plass i topplinja
+                fordi den fjerner seg selv: returnerer null når appen allerede
+                kjører installert. */}
+            <PwaInstallPromptModal />
+
             {/* Heart Rate Widget (vises diskret når tilkoblet) */}
             <HeartRateWidget onHeartRateUpdate={setCurrentHeartRate} />
 
@@ -525,13 +701,32 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                 </div>
               )}
 
-              {/* 3. Ukesmål Fremdrift (Spec kap. 4) */}
+              {/* 3. Ukesmål Fremdrift (Spec kap. 4) + uke-streak (C1, spec § 2.2 valg A):
+                  hele pillen er en knapp som åpner streak-detaljarket. Flamme/uketall
+                  i varm gulltone, atskilt fra progresjonsgrønn; ingen streak → ingen
+                  flamme (ingen «0 uker»-skam). */}
               {weeklyProgress && (
-                <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900/70 border border-zinc-800/80 rounded-2xl text-xs shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setShowStreakSheet(true)}
+                  className="w-full flex items-center justify-between px-3 py-1.5 bg-zinc-900/70 border border-zinc-800/80 hover:border-zinc-700 rounded-2xl text-xs shadow-sm transition-all active:scale-[0.99] text-left"
+                >
                   <div className="flex items-center gap-2">
                     <div className={`p-1 rounded-lg ${weeklyProgress.isGoalMet ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
                       <Target className="w-3.5 h-3.5" />
                     </div>
+                    {weekStreak && weekStreak.currentWeeks >= 1 && (
+                      <>
+                        <span
+                          role="img"
+                          aria-label={`${weekStreak.currentWeeks} ${weekStreak.currentWeeks === 1 ? 'ukes' : 'ukers'} streak`}
+                          className="text-[11px] text-amber-400 font-semibold"
+                        >
+                          🔥 {weekStreak.currentWeeks} {weekStreak.currentWeeks === 1 ? 'uke' : 'uker'}
+                        </span>
+                        <span aria-hidden="true" className="text-zinc-600">·</span>
+                      </>
+                    )}
                     <span className="text-[11px] font-bold text-zinc-300">
                       Ukesmål: <strong className="text-white">{weeklyProgress.completedThisWeek}</strong> av <strong>{weeklyProgress.goal}</strong> økter
                     </span>
@@ -549,7 +744,11 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                       {weeklyProgress.percentage}%
                     </span>
                   </div>
-                </div>
+                  {/* UU (B5a): åpne-hintet som skjult suffiks — knappens
+                      tilgjengelige navn er dermed innholdet (streak + fremdrift)
+                      pluss hintet, aldri en aria-label som skjuler tallene */}
+                  <span className="sr-only">— åpne detaljer</span>
+                </button>
               )}
 
               {/* 3b. Aktiv Utfordring Fremdriftskort (C.15, C.15b) */}
@@ -605,91 +804,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                 );
               })()}
 
-              {/* 1. VERKTØY- OG MODUS-MATRISE (Alltid synlige på 2 linjer) */}
-              <div className="grid grid-cols-5 gap-1 sm:gap-1.5 py-0.5">
-                <button
-                  onClick={() => setIsChallengesModalOpen(true)}
-                  aria-label="28 og 30 dagers treningsutfordringer"
-                  className="py-1.5 px-1 rounded-xl bg-amber-950/80 border border-amber-500/50 text-[10px] sm:text-[11px] font-bold text-amber-300 hover:bg-amber-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 ring-1 ring-amber-400/20 text-center"
-                >
-                  <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                  <span className="truncate">Utfordring</span>
-                </button>
-                <button
-                  onClick={() => setIsPainFilterOpen(true)}
-                  aria-label="Skade- og smertefilter for trygg trening"
-                  className="py-1.5 px-1 rounded-xl bg-rose-950/80 border border-rose-500/50 text-[10px] sm:text-[11px] font-bold text-rose-300 hover:bg-rose-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 ring-1 ring-rose-400/20 text-center"
-                >
-                  <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                  <span className="truncate">Skånsom</span>
-                </button>
-                <button
-                  onClick={() => setIsAiCoachOpen(true)}
-                  aria-label="Astrid AI-Trener"
-                  className="py-1.5 px-1 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-[10px] sm:text-[11px] font-bold text-emerald-300 hover:bg-emerald-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  <span className="truncate">Astrid AI</span>
-                </button>
-                <button
-                  onClick={() => setIsAiWorkoutModalOpen(true)}
-                  aria-label="AI Treningsgenerator"
-                  className="py-1.5 px-1 rounded-xl bg-indigo-950/80 border border-indigo-800/80 text-[10px] sm:text-[11px] font-bold text-indigo-300 hover:bg-indigo-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
-                >
-                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">AI Økt</span>
-                </button>
-                <button
-                  onClick={() => setIsSkillTreeModalOpen(true)}
-                  aria-label="Ferdighetstrær & Mestringsstige"
-                  className="py-1.5 px-1 rounded-xl bg-purple-950/80 border border-purple-800/80 text-[10px] sm:text-[11px] font-bold text-purple-400 hover:bg-purple-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
-                >
-                  <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">Ferdighet</span>
-                </button>
-                <button
-                  onClick={() => setIsStrengthModalOpen(true)}
-                  aria-label="Styrketrening med Dobbel Progresjon"
-                  className="py-1.5 px-1 rounded-xl bg-emerald-950/80 border border-emerald-800/80 text-[10px] sm:text-[11px] font-bold text-emerald-400 hover:bg-emerald-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
-                >
-                  <Dumbbell className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">Styrke</span>
-                </button>
-                <button
-                  onClick={() => setIsMicroModalOpen(true)}
-                  aria-label="Microtrening"
-                  className="py-1.5 px-1 rounded-xl bg-amber-950/80 border border-amber-800/80 text-[10px] sm:text-[11px] font-bold text-amber-400 hover:bg-amber-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
-                >
-                  <Zap className="w-3.5 h-3.5 fill-current shrink-0" />
-                  <span className="truncate">Micro</span>
-                </button>
-                <button
-                  onClick={() => setIsGpsModalOpen(true)}
-                  aria-label="GPS Utendørsøkt"
-                  className="py-1.5 px-1 rounded-xl bg-emerald-950/80 border border-emerald-800/80 text-[10px] sm:text-[11px] font-bold text-emerald-400 hover:bg-emerald-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
-                >
-                  <Navigation className="w-3.5 h-3.5 fill-current shrink-0" />
-                  <span className="truncate">GPS</span>
-                </button>
-                <button
-                  onClick={() => setIsGroupModalOpen(true)}
-                  aria-label="Grupperom"
-                  className="py-1.5 px-1 rounded-xl bg-purple-950/80 border border-purple-800/80 text-[10px] sm:text-[11px] font-bold text-purple-400 hover:bg-purple-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 text-center"
-                >
-                  <Users className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">Gruppe</span>
-                </button>
-                <button
-                  onClick={() => setIsTvModeOpen(true)}
-                  aria-label="Storskjerm og TV-visning"
-                  className="py-1.5 px-1 rounded-xl bg-blue-950/80 border border-blue-800/80 text-[10px] sm:text-[11px] font-bold text-blue-400 hover:bg-blue-900 transition-all flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm active:scale-95 ring-1 ring-blue-400/20 text-center"
-                >
-                  <Tv className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">TV</span>
-                </button>
-              </div>
-
-              {/* 2. FAVORITT-PROGRAMMER OVERSKRIFT & LENKE */}
+              {/* FAVORITT-PROGRAMMER OVERSKRIFT & LENKE */}
               <div className="flex items-center justify-between px-1 pt-1.5 pb-0.5">
                 <span className="text-[11px] uppercase font-black text-zinc-300 tracking-wider flex items-center gap-1.5">
                   <Star className="w-3.5 h-3.5 text-amber-400 fill-current" />
@@ -779,7 +894,13 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
       </header>
 
       {/* 2. HOVEDSEKSJON: Fase, Øvelsesnavn, Sirkulær indikator */}
-      <main className="flex flex-col items-center justify-center flex-1 my-auto space-y-1.5 text-center z-10 min-h-0">
+      {/* shrink-0 i hvilemodus: seksjonen skal vike ved å skyve innhold ned i
+          scrollen, ikke ved å presses sammen bak favorittlisten (funn B1). */}
+      <main
+        className={`flex flex-col items-center justify-center flex-1 my-auto space-y-1.5 landscape:space-y-0.5 text-center z-10 ${
+          state.status === 'idle' ? 'shrink-0' : 'min-h-0'
+        }`}
+      >
         {/* Rundenummer / Intervall & Fase-badge — forstørres i fokusmodus for lesbarhet
             på 1,5 m avstand under aktiv økt (revisjon §3.1) */}
         <div className="flex flex-col items-center gap-1">
@@ -832,13 +953,30 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           </h1>
         </div>
 
-        {/* Sirkelmåler med gjenværende tid */}
+        {/* Sirkelmåler med gjenværende tid — eller repetisjonsmålet når fasen
+            venter på brukeren. En nedtelling som ikke teller ned er verre enn
+            ingen: brukeren venter på et tall som aldri beveger seg. */}
         <div className="w-full flex items-center justify-center py-1">
-          <CircularProgress
-            progress={state.phaseProgress}
-            remainingSeconds={state.phaseRemainingSeconds}
-            phase={state.phase}
-          />
+          {state.awaitingReps !== undefined ? (
+            <div
+              data-testid="reps-maal"
+              className="flex flex-col items-center justify-center gap-1"
+              aria-live="polite"
+            >
+              <span className="text-7xl sm:text-8xl font-black text-white tabular-nums leading-none drop-shadow-sm">
+                {state.awaitingReps}
+              </span>
+              <span className="text-xs sm:text-sm font-bold uppercase tracking-widest text-zinc-400">
+                repetisjoner
+              </span>
+            </div>
+          ) : (
+            <CircularProgress
+              progress={state.phaseProgress}
+              remainingSeconds={state.phaseRemainingSeconds}
+              phase={state.phase}
+            />
+          )}
         </div>
 
         {/* Live Pulsgraf ved aktiv pulsmåling */}
@@ -886,7 +1024,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
       </main>
 
       {/* 3. BUNNBAR: Tommelknapper («Én hånd, ett blikk») */}
-      <footer className="pt-1 pb-[calc(env(safe-area-inset-bottom,0px)+8px)] shrink-0 z-10">
+      <footer className="pt-1 landscape:pt-0.5 pb-[calc(env(safe-area-inset-bottom,0px)+8px)] landscape:pb-[calc(env(safe-area-inset-bottom,0px)+4px)] shrink-0 z-10">
         <div className="flex items-center justify-between gap-2.5 max-w-sm mx-auto">
           {/* Forrige-knapp */}
           <button
@@ -899,7 +1037,16 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           </button>
 
           {/* Stor Hovedknapp (Start / Pause / Fortsett) */}
-          {state.status === 'idle' ? (
+          {state.awaitingReps !== undefined && state.status !== 'idle' ? (
+            <button
+              onClick={onSkipNext}
+              disabled={state.isLocked}
+              className="flex-[2.5] py-3.5 px-5 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-zinc-950 font-black text-lg rounded-2xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 transition-all"
+            >
+              <Check className="w-6 h-6" />
+              FERDIG
+            </button>
+          ) : state.status === 'idle' ? (
             <button
               onClick={onStart}
               disabled={state.isLocked}
@@ -952,6 +1099,55 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
           </div>
         )}
       </footer>
+
+      {/* 4. UTFORSK OG VERKTØY — sist på siden, kollapset til fire.
+          Matrisen sto tidligere over favorittlisten og dominerte skjermen med ti
+          alltid-synlige knapper (revisjon A, spørsmål D). Nå ligger den etter
+          primærhandlingen, og bare de fire som hører til en treningsøkt står
+          framme. Resten er ett trykk unna, ikke borte. */}
+      {state.status === 'idle' && (
+        <section className="shrink-0 z-10 pt-1 space-y-1 pb-[calc(env(safe-area-inset-bottom,0px)+8px)]">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[11px] uppercase font-black text-zinc-400 tracking-wider">
+              Utforsk og verktøy
+            </span>
+            <button
+              type="button"
+              onClick={handleToggleTools}
+              aria-expanded={showAllTools}
+              aria-controls="verktoy-rad"
+              className="flex items-center gap-0.5 px-2 py-1.5 -mr-1 rounded-lg text-xs font-bold text-emerald-400 hover:text-emerald-300 hover:bg-zinc-900/60 transition-colors"
+            >
+              {/* Navnet står stille i begge tilstander (WCAG 2.5.3); aria-expanded
+                  og pilretningen bærer tilstanden. */}
+              <span>Flere verktøy</span>
+              <ChevronDown
+                aria-hidden="true"
+                className={`w-3.5 h-3.5 transition-transform ${showAllTools ? 'rotate-180' : ''}`}
+              />
+            </button>
+          </div>
+
+          <div ref={toolRowRef} id="verktoy-rad" data-testid="verktoy-rad" className="grid grid-cols-4 gap-1.5">
+            {START_SCREEN_TOOLS.filter((t) => showAllTools || t.primary).map((tool) => {
+              const Ikon = tool.icon;
+              return (
+                <button
+                  key={tool.id}
+                  onClick={() => toolOpeners[tool.id]()}
+                  aria-label={tool.ariaLabel}
+                  className="min-h-[44px] px-1 py-1.5 rounded-xl bg-zinc-900/80 border border-zinc-800 hover:bg-zinc-800 hover:border-zinc-700 transition-all active:scale-95 flex flex-col items-center justify-center gap-0.5 text-center shadow-sm"
+                >
+                  <Ikon aria-hidden="true" className={`w-4 h-4 shrink-0 ${tool.iconClass}`} />
+                  <span className="text-[10px] sm:text-[11px] font-bold text-zinc-300 truncate max-w-full">
+                    {tool.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* LÅST SKJERM OVERLAY (Beskytter mot utilsiktede trykk) */}
       {state.isLocked && (
@@ -1126,6 +1322,11 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             onSelectWorkout(adapted);
           }}
         />
+      )}
+
+      {/* Streak-detaljark (C1, spec § 2.2) — åpnes fra ukesmål-pillen */}
+      {showStreakSheet && weekStreak && (
+        <StreakDetailSheet streak={weekStreak} onClose={() => setShowStreakSheet(false)} />
       )}
     </div>
   );

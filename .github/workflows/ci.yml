@@ -29,6 +29,12 @@ jobs:
           VITE_FIREBASE_PROJECT_ID: 'mintrener'
         run: npm test
 
+      # Fanger strukturelle feil testene ikke ser: tjenester uten kallsteder,
+      # Firestore-stier uten regel, localStorage-nøkler utenfor registeret.
+      # Rapporterer uten å blokkere — et funn kan være bevisst.
+      - name: Førmerge-sjekk
+        run: npm run sjekk
+
       - name: TypeScript & Vite Build
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY || 'ci-test-key' }}

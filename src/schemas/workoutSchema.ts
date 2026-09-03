@@ -31,6 +31,9 @@ export const IntervalItemSchema = z.object({
   exercise: WorkoutExerciseSchema,
   workDurationSeconds: durationSecondsSchema,
   restDurationSeconds: durationSecondsSchema,
+  // Repetisjonsbasert øvelse: fasen venter på brukeren i stedet for klokka.
+  // Øvre grense holder en fiendtlig payload fra å be om et urimelig mål.
+  targetReps: z.number().int().min(1).max(999).optional(),
 });
 
 export const WorkoutTemplateSchema = z.object({

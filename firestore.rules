@@ -32,6 +32,10 @@ service cloud.firestore {
       match /strength_logs/{logId} {
         allow read, write: if isOwner(userId);
       }
+
+      match /personal_records/{recordId} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
     // Felles øvelsesbibliotek: Alle kan lese, kun backend/admin kan endre
@@ -42,8 +46,10 @@ service cloud.firestore {
 
     // Grupperom: Sikret tilgangskontroll
     match /rooms/{roomId} {
-      // Alle med romkoden kan lese rommet
-      allow read: if true;
+      // Alle med romkoden kan lese rommet direkte (get), men samlingen kan IKKE listes (list)
+      // for å forhindre skraping av rom og vertsinformasjon (revisjon 2026-08-30).
+      allow get: if true;
+      allow list: if false;
 
       // Kun innlogget/anonym bruker kan opprette som vert
       allow create: if isAuthenticated() 
@@ -226,6 +232,101 @@ service cloud.firestore {
         && counterDeltaOk('deviationUnder20Ms', 1)
         && counterDeltaOk('deviation20to50Ms', 1)
         && counterDeltaOk('deviationOver50Ms', 1);
+    }
+
+    // Engasjementstellere (C1/C2: uke-streak + onboarding), skrevet av
+    // telemetryService.recordEngagementEvent. Bevisst FLATE feltnavn (ingen
+    // nøstede maps): da kan hver teller delta-valideres individuelt med
+    // counterInitOk/counterDeltaOk og maxDelta 1 — ingen av restrisikoene fra
+    // exercises/types-kartene. Feltallowlisten under speiler EngagementCounter-
+    // typen i telemetryService.ts — endres den ene, MÅ den andre endres.
+    //
+    // Why guarded per-felt-sjekk: regelmotoren har et tak på 1000 evaluerte
+    // uttrykk per betingelse, og 24 ubetingede counterDeltaOk-kall sprengte
+    // det (verifisert mot emulatoren — PERMISSION_DENIED med «maximum of 1000
+    // expressions»). Klienten berører uansett bare ÉN teller + lastUpdated per
+    // skriv, så delta-sjekken kortslutter til en billig hasAny for alle felt
+    // som ikke er med i skrivingen — samme garanti, brøkdelen av kostnaden.
+    match /global_stats/engagement {
+      function engagementFields() {
+        return ['onboarding_started', 'onboarding_personaChosen_haugesund',
+          'onboarding_personaChosen_romsdal', 'onboarding_personaChosen_hardcore',
+          'onboarding_personaChosen_boyband', 'onboarding_personaChosen_standard',
+          'onboarding_goalSet', 'onboarding_firstWorkoutStarted', 'onboarding_skipped',
+          'streak_weekCompleted', 'streak_insuranceUsed', 'streak_broken',
+          'streak_milestone_w2', 'streak_milestone_w4', 'streak_milestone_w8',
+          'streak_milestone_w12', 'streak_milestone_w26', 'streak_milestone_w52',
+          'accountPrompt_first_workout_shown', 'accountPrompt_first_workout_accepted',
+          'accountPrompt_first_workout_dismissed', 'accountPrompt_week2_shown',
+          'accountPrompt_week2_accepted', 'accountPrompt_week2_dismissed',
+          'lastUpdated'];
+      }
+
+      // Feltet er utelatt fra skrivingen, ELLERS må det bestå full init-sjekk.
+      function initOkIfPresent(field) {
+        return !request.resource.data.keys().hasAny([field]) || counterInitOk(field, 1);
+      }
+
+      // Feltet er uberørt av skrivingen, ELLERS må det bestå full delta-sjekk.
+      function deltaOkIfAffected(field) {
+        return !request.resource.data.diff(resource.data).affectedKeys().hasAny([field])
+          || counterDeltaOk(field, 1);
+      }
+
+      allow create: if request.resource.data.keys().hasOnly(engagementFields())
+        && request.resource.data.lastUpdated == request.time
+        && initOkIfPresent('onboarding_started')
+        && initOkIfPresent('onboarding_personaChosen_haugesund')
+        && initOkIfPresent('onboarding_personaChosen_romsdal')
+        && initOkIfPresent('onboarding_personaChosen_hardcore')
+        && initOkIfPresent('onboarding_personaChosen_boyband')
+        && initOkIfPresent('onboarding_personaChosen_standard')
+        && initOkIfPresent('onboarding_goalSet')
+        && initOkIfPresent('onboarding_firstWorkoutStarted')
+        && initOkIfPresent('onboarding_skipped')
+        && initOkIfPresent('streak_weekCompleted')
+        && initOkIfPresent('streak_insuranceUsed')
+        && initOkIfPresent('streak_broken')
+        && initOkIfPresent('streak_milestone_w2')
+        && initOkIfPresent('streak_milestone_w4')
+        && initOkIfPresent('streak_milestone_w8')
+        && initOkIfPresent('streak_milestone_w12')
+        && initOkIfPresent('streak_milestone_w26')
+        && initOkIfPresent('streak_milestone_w52')
+        && initOkIfPresent('accountPrompt_first_workout_shown')
+        && initOkIfPresent('accountPrompt_first_workout_accepted')
+        && initOkIfPresent('accountPrompt_first_workout_dismissed')
+        && initOkIfPresent('accountPrompt_week2_shown')
+        && initOkIfPresent('accountPrompt_week2_accepted')
+        && initOkIfPresent('accountPrompt_week2_dismissed');
+
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(engagementFields())
+        && request.resource.data.lastUpdated == request.time
+        && deltaOkIfAffected('onboarding_started')
+        && deltaOkIfAffected('onboarding_personaChosen_haugesund')
+        && deltaOkIfAffected('onboarding_personaChosen_romsdal')
+        && deltaOkIfAffected('onboarding_personaChosen_hardcore')
+        && deltaOkIfAffected('onboarding_personaChosen_boyband')
+        && deltaOkIfAffected('onboarding_personaChosen_standard')
+        && deltaOkIfAffected('onboarding_goalSet')
+        && deltaOkIfAffected('onboarding_firstWorkoutStarted')
+        && deltaOkIfAffected('onboarding_skipped')
+        && deltaOkIfAffected('streak_weekCompleted')
+        && deltaOkIfAffected('streak_insuranceUsed')
+        && deltaOkIfAffected('streak_broken')
+        && deltaOkIfAffected('streak_milestone_w2')
+        && deltaOkIfAffected('streak_milestone_w4')
+        && deltaOkIfAffected('streak_milestone_w8')
+        && deltaOkIfAffected('streak_milestone_w12')
+        && deltaOkIfAffected('streak_milestone_w26')
+        && deltaOkIfAffected('streak_milestone_w52')
+        && deltaOkIfAffected('accountPrompt_first_workout_shown')
+        && deltaOkIfAffected('accountPrompt_first_workout_accepted')
+        && deltaOkIfAffected('accountPrompt_first_workout_dismissed')
+        && deltaOkIfAffected('accountPrompt_week2_shown')
+        && deltaOkIfAffected('accountPrompt_week2_accepted')
+        && deltaOkIfAffected('accountPrompt_week2_dismissed');
     }
 
     // Klokkesynkronisering (NTP-forenklet): hver klient skriver/leser sitt eget

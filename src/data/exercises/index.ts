@@ -3,10 +3,10 @@ import { KETTLEBELL_EXERCISES } from './kettlebell';
 import { DUMBBELL_EXERCISES } from './dumbbells';
 import { CARDIO_EXERCISES } from './cardio';
 import { MOBILITY_EXERCISES } from './mobility';
-import { ExerciseItem, validateExerciseList } from '../../schemas/exerciseSchema';
+import { ExerciseInput, ExerciseItem, validateExerciseList } from '../../schemas/exerciseSchema';
 
 // Samle alle bolkene
-export const ALL_RAW_EXERCISES: ExerciseItem[] = [
+export const ALL_RAW_EXERCISES: ExerciseInput[] = [
   ...BODYWEIGHT_EXERCISES,
   ...KETTLEBELL_EXERCISES,
   ...DUMBBELL_EXERCISES,

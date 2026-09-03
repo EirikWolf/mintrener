@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StrengthProgramTemplate, StrengthSetLog } from '../../schemas/strengthSchema';
 import { EXERCISE_LIBRARY } from '../../data/exercises';
 import { ExerciseIllustration } from '../exercises/ExerciseIllustration';
@@ -20,6 +20,7 @@ import {
   Info,
   Clock,
 } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface StrengthWorkoutModalProps {
   program?: StrengthProgramTemplate;
@@ -48,6 +49,8 @@ export const StrengthWorkoutModal: React.FC<StrengthWorkoutModalProps> = ({
   onClose,
   onCompleteWorkout,
 }) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, { onClose });
   const [exercises, setExercises] = useState<ActiveExerciseState[]>(() => {
     return DEFAULT_STRENGTH_SESSION_EXERCISES.map((ex) => {
       const prev = getLatestExerciseLog(ex.id);
@@ -84,22 +87,41 @@ export const StrengthWorkoutModal: React.FC<StrengthWorkoutModalProps> = ({
   const activeExercise = exercises[activeExerciseIndex];
   const exerciseObj = EXERCISE_LIBRARY.find((e) => e.id === activeExercise?.exerciseId) || EXERCISE_LIBRARY[0];
 
-  // Hviletimer-teller
+  const restTargetTimeRef = useRef<number | null>(null);
+  const lastBeepSecondRef = useRef<number | null>(null);
+
+  // Hviletimer basert på veggklokke (Date.now()) slik at den overlever bakgrunnsmodus
   useEffect(() => {
-    if (restSecondsRemaining === null || restSecondsRemaining <= 0) return;
+    if (restSecondsRemaining === null || restSecondsRemaining <= 0) {
+      restTargetTimeRef.current = null;
+      lastBeepSecondRef.current = null;
+      return;
+    }
+
+    if (!restTargetTimeRef.current) {
+      restTargetTimeRef.current = Date.now() + restSecondsRemaining * 1000;
+    }
 
     const timer = setInterval(() => {
-      setRestSecondsRemaining((prev) => {
-        if (prev === null || prev <= 1) {
-          audioService.playWorkStart(true);
-          return null;
-        }
-        if (prev <= 3) {
-          audioService.playCountdownBeep(true);
-        }
-        return prev - 1;
-      });
-    }, 1000);
+      if (!restTargetTimeRef.current) return;
+      const diffMs = restTargetTimeRef.current - Date.now();
+      const remaining = Math.max(0, Math.ceil(diffMs / 1000));
+
+      if (remaining <= 0) {
+        audioService.playWorkStart(true);
+        restTargetTimeRef.current = null;
+        lastBeepSecondRef.current = null;
+        setRestSecondsRemaining(null);
+        return;
+      }
+
+      if (remaining <= 3 && lastBeepSecondRef.current !== remaining) {
+        lastBeepSecondRef.current = remaining;
+        audioService.playCountdownBeep(true);
+      }
+
+      setRestSecondsRemaining(remaining);
+    }, 250);
 
     return () => clearInterval(timer);
   }, [restSecondsRemaining]);
@@ -247,10 +269,12 @@ export const StrengthWorkoutModal: React.FC<StrengthWorkoutModalProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 text-white"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="strength-program-title"
-        className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4"
+        className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4 focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-850 pb-3 shrink-0">

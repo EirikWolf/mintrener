@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   generateCustomAiWorkout,
   AiWorkoutPrompt,
@@ -15,6 +15,7 @@ import {
   Flame,
   Check,
 } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface AiWorkoutGeneratorModalProps {
   onClose: () => void;
@@ -30,6 +31,9 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
   const [energy, setEnergy] = useState<'lav' | 'middels' | 'høy'>('middels');
   const [avoidList, setAvoidList] = useState<string[]>([]);
   const [generatedWorkout, setGeneratedWorkout] = useState<WorkoutTemplate | null>(null);
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, { onClose });
 
   const toggleAvoid = (tag: string) => {
     setAvoidList((prev) =>
@@ -80,10 +84,12 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 text-white"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="ai-generator-title"
-        className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto"
+        className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-850 pb-3">

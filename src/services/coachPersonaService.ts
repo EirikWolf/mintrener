@@ -10,7 +10,10 @@ import personaAudioManifestJson from '../data/personaAudioManifest.json';
 const AUDIO_MANIFEST: Readonly<Record<string, Readonly<Record<string, string>>>> =
   personaAudioManifestJson;
 
-export type CoachPersonaId = 'standard' | 'haugesund' | 'romsdal' | 'hardcore' | 'boyband';
+// Jossa (haugalandsk) og Ola (romsdalsk) er fjernet 2026-08-31. Lagrede valg
+// migreres av seg selv: getActiveCoachPersona validerer mot COACH_PERSONAS og
+// faller til 'standard' for en id som ikke finnes lenger.
+export type CoachPersonaId = 'standard' | 'hardcore' | 'boyband';
 
 export type PersonaCueName = 'intro' | 'start_321' | 'halfway' | 'last5' | 'finish';
 
@@ -30,30 +33,6 @@ export interface CoachPersona {
 }
 
 export const COACH_PERSONAS: CoachPersona[] = [
-  {
-    id: 'haugesund',
-    name: 'Jossa',
-    dialectOrStyle: 'Haugalandet (haugalandsk)',
-    tagline: '«Gje gass nå! Trø te!»',
-    description: 'Rått tempo, jovial vestlandsenergi og ingen vits å spare på kreftene.',
-    icon: '⚓',
-    color: 'emerald',
-    badge: 'Vestlandsk',
-    previewUrl: '/audio/personas/haugesund_preview.mp3',
-    cuesPath: '/audio/personas/haugesund',
-  },
-  {
-    id: 'romsdal',
-    name: 'Ola',
-    dialectOrStyle: 'Romsdalen (romsdalsk)',
-    tagline: '«No e det bære å gønne på!»',
-    description: 'Fjellstø romsdalsk treningsglede som holder trykket og humøret oppe.',
-    icon: '🏔️',
-    color: 'blue',
-    badge: 'Møredialekt',
-    previewUrl: '/audio/personas/romsdal_preview.mp3',
-    cuesPath: '/audio/personas/romsdal',
-  },
   {
     id: 'hardcore',
     name: 'Axel',
@@ -80,10 +59,15 @@ export const COACH_PERSONAS: CoachPersona[] = [
   },
   {
     id: 'standard',
-    name: 'Astrid (Standard)',
-    dialectOrStyle: 'Standard Norsk (Syntetisk)',
+    // Het «Astrid (Standard)». Navnet lovte en kvinnestemme, men stemmen kommer
+    // fra operativsystemet: på en vanlig Windows-maskin er «Microsoft Jon» den
+    // eneste norske som finnes, og den er mannlig. Vi eier ikke stemmene og kan
+    // derfor ikke gi dem navn eller kjønn — UI-et viser den faktiske stemmen.
+    name: 'Enhetens stemme',
+    dialectOrStyle: 'Talesyntese fra operativsystemet',
     tagline: '«Klar, ferdig, gå!»',
-    description: 'Klassisk rolig og tydelig stemmeveiledning rett i nettleseren.',
+    description:
+      'Bruker den norske stemmen enheten din har. Hvilken det er, varierer mellom telefon og PC.',
     icon: '🧘',
     color: 'zinc',
     badge: 'Klassisk',
@@ -384,6 +368,33 @@ export async function playPersonaCue(
 }
 
 /**
+ * Prepare-kjedens nøkler etter spec § 4 — ÉN definisjon (BØR-2, andre review).
+ * Med manifest-preloaden (β5) er personaens egne øvelsesklipp normalt cachet:
+ * da skal personaens stemme lese navnet, ikke det generiske studioklippet.
+ * null = kjeden kan ikke spilles som buffer (intro mangler, eller et ledd er
+ * ikke dekodet) → kalleren tar sin degraderte sti.
+ *
+ * TO kallsteder, samme utledning: playIntroThenExercise (avspilling) og
+ * audioDirector.derivePrepareChain (hodrommet lookaheaden beskytter og Ø4-
+ * degraderingen). Tidligere var dette to uavhengige kopier — driftet de fra
+ * hverandre, ville hodrommet vært regnet fra andre klipp enn de som spilles.
+ */
+export function resolveIntroExerciseKeys(
+  exerciseId: string
+): { introKey: string; nameKey: string } | null {
+  const introUrl = getPersonaCueUrl('intro');
+  const personaExerciseKey = getPersonaClipKey('exercise-' + exerciseId);
+  const exerciseKey =
+    personaExerciseKey && audioBufferEngine.has(personaExerciseKey)
+      ? personaExerciseKey
+      : 'exercise-' + exerciseId;
+  if (!introUrl || !audioBufferEngine.has(introUrl) || !audioBufferEngine.has(exerciseKey)) {
+    return null;
+  }
+  return { introKey: introUrl, nameKey: exerciseKey };
+}
+
+/**
  * Spiller personaens intro og øvelsesannonseringen som ÉN sample-nøyaktig
  * bufferkjede – erstatter den gamle sekvenseringen som GJETTET introens
  * varighet med setTimeout(2300). Returnerer false (uten å spille noe) når
@@ -393,22 +404,12 @@ export async function playPersonaCue(
 export async function playIntroThenExercise(exerciseId: string): Promise<boolean> {
   if (getActiveCoachPersona() === 'standard') return false;
 
-  const introUrl = getPersonaCueUrl('intro');
-  // Spec § 4-kjeden (persona-klipp → studioklipp) også i intro-kjeden: med
-  // manifest-preloaden (β5) er personaens egne øvelsesklipp normalt cachet —
-  // da skal personaens stemme lese navnet, ikke det generiske studioklippet.
-  const personaExerciseKey = getPersonaClipKey('exercise-' + exerciseId);
-  const exerciseKey =
-    personaExerciseKey && audioBufferEngine.has(personaExerciseKey)
-      ? personaExerciseKey
-      : 'exercise-' + exerciseId;
-  if (!introUrl || !audioBufferEngine.has(introUrl) || !audioBufferEngine.has(exerciseKey)) {
-    return false;
-  }
+  const keys = resolveIntroExerciseKeys(exerciseId);
+  if (keys === null) return false;
 
   // Audible-only (Planrettelse 3): prepare-lookaheaden (start_321/go) er
   // typisk allerede skedulert når intro-kjeden starter — den skal overleve.
   stopAudiblePersonaAudio();
-  void audioBufferEngine.playSequence([introUrl, exerciseKey]);
+  void audioBufferEngine.playSequence([keys.introKey, keys.nameKey]);
   return true;
 }

@@ -79,6 +79,7 @@ export const ExerciseSchema = z.object({
   bildeVinkel: ImageAngleSchema.default('side'),
   bildeStatus: ImageStatusSchema.default('mangler'),
   bildeUrl: z.string().optional(),
+  videoUrl: z.string().optional(),
   alternatives: z.object({
     seated: z.string().optional(),
     easier: z.string().optional(),
@@ -96,6 +97,7 @@ export const ExerciseSchema = z.object({
 });
 
 export type ExerciseItem = z.infer<typeof ExerciseSchema>;
+export type ExerciseInput = z.input<typeof ExerciseSchema>;
 
 /**
  * Validerer én enkelt øvelse mot JSON Schema

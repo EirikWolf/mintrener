@@ -10,6 +10,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { saveCompletedWorkout } from '../../services/firestoreService';
 import { Navigation, Play, Pause, Square, Download, X, Footprints, Bike, CheckCircle2 } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface GpsTrackerModalProps {
   onClose: () => void;
@@ -27,19 +28,33 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
   const [autoPauseEnabled, setAutoPauseEnabled] = useState<boolean>(true);
   const [isAutoPaused, setIsAutoPaused] = useState<boolean>(false);
 
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, { onClose });
+
   const watchIdRef = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);
   const lastPointRef = useRef<GpsPoint | null>(null);
-  const startTimeRef = useRef<number>(Date.now());
   const stationaryTickRef = useRef<number>(0);
+  const accumulatedMsRef = useRef<number>(0);
+  const segmentStartMsRef = useRef<number | null>(null);
 
-  // Sekundteller med støtte for auto-pause ved stillstand
+  // Sekundteller basert på veggklokke-tidsdifferanser (overlever bakgrunnsmodus og låst skjerm)
   useEffect(() => {
     if (status === 'tracking' && !isAutoPaused) {
+      if (!segmentStartMsRef.current) {
+        segmentStartMsRef.current = Date.now();
+      }
       timerRef.current = window.setInterval(() => {
-        setElapsedSeconds((prev) => prev + 1);
-      }, 1000);
+        if (!segmentStartMsRef.current) return;
+        const currentSegmentMs = Date.now() - segmentStartMsRef.current;
+        const totalActiveMs = accumulatedMsRef.current + currentSegmentMs;
+        setElapsedSeconds(Math.floor(totalActiveMs / 1000));
+      }, 500);
     } else {
+      if (segmentStartMsRef.current) {
+        accumulatedMsRef.current += Date.now() - segmentStartMsRef.current;
+        segmentStartMsRef.current = null;
+      }
       if (timerRef.current) clearInterval(timerRef.current);
     }
     return () => {
@@ -57,7 +72,7 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
     setStatus('tracking');
     setIsAutoPaused(false);
     stationaryTickRef.current = 0;
-    startTimeRef.current = Date.now();
+    segmentStartMsRef.current = Date.now();
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
@@ -132,6 +147,13 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
       watchIdRef.current = null;
     }
 
+    if (segmentStartMsRef.current) {
+      accumulatedMsRef.current += Date.now() - segmentStartMsRef.current;
+      segmentStartMsRef.current = null;
+    }
+    const finalSeconds = Math.floor(accumulatedMsRef.current / 1000);
+    setElapsedSeconds(finalSeconds);
+
     const distKm = (distanceMeters / 1000).toFixed(2);
     const actName = activityType === 'lop' ? 'Løpetur (GPS)' : activityType === 'sykkel' ? 'Sykkeltur (GPS)' : 'Gåtur (GPS)';
 
@@ -139,7 +161,7 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
       workoutId: `gps-${Date.now()}`,
       workoutName: `${actName} • ${distKm} km`,
       workoutType: 'gps',
-      durationSeconds: elapsedSeconds,
+      durationSeconds: finalSeconds,
       roundsCompleted: 1,
       totalRounds: 1,
     });
@@ -148,10 +170,10 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
   const completedSession: GpsWorkoutSession = {
     id: `gps-session-${Date.now()}`,
     activityType,
-    startTime: startTimeRef.current,
+    startTime: Date.now() - accumulatedMsRef.current,
     endTime: Date.now(),
     totalDistanceMeters: distanceMeters,
-    elapsedSeconds,
+    elapsedSeconds: Math.floor(accumulatedMsRef.current / 1000),
     averageSpeedKmh: elapsedSeconds > 0 ? (distanceMeters / elapsedSeconds) * 3.6 : 0,
     currentPaceMinKm: formatPace(currentSpeed),
     points,
@@ -182,10 +204,12 @@ export const GpsTrackerModal: React.FC<GpsTrackerModalProps> = ({ onClose }) => 
       className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="gps-modal-title"
-        className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4 relative z-[101]"
+        className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4 relative z-[101] focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5 shrink-0">

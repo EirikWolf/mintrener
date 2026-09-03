@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Download, X, Share, PlusSquare, Smartphone } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -12,6 +13,12 @@ export const PwaInstallPromptModal: React.FC = () => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isIos, setIsIos] = useState<boolean>(false);
   const [isStandalone, setIsStandalone] = useState<boolean>(false);
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, {
+    isActive: isOpen,
+    onClose: () => setIsOpen(false),
+  });
 
   useEffect(() => {
     // Sjekk om appen allerede kjører som standalone PWA
@@ -48,16 +55,6 @@ export const PwaInstallPromptModal: React.FC = () => {
     }
   };
 
-  // WCAG: Lukk ved trykk på Escape-tast
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsOpen(false);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen]);
-
   // Hvis allerede installert og åpnet som app, trenger vi ikke vise knappen
   if (isStandalone) {
     return null;
@@ -71,10 +68,12 @@ export const PwaInstallPromptModal: React.FC = () => {
       className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="pwa-modal-title"
-        className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl space-y-4 relative z-[101]"
+        className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl space-y-4 relative z-[101] focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
@@ -156,6 +155,11 @@ export const PwaInstallPromptModal: React.FC = () => {
       {/* Diskré installer-knapp i topplinjen */}
       <button
         onClick={() => (deferredPrompt ? handleInstallClick() : setIsOpen(true))}
+        // Teksten «Installer» skjules av CSS på smale skjermer. Uten et
+        // eksplisitt navn står da bare ikonet igjen, og title er ikke et
+        // pålitelig navn for skjermlesere. Den synlige teksten inngår i
+        // navnet (WCAG 2.5.3).
+        aria-label="Installer appen på hjemskjerm"
         title="Installer appen på hjemskjerm"
         className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-800/80 text-[10px] font-bold text-emerald-400 hover:bg-emerald-900 transition-all flex items-center gap-1 shadow-sm active:scale-95"
       >

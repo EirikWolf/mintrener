@@ -87,11 +87,11 @@ describe('persona-aksentfarger (B6.1)', () => {
   });
 
   it('applyPersonaAccent uten argument bruker aktiv persona (oppstartsstien)', () => {
-    setActiveCoachPersona('romsdal');
+    setActiveCoachPersona('hardcore');
     document.documentElement.style.removeProperty('--persona-accent');
     applyPersonaAccent();
     expect(document.documentElement.style.getPropertyValue('--persona-accent')).toBe(
-      getPersonaAccentColor('romsdal')
+      getPersonaAccentColor('hardcore')
     );
   });
 
@@ -100,9 +100,9 @@ describe('persona-aksentfarger (B6.1)', () => {
     expect(document.documentElement.style.getPropertyValue('--persona-accent')).toBe(
       getPersonaAccentColor('boyband')
     );
-    setActiveCoachPersona('haugesund');
+    setActiveCoachPersona('boyband');
     expect(document.documentElement.style.getPropertyValue('--persona-accent')).toBe(
-      getPersonaAccentColor('haugesund')
+      getPersonaAccentColor('boyband')
     );
   });
 });

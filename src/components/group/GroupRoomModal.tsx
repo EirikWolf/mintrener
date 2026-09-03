@@ -10,7 +10,8 @@ import {
   startGroupWorkout,
 } from '../../services/groupRoomService';
 import { estimateServerClockOffset, getServerNow } from '../../services/clockSyncService';
-import { Users, X, Play, Copy, Check, Radio, Sparkles, ArrowRight } from 'lucide-react';
+import { Users, X, Play, Copy, Check, Radio, Sparkles, ArrowRight, Share2 } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface GroupRoomModalProps {
   workout: WorkoutTemplate;
@@ -25,13 +26,41 @@ export const GroupRoomModal: React.FC<GroupRoomModalProps> = ({
 }) => {
   const { user } = useAuth();
   const [tab, setTab] = useState<'create' | 'join'>('create');
-  const [roomCode, setRoomCode] = useState<string>('');
+  const [roomCode, setRoomCode] = useState<string | null>(null);
   const [inputCode, setInputCode] = useState<string>('');
   const [roomState, setRoomState] = useState<GroupRoomState | null>(null);
   const [isCopied, setIsCopied] = useState<boolean>(false);
+  const [isShared, setIsShared] = useState<boolean>(false);
+  const [selectedReaction, setSelectedReaction] = useState<string | null>(null);
   const [isJoining, setIsJoining] = useState<boolean>(false);
   const [isStarting, setIsStarting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(modalRef, { onClose });
+
+  const handleShareRoom = async () => {
+    if (!roomCode) return;
+    const shareData = {
+      title: 'Bli med på treningsøkt i Min Trener!',
+      text: `Bli med på "${workout.name}" sammen nå! Romkode: ${roomCode}`,
+      url: `https://mintrener.web.app/?room=${roomCode}`,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        setIsShared(true);
+        setTimeout(() => setIsShared(false), 2000);
+      } catch {
+        // Bruker avbrøt deling
+      }
+    } else {
+      navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`);
+      setIsShared(true);
+      setTimeout(() => setIsShared(false), 2000);
+    }
+  };
 
   // Hindrer at felles-starten trigges flere ganger (onSnapshot kan fyre igjen mens vi venter)
   const hasStartedRef = useRef(false);
@@ -41,9 +70,10 @@ export const GroupRoomModal: React.FC<GroupRoomModalProps> = ({
   const handleCreateRoom = async () => {
     setErrorMsg(null);
     try {
+      const hostDisplayName = user?.displayName ? user.displayName.split(' ')[0] : 'Vert / Instruktør';
       const code = await createGroupRoom(
         user?.uid || 'anon-host',
-        user?.displayName || 'Vert / Instruktør',
+        hostDisplayName,
         workout
       );
       setRoomCode(code);
@@ -169,10 +199,12 @@ export const GroupRoomModal: React.FC<GroupRoomModalProps> = ({
       className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="group-room-title"
-        className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4 relative z-[101]"
+        className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden space-y-4 relative z-[101] focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5 shrink-0">
@@ -261,14 +293,42 @@ export const GroupRoomModal: React.FC<GroupRoomModalProps> = ({
                 <button
                   onClick={handleCopyCode}
                   title="Kopier romkode"
-                  className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+                  className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
                 >
                   {isCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={handleShareRoom}
+                  title="Del romlenke"
+                  className="p-2 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 border border-purple-500/40 transition-colors flex items-center gap-1 text-xs font-bold"
+                >
+                  {isShared ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
+                  <span>{isShared ? 'Delt!' : 'Del'}</span>
                 </button>
               </div>
               <p className="text-[10px] text-zinc-400">
                 Deltakere åpner mintrener.web.app og taster inn koden.
               </p>
+            </div>
+
+            {/* Heia-reaksjoner i lobby */}
+            <div className="space-y-1">
+              <span className="text-[10px] uppercase font-bold text-zinc-400">Heia på gjengen før start:</span>
+              <div className="flex items-center justify-center gap-2">
+                {['🔥', '👏', '💪', '⚡', '🎉'].map((emoji) => (
+                  <button
+                    key={emoji}
+                    onClick={() => setSelectedReaction(emoji)}
+                    className={`p-2 rounded-xl text-base transition-all hover:scale-125 active:scale-95 ${
+                      selectedReaction === emoji
+                        ? 'bg-purple-500/30 scale-125 border border-purple-400 shadow-md shadow-purple-500/20'
+                        : 'bg-zinc-950 border border-zinc-800 hover:bg-zinc-800'
+                    }`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="flex items-center justify-center gap-2 text-xs font-bold text-emerald-400">
@@ -329,6 +389,26 @@ export const GroupRoomModal: React.FC<GroupRoomModalProps> = ({
               <p className="text-[11px] text-purple-300 font-medium">
                 Venter på at verten ({roomState.hostName}) skal starte økten...
               </p>
+            </div>
+
+            {/* Heia-reaksjoner for deltaker */}
+            <div className="space-y-1 pt-1">
+              <span className="text-[10px] uppercase font-bold text-zinc-400">Heia på gjengen:</span>
+              <div className="flex items-center justify-center gap-2">
+                {['🔥', '👏', '💪', '⚡', '🎉'].map((emoji) => (
+                  <button
+                    key={emoji}
+                    onClick={() => setSelectedReaction(emoji)}
+                    className={`p-2 rounded-xl text-base transition-all hover:scale-125 active:scale-95 ${
+                      selectedReaction === emoji
+                        ? 'bg-purple-500/30 scale-125 border border-purple-400 shadow-md shadow-purple-500/20'
+                        : 'bg-zinc-950 border border-zinc-800 hover:bg-zinc-800'
+                    }`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}

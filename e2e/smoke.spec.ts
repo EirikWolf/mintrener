@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { WorkoutTemplate } from '../src/types/workout';
+import { kodKompakt } from '../src/services/shareCodec';
 
 /**
  * B4-røykflyten (revisjon § 5.3): start en økt → fullfør den → verifiser at
@@ -29,9 +30,12 @@ const SMOKE_WORKOUT: WorkoutTemplate = {
   ],
 };
 
-// Samme koding som shareWorkoutService.getSharedWorkoutFromUrl dekoder:
-// base64 av UTF-8-bytene til JSON-en.
-const encodedWorkout = Buffer.from(JSON.stringify(SMOKE_WORKOUT), 'utf8').toString('base64');
+// Kodes med appens EGEN koder framfor en kopi av formatet, slik at testen og
+// delingskanalen ikke kan gli fra hverandre igjen. Det skjedde 2026-09-01
+// (3993534), da lenken ble kompakt for å få QR-koden under 400 tegn mens denne
+// røyken fortsatte å sende base64-JSON — appen avviste den som ugyldig lenke,
+// og testen sa bare at «B4 Røyktest» ikke var synlig.
+const encodedWorkout = kodKompakt(SMOKE_WORKOUT);
 
 test('start → fullfør → historikk', async ({ page }) => {
   // Hopp over 1-spørsmåls-onboardingen — den er ikke det denne røyken vokter,
@@ -45,6 +49,14 @@ test('start → fullfør → historikk', async ({ page }) => {
         hasCompletedOnboarding: true,
       })
     );
+    // C2-gaten (OnboardingFlow) dekker ellers hele førstesiden (inkl. START)
+    // for ferske brukere — frøet speiler en bruker som alt har fullført flyten
+    // og valgt trenerstemme. Onboarding-flyten har sin egen røyk (onboarding.spec.ts).
+    localStorage.setItem(
+      'mintrener_onboarding_v1',
+      JSON.stringify({ completedAt: '2026-01-01T00:00:00.000Z' })
+    );
+    localStorage.setItem('mintrener_coach_persona', 'standard');
   });
 
   // 1. Åpne appen med røyk-økten valgt via delingslenken. `ref=share` gjør at

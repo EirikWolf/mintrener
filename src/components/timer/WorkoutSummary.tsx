@@ -1,17 +1,79 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { WorkoutTemplate } from '../../types/workout';
 import { CompletedWorkoutLog } from '../../types/models';
 import { useAuth } from '../../contexts/AuthContext';
 import { updateWorkoutRating } from '../../services/firestoreService';
 import { savePersonalRecord } from '../../services/personalRecordService';
-import { recordWorkoutTelemetry } from '../../services/telemetryService';
-import { calculateWeeklyProgress, WeeklyGoalProgress } from '../../services/weeklyGoalService';
-import { computeStreakDays } from '../../services/streakService';
+import { recordWorkoutTelemetry, recordEngagementEvent } from '../../services/telemetryService';
+import { calculateWeeklyProgress, makeGoalForWeek, WeeklyGoalProgress } from '../../services/weeklyGoalService';
+import { toLocalDateString } from '../../services/weekUtils';
+import { computeStreakDays, computeWeekStreak, WEEK_STREAK_MILESTONES, WeekStreakResult } from '../../services/streakService';
+import {
+  getUncelebratedMilestones,
+  markMilestoneCelebrated,
+  getLastReportedInsuranceWeek,
+  markInsuranceReported,
+  getLastReportedBreakWeek,
+  markBreakReported,
+} from '../../services/streakCelebrationService';
+import { shouldShowAccountPrompt, dismissAccountPrompt, AccountPromptMoment } from '../../services/accountPromptService';
 import { buildEffectiveHistory } from '../../services/summaryContextService';
 import { localAiCoach } from '../../services/localAiCoachService';
+import { WORKOUT_HISTORY_KEY as LOCAL_HISTORY_KEY } from '../../services/workoutHistoryStorage';
 import { Trophy, RotateCcw, Flame, CheckCircle2, ThumbsUp, Smile, Medal, Sparkles } from 'lucide-react';
 
-const LOCAL_HISTORY_KEY = 'mintrener_local_workout_history';
+type WeekMilestone = (typeof WEEK_STREAK_MILESTONES)[number];
+
+/**
+ * Utsatt konto-prompt (spec § 4): tilbys anonyme brukere ved verdimomenter,
+ * aldri som portvakt. Egen liten komponent for å holde WorkoutSummary lesbar;
+ * shown-telemetrien hører til selve visningen og bor derfor i mount-effekten her.
+ */
+const AccountPromptCard: React.FC<{ moment: AccountPromptMoment; text: string }> = ({
+  moment,
+  text,
+}) => {
+  const { signInWithGoogle } = useAuth();
+  const [dismissed, setDismissed] = useState(false);
+  // StrictMode-guard: dobbel effekt-kjøring i dev skal ikke doble shown-telleren.
+  // Refs overlever StrictModes simulerte remount, så markøren holder.
+  const shownReportedRef = useRef<AccountPromptMoment | null>(null);
+
+  useEffect(() => {
+    if (shownReportedRef.current === moment) return;
+    shownReportedRef.current = moment;
+    recordEngagementEvent(`accountPrompt_${moment}_shown`);
+  }, [moment]);
+
+  if (dismissed) return null;
+
+  return (
+    <div className="w-full bg-zinc-900/90 border border-zinc-800 rounded-2xl p-3.5 space-y-2.5 text-left">
+      <p className="text-xs text-zinc-300 leading-snug">{text}</p>
+      <div className="flex gap-2">
+        <button
+          onClick={() => {
+            recordEngagementEvent(`accountPrompt_${moment}_accepted`);
+            signInWithGoogle();
+          }}
+          className="flex-1 py-2 px-3 bg-emerald-500 hover:bg-emerald-400 active:scale-95 transition-all text-zinc-950 font-bold text-xs rounded-xl"
+        >
+          Lagre med konto
+        </button>
+        <button
+          onClick={() => {
+            dismissAccountPrompt(moment);
+            recordEngagementEvent(`accountPrompt_${moment}_dismissed`);
+            setDismissed(true);
+          }}
+          className="py-2 px-3 bg-zinc-800 hover:bg-zinc-700 transition-all text-zinc-300 font-bold text-xs rounded-xl"
+        >
+          Ikke nå
+        </button>
+      </div>
+    </div>
+  );
+};
 
 interface WorkoutSummaryProps {
   workout: WorkoutTemplate;
@@ -31,6 +93,14 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
   const [prStatus, setPrStatus] = useState<{ isNewPr: boolean; previousBest: number } | null>(null);
   const [weeklyGoal, setWeeklyGoal] = useState<WeeklyGoalProgress | null>(null);
   const [streakDays, setStreakDays] = useState(0);
+  const [weekStreak, setWeekStreak] = useState<WeekStreakResult | null>(null);
+  const [historyCount, setHistoryCount] = useState(0);
+  const [celebratedMilestone, setCelebratedMilestone] = useState<WeekMilestone | null>(null);
+  // Slinguke-feiring (spec § 2.1: «feires i etterkant») — serietallet fra resultatet
+  const [insuranceSavedWeeks, setInsuranceSavedWeeks] = useState<number | null>(null);
+  // Effekten under re-kjører når workoutLogId ankommer — uka skal likevel bare
+  // telles/feires ÉN gang per fullført økt.
+  const weekCompletedHandledRef = useRef(false);
 
   // Send anonym telemetri og sjekk PR ved fullføring
   useEffect(() => {
@@ -68,8 +138,66 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
 
       setWeeklyGoal(calculateWeeklyProgress(effectiveHistory));
 
-      const dates = effectiveHistory.map((log) => new Date(log.completedAt).toISOString().split('T')[0]);
+      const dates = effectiveHistory.map((log) => toLocalDateString(new Date(log.completedAt)));
       setStreakDays(computeStreakDays(dates));
+
+      // Uke-streak (C1): avledet fra samme effektive historikk. Feiringstekster
+      // og konto-prompt genererer tallene sine fra dette resultatet — aldri
+      // antatt aritmetikk (forsikret uke bevarer serien uten å telle +1).
+      // ÉN makeGoalForWeek-instans deles av begge beregningene (B3): den leser
+      // målloggen fra localStorage én gang, ikke per uke i simuleringen.
+      const goalForWeek = makeGoalForWeek();
+      const streak = computeWeekStreak(effectiveHistory, goalForWeek);
+      setWeekStreak(streak);
+      setHistoryCount(effectiveHistory.length);
+
+      // Fullførte DENNE økta uka? Beregn streaken også UTEN øktas egen logg:
+      // overgangen false → true på currentWeekCompleted er signalet.
+      const sessionId = workoutLogId ?? 'pending-session';
+      const before = computeWeekStreak(
+        effectiveHistory.filter((log) => log.id !== sessionId),
+        goalForWeek
+      );
+      const weekJustCompleted = streak.currentWeekCompleted && !before.currentWeekCompleted;
+
+      if (weekJustCompleted && !weekCompletedHandledRef.current) {
+        weekCompletedHandledRef.current = true;
+        recordEngagementEvent('streak_weekCompleted');
+
+        const uncelebrated = getUncelebratedMilestones(streak.reachedMilestones);
+        if (uncelebrated.length > 0) {
+          // Feir høyeste ufeirede i banneret; markér OG tell ALLE som feires
+          // (B2) — retroaktiv bootstrap (eksisterende bruker med lang serie)
+          // skal telle hver milepæl i telemetrien uten banner-kaskade.
+          const milestone = Math.max(...uncelebrated) as WeekMilestone;
+          uncelebrated.forEach((m) => {
+            markMilestoneCelebrated(m);
+            recordEngagementEvent(`streak_milestone_w${m as WeekMilestone}`);
+          });
+          setCelebratedMilestone(milestone);
+        }
+      }
+
+      // Telemetri-produsenter for slinguke-forbruk og brudd (spec § 2.1/5):
+      // begge avledes retroaktivt av hver beregning, så persisterte markører
+      // deduper over re-render/StrictMode og på tvers av økter.
+      const lastInsuredWeek =
+        streak.insuranceUsedWeekKeys[streak.insuranceUsedWeekKeys.length - 1] ?? null;
+      if (lastInsuredWeek !== null && lastInsuredWeek !== getLastReportedInsuranceWeek()) {
+        markInsuranceReported(lastInsuredWeek);
+        recordEngagementEvent('streak_insuranceUsed');
+        // Feires i etterkant (spec § 2.1) — forsikring truer aldri før
+        setInsuranceSavedWeeks(streak.currentWeeks);
+      }
+      if (
+        streak.breakWeekKey !== null &&
+        streak.lastBrokenWeeks > 0 &&
+        streak.breakWeekKey !== getLastReportedBreakWeek()
+      ) {
+        markBreakReported(streak.breakWeekKey);
+        // Ingen sørgetekst her — brudd re-frames kun i detaljarket (B1)
+        recordEngagementEvent('streak_broken');
+      }
     } catch {
       // Lokal historikk utilgjengelig - Astrid faller tilbake på generisk feedback
     }
@@ -92,6 +220,24 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
       }),
     [workout.name, totalElapsedSeconds, prStatus, selectedRating, weeklyGoal, streakDays]
   );
+
+  // Konto-prompt-moment (spec § 4): week2 vinner når begge er aktuelle.
+  // Kun for anonyme brukere, og en avvisning er varig per moment.
+  const accountPromptMoment = useMemo<AccountPromptMoment | null>(() => {
+    if (user) return null;
+    if (celebratedMilestone === 2 && shouldShowAccountPrompt('week2', { isLoggedIn: false })) {
+      return 'week2';
+    }
+    if (historyCount === 1 && shouldShowAccountPrompt('first_workout', { isLoggedIn: false })) {
+      return 'first_workout';
+    }
+    return null;
+  }, [user, celebratedMilestone, historyCount]);
+
+  const accountPromptText =
+    accountPromptMoment === 'week2' && weekStreak
+      ? `${historyCount} økter og ${weekStreak.currentWeeks} uker på rad — vil du synkronisere fremgangen med en konto?`
+      : 'Vil du ta vare på fremgangen din på tvers av enheter?';
 
   const handleRate = async (rating: 'for_lett' | 'passe' | 'for_tungt') => {
     setSelectedRating(rating);
@@ -122,6 +268,23 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
         <div className="w-full py-2.5 px-4 rounded-2xl bg-amber-500/20 border border-amber-500/60 text-amber-300 flex items-center justify-center gap-2 font-black text-sm animate-bounce shadow-md">
           <Medal className="w-5 h-5 text-amber-400 fill-current" />
           <span>🎉 NY PERSONLIG REKORD (PR)!</span>
+        </div>
+      )}
+
+      {/* Milepælsfeiring (C1, spec § 2.2): etter økta som sikret uka — aldri push-varsel */}
+      {celebratedMilestone !== null && (
+        <div className="w-full py-2.5 px-4 rounded-2xl bg-amber-500/20 border border-amber-500/60 text-amber-300 flex items-center justify-center gap-2 font-black text-sm animate-bounce shadow-md">
+          <Flame className="w-5 h-5 text-amber-400 fill-current" />
+          <span>🔥 {celebratedMilestone} uker på rad — milepæl nådd!</span>
+        </div>
+      )}
+
+      {/* Slinguke-feiring (spec § 2.1: forsikring feires etterpå, truer aldri før).
+          Sekundær til milepælsbanneret når begge er aktuelle. */}
+      {insuranceSavedWeeks !== null && (
+        <div className="w-full py-2 px-4 rounded-2xl bg-blue-950/60 border border-blue-500/50 text-blue-300 flex items-center justify-center gap-2 font-bold text-xs shadow-md">
+          <span aria-hidden="true">🛡️</span>
+          <span>Slinguka reddet serien din — fortsatt {insuranceSavedWeeks} uker!</span>
         </div>
       )}
 
@@ -233,6 +396,11 @@ export const WorkoutSummary: React.FC<WorkoutSummaryProps> = ({
           <p className="text-xs text-zinc-300 leading-snug">{astridFeedback}</p>
         </div>
       </div>
+
+      {/* Utsatt konto-prompt (spec § 4) */}
+      {accountPromptMoment && (
+        <AccountPromptCard moment={accountPromptMoment} text={accountPromptText} />
+      )}
 
       {/* Start på nytt knapp */}
       <button

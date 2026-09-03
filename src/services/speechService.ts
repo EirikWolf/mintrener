@@ -61,6 +61,112 @@ export function normalizeTextForSpeech(raw: string): string {
   return text;
 }
 
+const FEMALE_VOICE_HINTS = [
+  'iselin',
+  'nora',
+  'pernille',
+  'hedda',
+  'ingrid',
+  'liv',
+  'astrid',
+  'bente',
+  'hulda',
+  'kari',
+  'marit',
+  'silje',
+  'female',
+  'woman',
+  'kvinne',
+  'kvinnelig',
+];
+
+// «google» sto her som kvinnelig hint. Leverandørnavnet sier ingenting om
+// kjønn — «Google norsk» kan være hva som helst — og gjorde valget vilkårlig.
+
+const MALE_VOICE_HINTS = [
+  'jon',
+  'henrik',
+  'jonas',
+  'stian',
+  'male',
+  'mann',
+  'mannlig',
+  'david',
+  'george',
+];
+
+/**
+ * Treffer et hint som eget ord.
+ *
+ * Ren substring-sjekk gjorde at «female» inneholdt «male»: en stemme som
+ * heter «Female» ble klassifisert som mannlig i det nøytrale filteret.
+ */
+function matcherHint(navn: string, hints: string[]): boolean {
+  const ord = navn.toLowerCase().split(/[^a-zà-ÿ]+/i).filter(Boolean);
+  return hints.some((hint) => ord.includes(hint) || navn.toLowerCase().includes(` ${hint} `));
+}
+
+/**
+ * Velger stemme etter én prioritet: NORSK UTTALE FØRST.
+ *
+ * En norsk instruksjon lest av en engelsk stemme er ubrukelig, uansett hvor
+ * godt den ellers passer. Derfor vinner en mannlig norsk stemme over en
+ * kvinnelig engelsk — og på en vanlig Windows-maskin er «Microsoft Jon» den
+ * eneste norske som finnes.
+ *
+ * Ren funksjon slik at prioriteringen kan testes uten talesyntese.
+ */
+export function pickVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  if (!voices || voices.length === 0) return null;
+
+  const norske = voices.filter(
+    (v) =>
+      v.lang.toLowerCase().startsWith('nb') ||
+      v.lang.toLowerCase().startsWith('no') ||
+      v.lang.toLowerCase().startsWith('nn')
+  );
+
+  if (norske.length > 0) {
+    const kvinnelig = norske.find((v) => matcherHint(v.name, FEMALE_VOICE_HINTS));
+    if (kvinnelig) return kvinnelig;
+
+    const noytral = norske.find((v) => !matcherHint(v.name, MALE_VOICE_HINTS));
+    if (noytral) return noytral;
+
+    // Ingen kvinnelig eller nøytral norsk stemme: ta den norske uansett.
+    return norske[0];
+  }
+
+  const kvinneligFallback = voices.find((v) => matcherHint(v.name, FEMALE_VOICE_HINTS));
+  if (kvinneligFallback) return kvinneligFallback;
+
+  return voices.find((v) => v.default) || voices[0] || null;
+}
+
+export interface VoiceInfo {
+  name: string;
+  lang: string;
+  isNorwegian: boolean;
+}
+
+/**
+ * Hva brukeren faktisk får.
+ *
+ * Her sto det tidligere «Astrid (Standard kvinnestemme)» når ingen stemme
+ * fantes — en påstand om både navn og kjønn på noe vi ikke eier. Stemmene
+ * kommer fra operativsystemet og varierer per enhet.
+ */
+export function describeVoice(v: SpeechSynthesisVoice | null): VoiceInfo {
+  if (!v) {
+    return { name: 'Ingen stemme tilgjengelig på enheten', lang: '', isNorwegian: false };
+  }
+  const isNorwegian =
+    v.lang.toLowerCase().startsWith('nb') ||
+    v.lang.toLowerCase().startsWith('no') ||
+    v.lang.toLowerCase().startsWith('nn');
+  return { name: v.name, lang: v.lang, isNorwegian };
+}
+
 export class SpeechService {
   private synth: SpeechSynthesis | null = null;
   private voice: SpeechSynthesisVoice | null = null;
@@ -104,37 +210,12 @@ export class SpeechService {
     }
     if (!this.synth) return null;
 
-    const voices = this.synth.getVoices();
-    if (!voices || voices.length === 0) return null;
-
-    // 1. Prioriter norske stemmer (nb-NO, no-NO, nn-NO)
-    const norwegian = voices.find(
-      (v) =>
-        v.lang.toLowerCase().startsWith('nb') ||
-        v.lang.toLowerCase().startsWith('no') ||
-        v.lang.toLowerCase().startsWith('nn')
-    );
-    if (norwegian) {
-      this.voice = norwegian;
-      return norwegian;
-    }
-
-    // 2. Fallback til standardspråk
-    const fallback = voices.find((v) => v.default) || voices[0] || null;
-    this.voice = fallback;
-    return fallback;
+    this.voice = pickVoice(this.synth.getVoices());
+    return this.voice;
   }
 
-  public getVoiceInfo(): { name: string; lang: string; isNorwegian: boolean } {
-    const v = this.voice || this.loadVoice();
-    if (!v) {
-      return { name: 'Standard nettleserstemme', lang: 'nb-NO', isNorwegian: true };
-    }
-    const isNorwegian =
-      v.lang.toLowerCase().startsWith('nb') ||
-      v.lang.toLowerCase().startsWith('no') ||
-      v.lang.toLowerCase().startsWith('nn');
-    return { name: v.name, lang: v.lang, isNorwegian };
+  public getVoiceInfo(): VoiceInfo {
+    return describeVoice(this.voice || this.loadVoice());
   }
 
   public setEnabled(enabled: boolean) {
@@ -173,9 +254,14 @@ export class SpeechService {
         utterance.lang = 'nb-NO';
       }
 
+      const voiceNameLower = (activeVoice?.name || '').toLowerCase();
+      const isKnownMale = MALE_VOICE_HINTS.some((hint) => voiceNameLower.includes(hint));
+
       utterance.volume = 1.0;
       utterance.rate = rate;
-      utterance.pitch = 1.0;
+      // Hvis enheten kun har en mannlig stemme (f.eks. kun Microsoft Jon installert),
+      // heves pitch til 1.2 for å modulere mot en kvinnelig karakter (Astrid).
+      utterance.pitch = isKnownMale ? 1.2 : 1.05;
 
       // Chrome Android bugfix & Audio Ducking: demper bakgrunnsmusikk mens stemmen snakker
       utterance.onstart = () => {

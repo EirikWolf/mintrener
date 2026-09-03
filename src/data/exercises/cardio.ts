@@ -1,6 +1,6 @@
-import { ExerciseItem } from '../../schemas/exerciseSchema';
+import { ExerciseInput } from '../../schemas/exerciseSchema';
 
-export const CARDIO_EXERCISES: ExerciseItem[] = [
+export const CARDIO_EXERCISES: ExerciseInput[] = [
   {
     id: 'sprellmenn',
     navn: { nb: 'Sprellmenn (Jumping Jacks)', en: 'Jumping Jacks' },
@@ -77,6 +77,72 @@ export const CARDIO_EXERCISES: ExerciseItem[] = [
       '1': 'captured in front-diagonal angle leaping laterally through the air across the gym mat, arms driving for momentum, dynamic airborne athletic leap',
     },
     bildeVinkel: 'front',
+    bildeStatus: 'mangler',
+  },
+  {
+    id: 'seated-marsj',
+    navn: { nb: 'Sittende marsj på stol', en: 'Seated Marching' },
+    type: 'tid',
+    kategori: 'kondisjon',
+    muskler: { primær: ['hofteleddsbøyere', 'kondisjon'], sekundær: ['kjerne'] },
+    utstyr: ['stol/benk'],
+    nivå: 'nybegynner',
+    instruks: {
+      nb: [
+        'Sitt oppreist på stolen med føttene i gulvet og stram magen lett.',
+        'Løft knærne vekselvis opp i en jevn marsjrytme mens armene pendler naturlig.',
+      ],
+    },
+    sensorProfil: 'ingen',
+    bildePrompt: {
+      '0': 'sitting firmly upright on a four-legged chair with back straight, feet flat on the floor, arms bent at 90 degrees by hips preparing to march',
+      '1': 'seated firmly upright on a four-legged chair actively marching, lifting her right knee high up in the air towards chest at a 90 degree angle while the left foot stays flat on the floor, arms pumping in running motion',
+    },
+    bildeVinkel: 'skrå',
+    bildeStatus: 'mangler',
+  },
+  {
+    id: 'jogging-sted',
+    navn: { nb: 'Lett jogg med armsirkler', en: 'Light Jog in Place' },
+    type: 'tid',
+    kategori: 'kondisjon',
+    muskler: { primær: ['kondisjon', 'legger'], sekundær: ['skuldre'] },
+    utstyr: ['ingen'],
+    nivå: 'nybegynner',
+    instruks: {
+      nb: [
+        'Jogg lett og spenstig på stedet med myke landinger på tåballene.',
+        'Gjør store, rolige armsirkler forover og bakover for å varme opp skuldrene.',
+      ],
+    },
+    sensorProfil: 'kadens',
+    bildePrompt: {
+      '0': 'full body captured in front view jogging lightly on the spot, springy step on balls of feet, arms bent at sides',
+      '1': 'full body captured in front view jogging actively in place while circling straight arms in wide dynamic arcs, bouncy athletic cardio movement',
+    },
+    bildeVinkel: 'front',
+    bildeStatus: 'mangler',
+  },
+  {
+    id: 'lett-gange',
+    navn: { nb: 'Rolig gange & restitusjonspust', en: 'Cooldown Walking' },
+    type: 'tid',
+    kategori: 'kondisjon',
+    muskler: { primær: ['kondisjon', 'restitusjon'], sekundær: ['legger'] },
+    utstyr: ['ingen'],
+    nivå: 'nybegynner',
+    instruks: {
+      nb: [
+        'Gå i et rolig og uanstrengt tempo på stedet eller rundt i rommet.',
+        'Pust dypt inn med magen og slipp skuldrene ned for å senke hjerterytmen.',
+      ],
+    },
+    sensorProfil: 'ingen',
+    bildePrompt: {
+      '0': 'full body captured in side profile walking calmly and naturally on gym floor, shoulders dropped and relaxed, peaceful breathing rhythm',
+      '1': 'full body captured in side profile taking a gentle mindful stride with arms relaxed, deep restorative inhale expanding the chest, serene calm posture',
+    },
+    bildeVinkel: 'side',
     bildeStatus: 'mangler',
   },
 ];

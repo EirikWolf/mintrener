@@ -1,42 +1,49 @@
 import { WorkoutTemplate } from '../types/workout';
 import { WorkoutTemplateSchema } from '../schemas/workoutSchema';
+import { kodKompakt, dekodKompakt } from './shareCodec';
 import { recordShareLinkOpen } from './telemetryService';
 import { showErrorToast } from './errorToastService';
+import { PRESET_WORKOUTS } from '../data/mockWorkouts';
+import { TRAINING_PROGRAMS } from '../data/programs';
 
 /**
- * Genererer en kompakt, delbar URL med øktens data innebygd i lenken
+ * Delingslenker som får plass i en QR-kode.
+ *
+ * Hele økten lå base64-kodet i URL-en. Målt på «Klassisk Tabata» med åtte
+ * øvelser ble lenken 2 111 tegn. Windows' delemeny nekter å lage QR over 400:
+ * «Kan ikke generere QR-kode. Bruk en kobling med 400 tegn eller mindre.»
+ *
+ * QR er nettopp måten man deler en økt i et rom — instruktøren viser koden og
+ * alle scanner. At den sluttet å virke jo flere øvelser økten hadde, rammet
+ * nettopp de øktene det er mest verdt å dele.
+ *
+ * To grep, ingen backend:
+ *
+ * 1. En økt fra katalogen deles med ID: `?p=tabata-klassisk`. Da følger den
+ *    dessuten med når øktens innhold rettes senere — den gamle lenken frøs en
+ *    kopi av innholdet slik det var den dagen den ble delt.
+ * 2. En egen økt kodes kompakt. Øvelsens navn, engelske navn og kategori er
+ *    utledbare fra øvelses-ID-en, og utgjorde mesteparten av payloaden.
  */
+
+/** Alle økter som kan deles med ren ID. */
+function katalogØkter(): WorkoutTemplate[] {
+  return [...PRESET_WORKOUTS, ...TRAINING_PROGRAMS.map((p) => p.workout)];
+}
+
+function finnKatalogØkt(id: string): WorkoutTemplate | undefined {
+  return katalogØkter().find((w) => w.id === id);
+}
+
+
 export function generateShareUrl(workout: WorkoutTemplate): string {
   try {
-    const minified = {
-      id: `shared-${Date.now()}`,
-      name: workout.name,
-      description: workout.description || '',
-      type: workout.type,
-      prepareDurationSeconds: workout.prepareDurationSeconds,
-      rounds: workout.rounds,
-      roundRestDurationSeconds: workout.roundRestDurationSeconds,
-      items: workout.items.map((i) => ({
-        id: i.id,
-        exercise: {
-          id: i.exercise.id,
-          name: i.exercise.name,
-          nameEn: i.exercise.nameEn,
-          category: i.exercise.category,
-        },
-        workDurationSeconds: i.workDurationSeconds,
-        restDurationSeconds: i.restDurationSeconds,
-      })),
-    };
-
-    const json = JSON.stringify(minified);
-    // Base64 encoding kompatibel med UTF-8
-    const base64 = btoa(encodeURIComponent(json).replace(/%([0-9A-F]{2})/g, (_, p1) => {
-      return String.fromCharCode(parseInt(p1, 16));
-    }));
-
     const url = new URL(window.location.origin + window.location.pathname);
-    url.searchParams.set('w', base64);
+    if (finnKatalogØkt(workout.id)) {
+      url.searchParams.set('p', workout.id);
+    } else {
+      url.searchParams.set('w', kodKompakt(workout));
+    }
     // Attribusjonsparameter: gjør åpninger av delte lenker målbare (K-faktor)
     url.searchParams.set('ref', 'share');
     return url.toString();
@@ -78,31 +85,40 @@ export async function shareWorkout(workout: WorkoutTemplate): Promise<{ shared: 
 }
 
 /**
- * Leser og dekoder en delt økt fra URL-parametere ved app-oppstart
+ * Leser en delt økt fra URL-en ved oppstart.
+ *
+ * To former: katalog-ID (`?p=`) og kompakt (`?w=1~…`).
+ *
+ * Det gamle base64-formatet leses IKKE lenger. Det ble delt i en periode da
+ * lenkene var for lange til å bli QR-koder, og er bevisst droppet framfor å
+ * bære en dekoder for det. En gammel lenke avvises med feilmelding, ikke i
+ * stillhet.
  */
 export function getSharedWorkoutFromUrl(): WorkoutTemplate | null {
   if (typeof window === 'undefined') return null;
 
   const params = new URLSearchParams(window.location.search);
+  const presetId = params.get('p');
   const encoded = params.get('w');
-  if (!encoded) return null;
+  if (!presetId && !encoded) return null;
 
-  // Dekod og skjemavalider: en fiendtlig/korrupt lenke skal aldri kunne legge
-  // vilkårlige objekter i state (revisjon § 2.4) — og aldri kræsje stille.
   let workout: WorkoutTemplate | null = null;
   try {
-    // Dekod base64 UTF-8
-    const json = decodeURIComponent(
-      Array.prototype.map
-        .call(atob(encoded), (c: string) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-
-    const result = WorkoutTemplateSchema.safeParse(JSON.parse(json));
-    if (result.success) {
-      workout = result.data;
-    } else {
-      console.warn('Delt økt avvist av skjemavalidering:', result.error.issues);
+    if (presetId) {
+      // Katalogøkten leses fra dataene våre, ikke fra lenken: da følger
+      // senere rettelser i øvelser og tider med.
+      workout = finnKatalogØkt(presetId) ?? null;
+      if (!workout) console.warn('Delt katalog-ID finnes ikke:', presetId);
+    } else if (encoded) {
+      const rå = dekodKompakt(encoded);
+      // Skjemavalider uansett form: en fiendtlig eller korrupt lenke skal
+      // aldri legge vilkårlige objekter i state (revisjon § 2.4).
+      const result = WorkoutTemplateSchema.safeParse(rå);
+      if (result.success) {
+        workout = result.data;
+      } else {
+        console.warn('Delt økt avvist av skjemavalidering:', result.error.issues);
+      }
     }
   } catch (err) {
     console.warn('Kunne ikke dekode delt økt fra URL:', err);
@@ -120,6 +136,7 @@ export function getSharedWorkoutFromUrl(): WorkoutTemplate | null {
   try {
     const cleanUrl = new URL(window.location.href);
     cleanUrl.searchParams.delete('w');
+    cleanUrl.searchParams.delete('p');
     cleanUrl.searchParams.delete('ref');
     window.history.replaceState({}, document.title, cleanUrl.toString());
   } catch (err) {

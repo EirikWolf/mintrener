@@ -1,6 +1,7 @@
 import { WorkoutTemplate, TimerState, IntervalPhase } from '../types/workout';
 import { EngineEvent, PersistPayload } from '../types/engineEvents';
 import { InterruptedSession } from './sessionRecoveryService';
+import { loadPersistedSettings, savePersistedSettings } from './settingsStorageService';
 
 // Terskel (sekunder) for å skille normal tick-drift (fanen synlig) fra en reell
 // oppvåkning etter dvale/lomme – under denne kjøres vanlig enkelt-avansement.
@@ -44,6 +45,12 @@ interface EngineState {
   lastCountdownBeep: number;
   lastSessionSaveSecond: number;
   firedCues: Set<string>;
+  /**
+   * Antall repetisjoner den pågående fasen venter på, eller null for en vanlig
+   * tidsbasert fase. Er den satt, utløper ikke fasen av seg selv — brukeren
+   * avslutter den med skipNext().
+   */
+  awaitingReps: number | null;
   lastTickWallMs: number;
   lastTickPerfMs: number;
 }
@@ -82,6 +89,7 @@ export class TimerEngine {
   constructor(workout: WorkoutTemplate, now: () => number = () => performance.now()) {
     this.now = now;
     this.propWorkout = workout;
+    const initialSettings = loadPersistedSettings();
     this.state = {
       status: 'idle',
       phase: 'prepare',
@@ -91,10 +99,10 @@ export class TimerEngine {
       phaseRemaining: workout.prepareDurationSeconds,
       totalElapsed: 0,
       isLocked: false,
-      soundEnabled: true,
-      vibrateEnabled: true,
-      wakeLockEnabled: true,
-      speechEnabled: true,
+      soundEnabled: initialSettings.soundEnabled,
+      vibrateEnabled: initialSettings.vibrateEnabled,
+      wakeLockEnabled: initialSettings.wakeLockEnabled,
+      speechEnabled: initialSettings.speechEnabled,
       motionReps: 0,
       activeWorkout: workout,
       phaseStartTime: 0,
@@ -102,6 +110,7 @@ export class TimerEngine {
       lastCountdownBeep: -1,
       lastSessionSaveSecond: -1,
       firedCues: new Set<string>(),
+      awaitingReps: null,
       lastTickWallMs: 0,
       lastTickPerfMs: 0,
     };
@@ -155,6 +164,12 @@ export class TimerEngine {
 
     this.state.firedCues = new Set<string>();
 
+    // Repetisjonsbasert arbeidsfase: varigheten er et anslag for totaltiden,
+    // ikke en frist. Fasen står til brukeren sier ifra.
+    const awaitingReps =
+      newPhase === 'work' ? (items[itemIdx]?.targetReps ?? null) : null;
+    this.state.awaitingReps = awaitingReps;
+
     const phaseStart = this.now();
     this.state.phase = newPhase;
     this.state.currentRound = round;
@@ -188,7 +203,12 @@ export class TimerEngine {
       durationS: duration,
       tone,
       silent,
-      endsAt: newPhase === 'complete' ? null : phaseStart + duration * 1000,
+      // Ingen frist når fasen venter på brukeren: endsAt styrer
+      // nedtellingspipene, og de skal ikke telle mot et tidspunkt uten mening.
+      endsAt:
+        newPhase === 'complete' || awaitingReps !== null
+          ? null
+          : phaseStart + duration * 1000,
     });
     if (newPhase === 'complete') {
       this.emit({ type: 'workout:completed', tone });
@@ -284,7 +304,7 @@ export class TimerEngine {
       s.status, s.phase, s.currentRound, s.currentItemIndex, s.phaseDuration,
       Math.ceil(s.phaseRemaining), Math.floor(s.totalElapsed),
       s.isLocked, s.soundEnabled, s.vibrateEnabled, s.wakeLockEnabled,
-      s.speechEnabled, s.motionReps,
+      s.speechEnabled && s.soundEnabled, s.motionReps, s.awaitingReps,
     ].join('|');
   }
 
@@ -320,7 +340,14 @@ export class TimerEngine {
     const currentExercise = currentItem ? currentItem.exercise : null;
     const nextExercise = nextItem ? nextItem.exercise : null;
 
-    const phaseProgress = s.phaseDuration > 0 ? (s.phaseDuration - s.phaseRemaining) / s.phaseDuration : 1;
+    // En ventende fase har ingen fremdrift å vise — sirkelen skal stå stille,
+    // ikke krype mot et anslag brukeren ikke er bundet av.
+    const phaseProgress =
+      s.awaitingReps !== null
+        ? 0
+        : s.phaseDuration > 0
+        ? (s.phaseDuration - s.phaseRemaining) / s.phaseDuration
+        : 1;
     const totalWorkoutDuration = this.calculateTotalWorkoutSeconds();
     const totalRemainingSeconds = Math.max(0, totalWorkoutDuration - s.totalElapsed);
 
@@ -342,8 +369,15 @@ export class TimerEngine {
       soundEnabled: s.soundEnabled,
       vibrateEnabled: s.vibrateEnabled,
       wakeLockEnabled: s.wakeLockEnabled,
-      speechEnabled: s.speechEnabled,
+      // Tale er BETINGET av lyd. Med to uavhengige brytere kunne stemmen
+      // fortsette etter at brukeren hadde slått av lyden — «av» må bety av.
+      // Brukerens valg ligger urørt i s.speechEnabled, så nivået kommer
+      // tilbake når lyden slås på igjen.
+      speechEnabled: s.speechEnabled && s.soundEnabled,
       motionReps: s.motionReps,
+      // undefined, ikke null, i den utadvendte typen: fraværet av et mål er
+      // «ingen repetisjoner å vente på», ikke «null repetisjoner».
+      awaitingReps: s.awaitingReps ?? undefined,
     };
   }
 
@@ -482,9 +516,19 @@ export class TimerEngine {
     this.reanchorOnWallClockDrift(now, Date.now());
 
     const phaseElapsed = (now - s.phaseStartTime) / 1000;
+    s.totalElapsed = Math.max(0, (now - s.workoutStartTime) / 1000);
+
+    if (s.awaitingReps !== null) {
+      // Fasen venter på brukeren. Klokka går videre for øktens totaltid, men
+      // fasen hverken utløper, teller ned eller avgir cues. Uten denne grenen
+      // ville catchUpExpiredPhases() spolt forbi øvelsen etter anslaget.
+      s.phaseRemaining = s.phaseDuration;
+      this.notifySnapshotIfChanged();
+      return;
+    }
+
     const remaining = Math.max(0, s.phaseDuration - phaseElapsed);
     s.phaseRemaining = remaining;
-    s.totalElapsed = Math.max(0, (now - s.workoutStartTime) / 1000);
 
     this.emitTickCues(phaseElapsed, remaining);
 
@@ -747,11 +791,13 @@ export class TimerEngine {
 
   setSoundEnabled(v: boolean): void {
     this.state.soundEnabled = v;
+    savePersistedSettings({ soundEnabled: v });
     this.notifySnapshotIfChanged();
   }
 
   setVibrateEnabled(v: boolean): void {
     this.state.vibrateEnabled = v;
+    savePersistedSettings({ vibrateEnabled: v });
     this.notifySnapshotIfChanged();
   }
 
@@ -759,12 +805,14 @@ export class TimerEngine {
     // wakeLockService.request/releaseLock eies av hook-bindingen (α5) — motoren
     // er rammeverksfri og holder kun flagget.
     this.state.wakeLockEnabled = v;
+    savePersistedSettings({ wakeLockEnabled: v });
     this.notifySnapshotIfChanged();
   }
 
   setSpeechEnabled(v: boolean): void {
     // speechService.setEnabled eies av hook-bindingen (α5).
     this.state.speechEnabled = v;
+    savePersistedSettings({ speechEnabled: v });
     this.notifySnapshotIfChanged();
   }
 

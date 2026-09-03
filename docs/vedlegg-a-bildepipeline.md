@@ -52,7 +52,7 @@
 
 **Alternativ som holdes åpen:** flat vektorstil med Flux **uten** LoRA fungerte utmerket i testbatch 1. Hvis retningen endres tilbake, er det bare stilprompten og LoRA-noden som byttes; ControlNet-oppsettet er det samme.
 
-**Lisens – les A.12.** Flux.1-dev har ikke-kommersiell lisens. Det er akseptert for en gratis app, men det låser en beslutning: skal appen tjene penger, må bildene regenereres med en modell som tillater det.
+**Lisens – les A.12.** Flux.1-dev sperrer *kommersiell kjøring av modellen*, ikke bruken av bildene den lager. Bildene vi har er frie, også ved inntekt. Det som må byttes den dagen appen tjener penger, er hva vi genererer *nytt* med.
 
 ---
 
@@ -443,7 +443,7 @@ Underkjente posisjoner: sett `bildeStatus: "regenerer"` med merknad, juster skje
 
 | Komponent | Lisens | Konsekvens |
 |---|---|---|
-| **Flux.1-dev** | FLUX.1 [dev] Non-Commercial License | Bruk av generert innhold er tillatt for ikke-kommersielle formål. En gratis app uten inntekt ligger innenfor. **Skal Min Trener tjene penger – betalt nivå, sponsing, salg – må øvelsesbildene regenereres** med en modell som tillater det (SDXL, eller Flux under kommersiell lisens). Pipelinen er bygget så det er et modellbytte, ikke en omskriving |
+| **Flux.1-dev** | FLUX.1 [dev] Non-Commercial License | **Lest 2026-08-30:** lisensen sier ordrett «You may use Output for any purpose (including for commercial purposes)». «Non-Commercial Purpose» begrenser bruk av *modellen* — «so far as you do not receive any direct or indirect payment arising from the use of the FLUX.1 [dev] Model». **Bildene vi har er altså frie, også ved inntekt.** Det som er sperret, er å *kjøre* modellen kommersielt. Eneste begrensning på utdataene: de kan ikke brukes til å trene en konkurrerende modell, og innholdskravene gjelder |
 | ControlNet Union Pro 2.0 (Shakker-Labs) | Følger Flux.1-dev-lisensen | Samme forbehold |
 | astrid_k-LoRA | Eirik / SynthIQ, eget verk | Ingen begrensning. Instruktøren er en fiktiv person |
 | Referansefoto | Egne, eller free-exercise-db (offentlig eiendom) | Skjelettene inneholder ingen gjenkjennbar informasjon |
@@ -451,7 +451,9 @@ Underkjente posisjoner: sett `bildeStatus: "regenerer"` med merknad, juster skje
 
 Beslutningen om ikke-kommersiell lisens er tatt bevisst, og skal stå i `docs/DECISIONS.md` med dato. Den henger sammen med sideinntekt-vurderingen (Vedlegg C del 3): den dagen appen skal gi inntekt, er regenerering av bildene en kjent kostnad, ikke en overraskelse.
 
-**Lisensen er mindre entydig enn den ser ut.** Black Forest Labs' modellkort sier at genererte bilder kan brukes kommersielt, mens lisensteksten definerer ikke-kommersiell bruk som bruk uten direkte eller indirekte betaling knyttet til modellen, derivater eller innholdet. To formuleringer fra samme selskap som peker hver sin vei for et statisk bildesett i en betalt tjeneste. Konklusjonen er ikke at vi er i orden, men at det ikke er noe å bygge inntekt på. Vi tolker ikke lisensen; vi bytter modell før første betaling.
+**Avklart 2026-08-30 — de to formuleringene peker samme vei.** Dette avsnittet slo tidligere fast at modellkortet og lisensteksten motsa hverandre, og at vi derfor ikke skulle tolke lisensen. Lisensteksten er nå lest direkte, og tvetydigheten var vår, ikke deres: modellkortet og lisensen sier det samme. Utdataene er kommersielt frie; det er kjøring av modellen mot betaling som er sperret.
+
+Praktisk konsekvens: **de eksisterende bildene skal ikke regenereres.** Arkivet er fritt, pipelinen er heftet. Den dagen appen gir inntekt, er det *ny* generering som må skje på en annen modell — FLUX.2 [klein] 4B (Apache 2.0) er nærmeste kandidat. Merk at person-LoRA-en er en separat vurdering, og at et modellbytte betyr at den må trenes på nytt. Det er den reelle kostnaden, ikke bildene.
 
 ### A.12.1 Alternativer ved kommersialisering
 

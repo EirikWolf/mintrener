@@ -11,8 +11,6 @@ import {
   buildClonePayload,
   buildTtsFfmpegArgs,
   buildRecordedFfmpegArgs,
-  buildRecordedShortFfmpegArgs,
-  START321_SHORT_TAIL_S,
   cacheIsFresh,
   decideTtsAction,
   persistRawCache,
@@ -33,40 +31,50 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const manifestPath = path.resolve(__dirname, '..', 'voicebank-manuskript.json');
 const manifest = parseManifest(JSON.parse(fs.readFileSync(manifestPath, 'utf-8')));
 
-const PERSONA_IDS = ['haugesund', 'romsdal', 'hardcore', 'boyband'];
+// Utledet fra manuskriptet, ikke hardkodet: da trenger ikke tallene under
+// rettes hver gang en stemme legges til eller fjernes.
+const PERSONA_IDS = Object.keys(manifest.personas);
+const OPPGAVER_PER_PERSONA = 38; // 12 cues + 25 øvelser + 1 innspilt
 
 describe('buildTaskList', () => {
-  it('bygger full liste: 144 TTS-oppgaver + 8 innspilte (full + short per persona) = 152', () => {
+  // Oppgave B (felttest-oppfølging): start_321_short er nå en egen TTS-cue i
+  // cues-mappen (kort «Klar? Tre, to, ein, kjør!»-tekst per persona), ikke
+  // lenger en hale-trim av den innspilte peptalken — halen («ikkje no knussel
+  // på slutten») var meningsløs isolert ved øktstart. Totalen er fortsatt 152:
+  // short flytter bare kategori (recorded → tts).
+  it('bygger full liste: 37 TTS + 1 innspilt per persona', () => {
     const tasks = buildTaskList(manifest, {});
-    expect(tasks).toHaveLength(152);
-    expect(tasks.filter((t) => t.kind === 'tts')).toHaveLength(144);
-    expect(tasks.filter((t) => t.kind === 'recorded')).toHaveLength(8);
+    const n = PERSONA_IDS.length;
+    expect(tasks).toHaveLength(n * OPPGAVER_PER_PERSONA);
+    expect(tasks.filter((t) => t.kind === 'tts')).toHaveLength(n * (OPPGAVER_PER_PERSONA - 1));
+    expect(tasks.filter((t) => t.kind === 'recorded')).toHaveLength(n);
   });
 
-  it('gir 38 oppgaver per persona (11 cues + 25 øvelser + 2 innspilte)', () => {
+  it('gir 38 oppgaver per persona (12 cues + 25 øvelser + 1 innspilt)', () => {
+    expect(PERSONA_IDS.length).toBeGreaterThan(0);
     for (const id of PERSONA_IDS) {
       const forPersona = buildTaskList(manifest, {}).filter((t) => t.personaId === id);
-      expect(forPersona).toHaveLength(38);
+      expect(forPersona).toHaveLength(OPPGAVER_PER_PERSONA);
     }
   });
 
   it('bruker ttsText (fonetisk), aldri displayText, for øvelser', () => {
     const tasks = buildTaskList(manifest, {});
     const burpees = tasks.find(
-      (t) => t.personaId === 'haugesund' && t.id === 'burpees',
+      (t) => t.personaId === PERSONA_IDS[0] && t.id === 'burpees',
     );
     expect(burpees?.kind).toBe('tts');
     expect(burpees && burpees.kind === 'tts' ? burpees.text : null).toBe('Børpis');
     const goblet = tasks.find(
-      (t) => t.personaId === 'romsdal' && t.id === 'goblet-squat',
+      (t) => t.personaId === PERSONA_IDS[1] && t.id === 'goblet-squat',
     );
     expect(goblet && goblet.kind === 'tts' ? goblet.text : null).toBe('Gåblet skvått');
   });
 
   it('bygger riktige outputstier under public/audio/personas/<persona>/', () => {
     const tasks = buildTaskList(manifest, {});
-    const intro = tasks.find((t) => t.personaId === 'haugesund' && t.id === 'intro');
-    expect(intro?.outputRelPath).toBe('public/audio/personas/haugesund/intro.mp3');
+    const intro = tasks.find((t) => t.personaId === PERSONA_IDS[0] && t.id === 'intro');
+    expect(intro?.outputRelPath).toBe(`public/audio/personas/${PERSONA_IDS[0]}/intro.mp3`);
     const burpees = tasks.find((t) => t.personaId === 'boyband' && t.id === 'burpees');
     expect(burpees?.outputRelPath).toBe(
       'public/audio/personas/boyband/exercise-burpees.mp3',
@@ -81,8 +89,10 @@ describe('buildTaskList', () => {
 
   it('TTS-oppgaver bærer personaens seedFile', () => {
     const tasks = buildTaskList(manifest, {});
-    const t = tasks.find((x) => x.personaId === 'romsdal' && x.id === 'halfway');
-    expect(t && t.kind === 'tts' ? t.seedFile : null).toBe('mintrener-seed-romsdal.wav');
+    const t = tasks.find((x) => x.personaId === PERSONA_IDS[1] && x.id === 'halfway');
+    expect(t && t.kind === 'tts' ? t.seedFile : null).toBe(
+      manifest.personas[PERSONA_IDS[1]].seedFile,
+    );
   });
 
   it('har stabil rekkefølge: persona-rekkefølgen i JSON, cues før exercises', () => {
@@ -90,62 +100,70 @@ describe('buildTaskList', () => {
     const personaOrder = [...new Set(tasks.map((t) => t.personaId))];
     expect(personaOrder).toEqual(PERSONA_IDS);
 
-    const haugesund = tasks.filter((t) => t.personaId === 'haugesund');
-    const firstExerciseIdx = haugesund.findIndex((t) =>
+    const forstePersona = tasks.filter((t) => t.personaId === PERSONA_IDS[0]);
+    const firstExerciseIdx = forstePersona.findIndex((t) =>
       t.outputRelPath.includes('/exercise-'),
     );
-    const lastCueIdx = haugesund.findIndex((t) => t.id === 'bro-resync');
-    expect(haugesund[0]?.id).toBe('intro');
+    const lastCueIdx = forstePersona.findIndex((t) => t.id === 'bro-resync');
+    expect(forstePersona[0]?.id).toBe('intro');
     expect(lastCueIdx).toBeLessThan(firstExerciseIdx);
     // Øvelsene beholder JSON-rekkefølgen
-    const exerciseIds = haugesund
+    const exerciseIds = forstePersona
       .filter((t) => t.outputRelPath.includes('/exercise-'))
       .map((t) => t.id);
     expect(exerciseIds[0]).toBe('kneboy');
     expect(exerciseIds[exerciseIds.length - 1]).toBe('skulder-dislocates');
   });
 
-  it('--persona filtrerer til én persona (36 TTS + 2 innspilte)', () => {
-    const tasks = buildTaskList(manifest, { persona: 'haugesund' });
-    expect(tasks).toHaveLength(38);
-    expect(tasks.every((t) => t.personaId === 'haugesund')).toBe(true);
+  it('--persona filtrerer til én persona (37 TTS + 1 innspilt)', () => {
+    const tasks = buildTaskList(manifest, { persona: PERSONA_IDS[0] });
+    expect(tasks).toHaveLength(OPPGAVER_PER_PERSONA);
+    expect(tasks.every((t) => t.personaId === PERSONA_IDS[0])).toBe(true);
   });
 
   it('--only matcher cue-nøkkel på tvers av personas', () => {
     const tasks = buildTaskList(manifest, { only: 'halfway' });
-    expect(tasks).toHaveLength(4);
+    expect(tasks).toHaveLength(PERSONA_IDS.length);
     expect(tasks.every((t) => t.id === 'halfway')).toBe(true);
   });
 
   it('--only matcher øvelses-id', () => {
     const tasks = buildTaskList(manifest, { only: 'kettlebell-swing' });
-    expect(tasks).toHaveLength(4);
+    expect(tasks).toHaveLength(PERSONA_IDS.length);
     expect(
       tasks.every((t) => t.outputRelPath.endsWith('exercise-kettlebell-swing.mp3')),
     ).toBe(true);
   });
 
-  it('--only start_321 gir kun de fire innspilte (aldri short-variantene)', () => {
+  it('--only start_321 gir kun de innspilte (short er TTS og matcher ikke)', () => {
     const tasks = buildTaskList(manifest, { only: 'start_321' });
-    expect(tasks).toHaveLength(4);
+    expect(tasks).toHaveLength(PERSONA_IDS.length);
     expect(tasks.every((t) => t.kind === 'recorded')).toBe(true);
     expect(tasks.every((t) => t.outputRelPath.endsWith('/start_321.mp3'))).toBe(true);
   });
 
-  it('--only start_321_short gir kun de fire trimmede variantene, fra samme kilde', () => {
+  it('--only start_321_short gir én TTS-oppgave per persona med personaens korte 3-2-1-tekst', () => {
+    // Oppgave B: short produseres i samme TTS-prosesseringskjede (v2) som de
+    // andre cuene — ikke lenger klippet fra den innspilte kilden.
     const tasks = buildTaskList(manifest, { only: 'start_321_short' });
-    expect(tasks).toHaveLength(4);
-    expect(tasks.every((t) => t.kind === 'recorded')).toBe(true);
+    expect(tasks).toHaveLength(PERSONA_IDS.length);
+    expect(tasks.every((t) => t.kind === 'tts')).toBe(true);
     expect(tasks.every((t) => t.outputRelPath.endsWith('/start_321_short.mp3'))).toBe(true);
-    const romsdal = tasks.find((t) => t.personaId === 'romsdal');
-    expect(romsdal && romsdal.kind === 'recorded' ? romsdal.sourceRelPath : null).toBe(
-      'audio/Tre-To-En- Romsdalen (Lead Vocal).mp3',
+    const textByPersona = Object.fromEntries(
+      tasks.map((t) => [t.personaId, t.kind === 'tts' ? t.text : null]),
+    );
+    // Teksten hentes fra manuskriptet, som er fasiten — en kopi her ville
+    // bare vært et sted til å glemme å oppdatere.
+    expect(textByPersona).toEqual(
+      Object.fromEntries(
+        PERSONA_IDS.map((id) => [id, manifest.personas[id].cues.start_321_short.text]),
+      ),
     );
   });
 
-  it('--skip-recorded utelater innspilte spor (144 igjen)', () => {
+  it('--skip-recorded utelater innspilte spor', () => {
     const tasks = buildTaskList(manifest, { skipRecorded: true });
-    expect(tasks).toHaveLength(144);
+    expect(tasks).toHaveLength(PERSONA_IDS.length * (OPPGAVER_PER_PERSONA - 1));
     expect(tasks.every((t) => t.kind === 'tts')).toBe(true);
   });
 
@@ -159,31 +177,28 @@ describe('buildTaskList', () => {
 });
 
 describe('RECORDED_SOURCES', () => {
-  it('mapper alle fire innspilte filer til riktig persona-id', () => {
-    expect(RECORDED_SOURCES).toEqual({
-      haugesund: 'audio/Tre-To-En- Haugesund (Lead Vocal).mp3',
-      romsdal: 'audio/Tre-To-En- Romsdalen (Lead Vocal).mp3',
-      hardcore: 'audio/Tre-To-En- Hardcore (Lead Vocal).mp3',
-      boyband: 'audio/Tre-To-En- Boyband (Lead Vocal).mp3',
-    });
+  it('har én innspilt kildefil per persona i manuskriptet', () => {
+    // Ingen kilde uten persona, og ingen persona uten kilde — det er
+    // relasjonen som betyr noe, ikke filnavnene.
+    expect(Object.keys(RECORDED_SOURCES).sort()).toEqual([...PERSONA_IDS].sort());
   });
 
   it('innspilte oppgaver peker på riktig kildefil', () => {
     const recorded = buildTaskList(manifest, { only: 'start_321' });
-    const romsdal = recorded.find((t) => t.personaId === 'romsdal');
-    expect(romsdal && romsdal.kind === 'recorded' ? romsdal.sourceRelPath : null).toBe(
-      'audio/Tre-To-En- Romsdalen (Lead Vocal).mp3',
+    const t = recorded.find((x) => x.personaId === PERSONA_IDS[1]);
+    expect(t && t.kind === 'recorded' ? t.sourceRelPath : null).toBe(
+      RECORDED_SOURCES[PERSONA_IDS[1]],
     );
   });
 });
 
 describe('buildClonePayload', () => {
   it('bygger clone-payload med reference_audio_filename = seedFile (default norsk)', () => {
-    const payload = buildClonePayload('Gje gass!', 'mintrener-seed-haugesund.wav');
+    const payload = buildClonePayload('Gje gass!', 'mintrener-seed-hardcore.wav');
     expect(payload).toEqual({
       text: 'Gje gass!',
       voice_mode: 'clone',
-      reference_audio_filename: 'mintrener-seed-haugesund.wav',
+      reference_audio_filename: 'mintrener-seed-hardcore.wav',
       language: 'no',
       output_format: 'mp3',
     });
@@ -199,7 +214,7 @@ describe('buildClonePayload', () => {
 describe('språkoverstyring (ttsLang)', () => {
   it('mountain-climbers bærer engelsk tekst og lang=en i alle personas', () => {
     const tasks = buildTaskList(manifest, { only: 'mountain-climbers' });
-    expect(tasks).toHaveLength(4);
+    expect(tasks).toHaveLength(PERSONA_IDS.length);
     for (const t of tasks) {
       expect(t.kind === 'tts' ? t.text : null).toBe('Mountain Climbers');
       expect(t.kind === 'tts' ? t.lang : null).toBe('en');
@@ -210,7 +225,7 @@ describe('språkoverstyring (ttsLang)', () => {
     const others = buildTaskList(manifest, {}).filter(
       (t): t is TtsTask => t.kind === 'tts' && t.id !== 'mountain-climbers',
     );
-    expect(others).toHaveLength(140);
+    expect(others).toHaveLength(PERSONA_IDS.length * (OPPGAVER_PER_PERSONA - 2));
     expect(others.every((t) => t.lang === 'no')).toBe(true);
   });
 });
@@ -297,52 +312,12 @@ describe('buildRecordedFfmpegArgs (skånsom kjede for innspilte spor)', () => {
   });
 });
 
-describe('buildRecordedShortFfmpegArgs (trimmet start_321-variant for korte faser)', () => {
-  const args = buildRecordedShortFfmpegArgs('in.mp3', 'out.mp3');
-  const filter = args[args.indexOf('-af') + 1] ?? '';
-
-  it('kalibrerings-konstanten er 8,5 s (én-linjes justerbar for lytterunde)', () => {
-    expect(START321_SHORT_TAIL_S).toBe(8.5);
-  });
-
-  it('beholder de SISTE 8,5 sekundene av INNHOLDET: haletrim (areverse) FØR atrim-utsnittet', () => {
-    // Kildene har 0-5 s halestillhet — et rått tail-kutt ville gitt 3-8 s
-    // faktisk innhold avhengig av persona. Derfor: reverser, trim (gamle)
-    // halestillheten, kutt utsnittet, reverser tilbake.
-    const atrimIdx = filter.indexOf(`atrim=end=${START321_SHORT_TAIL_S}`);
-    expect(atrimIdx).toBeGreaterThanOrEqual(0);
-    expect(filter.startsWith('areverse,silenceremove=')).toBe(true);
-    expect(filter.indexOf('silenceremove=')).toBeLessThan(atrimIdx);
-  });
-
-  it('fader inn 0,4 s i starten av utsnittet, FØR den skånsomme kjeden', () => {
-    expect(filter).toContain('areverse,afade=t=in:st=0:d=0.4,');
-  });
-
-  it('gjenbruker den skånsomme recorded-kjeden (trim + fade + loudnorm, ingen denoise/EQ)', () => {
-    const recordedFilter = buildRecordedFfmpegArgs('in.mp3', 'out.mp3');
-    const chain = recordedFilter[recordedFilter.indexOf('-af') + 1];
-    expect(filter).toBe(
-      'areverse,silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,' +
-        `atrim=end=${START321_SHORT_TAIL_S},areverse,afade=t=in:st=0:d=0.4,${chain}`
-    );
-    expect(filter).not.toContain('afftdn');
-    expect(filter).not.toContain('deesser');
-  });
-
-  it('overskriver uten prompt og leser aldri stdin', () => {
-    expect(args).toContain('-y');
-    expect(args).toContain('-nostdin');
-    expect(args[args.length - 1]).toBe('out.mp3');
-  });
-});
-
 describe('rå-cache', () => {
   it('TTS-oppgaver får cacheRelPath under audio/raw-cache/<persona>/', () => {
     const tasks = buildTaskList(manifest, {});
-    const intro = tasks.find((t) => t.personaId === 'haugesund' && t.id === 'intro');
+    const intro = tasks.find((t) => t.personaId === PERSONA_IDS[0] && t.id === 'intro');
     expect(intro && intro.kind === 'tts' ? intro.cacheRelPath : null).toBe(
-      'audio/raw-cache/haugesund/intro.mp3',
+      `audio/raw-cache/${PERSONA_IDS[0]}/intro.mp3`,
     );
     const burpees = tasks.find((t) => t.personaId === 'boyband' && t.id === 'burpees');
     expect(burpees && burpees.kind === 'tts' ? burpees.cacheRelPath : null).toBe(
@@ -479,7 +454,7 @@ describe('buildTaskList — kanttilfeller', () => {
 describe('parseCliArgs', () => {
   it('parser gyldige flagg', () => {
     const opts = parseCliArgs([
-      '--dry-run', '--persona', 'haugesund', '--only', 'intro', '--force', '--skip-recorded',
+      '--dry-run', '--persona', PERSONA_IDS[0], '--only', 'intro', '--force', '--skip-recorded',
     ]);
     expect(opts).toEqual({
       dryRun: true,
@@ -487,16 +462,16 @@ describe('parseCliArgs', () => {
       skipRecorded: true,
       reprocess: false,
       refetch: false,
-      persona: 'haugesund',
+      persona: PERSONA_IDS[0],
       only: 'intro',
     });
   });
 
   it('parser --reprocess', () => {
     expect(parseCliArgs(['--reprocess']).reprocess).toBe(true);
-    expect(parseCliArgs(['--reprocess', '--persona', 'romsdal'])).toMatchObject({
+    expect(parseCliArgs(['--reprocess', '--persona', PERSONA_IDS[1]])).toMatchObject({
       reprocess: true,
-      persona: 'romsdal',
+      persona: PERSONA_IDS[1],
     });
   });
 
@@ -553,12 +528,12 @@ describe('updateConsecutiveFailures', () => {
 describe('fetchTtsWithRetries — retry-klassifisering (mock fetch)', () => {
   const task: TtsTask = {
     kind: 'tts',
-    personaId: 'haugesund',
+    personaId: PERSONA_IDS[0],
     id: 'intro',
     text: 'Trø te!',
-    seedFile: 'mintrener-seed-haugesund.wav',
-    outputRelPath: 'public/audio/personas/haugesund/intro.mp3',
-    cacheRelPath: 'audio/raw-cache/haugesund/intro.mp3',
+    seedFile: 'mintrener-seed-hardcore.wav',
+    outputRelPath: `public/audio/personas/${PERSONA_IDS[0]}/intro.mp3`,
+    cacheRelPath: `audio/raw-cache/${PERSONA_IDS[0]}/intro.mp3`,
     lang: 'no',
   };
 

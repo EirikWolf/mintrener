@@ -1,6 +1,6 @@
-import { ExerciseItem } from '../../schemas/exerciseSchema';
+import { ExerciseInput } from '../../schemas/exerciseSchema';
 
-export const DUMBBELL_EXERCISES: ExerciseItem[] = [
+export const DUMBBELL_EXERCISES: ExerciseInput[] = [
   {
     id: 'manualpress-bryst',
     navn: { nb: 'Brystpress med manualer', en: 'Dumbbell Chest Press' },

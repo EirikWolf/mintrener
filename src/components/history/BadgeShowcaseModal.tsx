@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BadgeItem, getAllUserBadges } from '../../services/badgeService';
 import { CompletedWorkoutLog } from '../../types/models';
 import { ShareCardModal } from '../social/ShareCardModal';
 import { Trophy, X, Lock, CheckCircle2, Share2, Sparkles } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface BadgeShowcaseModalProps {
   history?: CompletedWorkoutLog[];
@@ -17,18 +18,12 @@ export const BadgeShowcaseModal: React.FC<BadgeShowcaseModalProps> = ({
   const [filter, setFilter] = useState<'alle' | 'opplåst' | 'låst'>('alle');
   const [selectedBadgeToShare, setSelectedBadgeToShare] = useState<BadgeItem | null>(null);
 
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, { onClose });
+
   useEffect(() => {
     setBadges(getAllUserBadges(history));
   }, [history]);
-
-  // WCAG: Lukk ved Escape-tast
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
 
   const unlockedCount = badges.filter((b) => b.isUnlocked).length;
   const totalCount = badges.length;
@@ -48,10 +43,12 @@ export const BadgeShowcaseModal: React.FC<BadgeShowcaseModalProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="badge-showcase-title"
-        className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden text-white space-y-4"
+        className="w-full max-w-lg max-h-[92vh] bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col overflow-hidden text-white space-y-4 focus:outline-none"
       >
         {/* 1. Header */}
         <div className="flex items-center justify-between border-b border-zinc-850 pb-3 shrink-0">

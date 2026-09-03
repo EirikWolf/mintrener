@@ -9,6 +9,7 @@ import {
   VolumeX,
   ShieldCheck,
 } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface AiCoachModalProps {
   onClose: () => void;
@@ -41,6 +42,8 @@ export const AiCoachModal: React.FC<AiCoachModalProps> = ({
   const [isTyping, setIsTyping] = useState(false);
   const [voiceSpeechEnabled, setVoiceSpeechEnabled] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, { onClose });
 
   // WCAG: Lukk med Escape
   useEffect(() => {
@@ -110,10 +113,12 @@ export const AiCoachModal: React.FC<AiCoachModalProps> = ({
       className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200"
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="ai-coach-title"
-        className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-lg h-[90vh] sm:h-[650px] flex flex-col overflow-hidden shadow-2xl"
+        className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-lg h-[90vh] sm:h-[650px] flex flex-col overflow-hidden shadow-2xl focus:outline-none"
       >
         {/* Topplinje */}
         <div className="p-4 bg-zinc-950/80 border-b border-zinc-800 flex items-center justify-between shrink-0">

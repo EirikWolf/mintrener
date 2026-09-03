@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { CONTEXT_PROFILES } from '../../data/profiles';
 import { ContextProfileId, UserProfilesState } from '../../schemas/profileSchema';
 import { saveUserProfilesState, getUserProfilesState } from '../../services/profileCompositionService';
 import { Briefcase, Heart, Music, Armchair, Trophy, Users, Check, Sparkles } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface ProfileOnboardingModalProps {
   isOpen: boolean;
@@ -25,6 +26,20 @@ export const ProfileOnboardingModal: React.FC<ProfileOnboardingModalProps> = ({
   const [selectedProfiles, setSelectedProfiles] = useState<ContextProfileId[]>(() => {
     const state = getUserProfilesState();
     return state.profiles.length > 0 ? state.profiles : ['kontor'];
+  });
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, {
+    isActive: isOpen,
+    onClose: () => {
+      const defaultState: UserProfilesState = {
+        profiles: selectedProfiles.length > 0 ? selectedProfiles : ['kontor'],
+        primaryProfile: selectedProfiles[0] || 'kontor',
+        hasCompletedOnboarding: true,
+      };
+      saveUserProfilesState(defaultState);
+      onClose(defaultState);
+    },
   });
 
   if (!isOpen) return null;
@@ -79,10 +94,12 @@ export const ProfileOnboardingModal: React.FC<ProfileOnboardingModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
       <div
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="profile-onboarding-title"
-        className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-6 text-zinc-100 max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-6 text-zinc-100 max-h-[90vh] overflow-y-auto focus:outline-none"
       >
         {/* Header */}
         <div className="text-center space-y-2">

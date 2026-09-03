@@ -88,7 +88,7 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
   const colors = getPhaseColors();
 
   return (
-    <div className="relative flex items-center justify-center w-full max-w-[240px] xs:max-w-[270px] sm:max-w-[320px] aspect-square mx-auto select-none">
+    <div className="relative flex items-center justify-center w-full max-w-[280px] xs:max-w-[320px] sm:max-w-[360px] md:max-w-[400px] h-[28vh] max-h-[360px] landscape:max-h-[46vh] landscape:max-w-[46vh] aspect-square mx-auto select-none">
       <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
         {/* Bakgrunnsspor */}
         <circle
@@ -126,18 +126,24 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
         />
       </svg>
 
-      {/* Stor tallvisning i midten – lesbar på 1-2 meters avstand */}
+      {/* Stor tallvisning i midten – skalerer med viewport (minst 20-25% vh) for lesbarhet på 1-2 meters avstand. 3-sifrede tall (f.eks. 120s, 300s) justeres proporsjonalt for å passe trygt inne i sirkelen */}
       <div
         role="timer"
         aria-live="polite"
         aria-atomic="true"
         aria-label={`${remainingSeconds} sekunder igjen`}
-        className="absolute inset-0 flex flex-col items-center justify-center text-center"
+        className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-4"
       >
-        <span className={`font-mono text-7xl sm:text-8xl md:text-9xl font-black tracking-tight ${colors.text} drop-shadow-lg`}>
+        <span
+          className={`font-mono tabular-nums font-black tracking-tight ${colors.text} drop-shadow-lg leading-none ${
+            remainingSeconds >= 100
+              ? 'text-[clamp(3.5rem,18vh,9rem)]'
+              : 'text-[clamp(4.5rem,25vh,13rem)]'
+          }`}
+        >
           {remainingSeconds}
         </span>
-        <span className="text-xs uppercase tracking-widest text-zinc-400 font-bold mt-1">
+        <span className="text-[10px] xs:text-xs uppercase tracking-widest text-zinc-400 font-bold mt-0.5">
           sekunder
         </span>
       </div>

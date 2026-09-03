@@ -1,9 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   getWeeklyGoal,
   setWeeklyGoal,
   calculateWeeklyProgress,
+  getGoalForWeek,
+  makeGoalForWeek,
 } from '../weeklyGoalService';
+import { weekKey, addWeeksToKey } from '../weekUtils';
 import { CompletedWorkoutLog } from '../../types/models';
 
 describe('Weekly Goal Service', () => {
@@ -51,5 +54,100 @@ describe('Weekly Goal Service', () => {
     expect(progress.completedThisWeek).toBe(2);
     expect(progress.percentage).toBe(50);
     expect(progress.isGoalMet).toBe(false);
+  });
+});
+
+describe('getGoalForWeek', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useRealTimers();
+  });
+
+  it('uten logg: alle uker dømmes etter gjeldende mål', () => {
+    expect(getGoalForWeek('2026-01-05')).toBe(getWeeklyGoal());
+  });
+  it('førstegangsvalg (fersk bruker) gjelder INNEVÆRENDE uke — B1', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 0, 7)); // onsdag, uke 2026-01-05
+    // Rått fravær av lagret mål = aldri satt før (onboarding-scenarioet):
+    // brukeren som velger 2 skal få FØRSTE uke dømt etter 2, ikke default 3.
+    expect(localStorage.getItem('mintrener_weekly_goal')).toBeNull();
+    setWeeklyGoal(2);
+    expect(getGoalForWeek('2026-01-05')).toBe(2);
+    expect(getGoalForWeek('2026-01-12')).toBe(2);
+  });
+  it('senere ENDRING etter førstegangsvalg gjelder fortsatt fra neste uke — B1', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 0, 7));
+    setWeeklyGoal(2); // førstegang → gjelder nå
+    setWeeklyGoal(4); // endring → fra neste uke
+    expect(getGoalForWeek('2026-01-05')).toBe(2);
+    expect(getGoalForWeek('2026-01-12')).toBe(4);
+  });
+  it('endring gjelder fra NESTE uke (spec § 2.1)', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 0, 7)); // onsdag, uke 2026-01-05
+    localStorage.setItem('mintrener_weekly_goal', '3'); // eksisterende mål → dette er en ENDRING
+    setWeeklyGoal(5);
+    expect(getGoalForWeek(weekKey(new Date(2026, 0, 7)))).toBe(3);         // inneværende: gammelt mål
+    expect(getGoalForWeek(addWeeksToKey(weekKey(new Date(2026, 0, 7)), 1))).toBe(5); // neste: nytt
+  });
+  it('endring i uke N påvirker ikke uke N-1 (historisk anker, ikke nytt mål)', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 0, 7)); // onsdag, uke 2026-01-05
+    localStorage.setItem('mintrener_weekly_goal', '3'); // eksisterende mål → ENDRING
+    setWeeklyGoal(5);
+    // Uker ELDRE enn loggens første linje skal dømmes etter første linjes mål
+    // (det gamle), aldri etter gjeldende mål — ellers ville en målheving
+    // re-dømt hele historikken og kollapset streaken retroaktivt.
+    expect(getGoalForWeek('2025-12-29')).toBe(3);
+    expect(getGoalForWeek('2024-06-03')).toBe(3);
+  });
+  it('flere endringer: siste logglinje med weekKey <= spurt uke vinner', () => {
+    vi.useFakeTimers();
+    localStorage.setItem('mintrener_weekly_goal', '3'); // eksisterende mål → ENDRINGER
+    vi.setSystemTime(new Date(2026, 0, 7)); setWeeklyGoal(5);
+    vi.setSystemTime(new Date(2026, 0, 20)); setWeeklyGoal(2);
+    expect(getGoalForWeek('2026-01-12')).toBe(5);
+    expect(getGoalForWeek('2026-02-02')).toBe(2);
+  });
+  it('korrupt logg → fallback til gjeldende mål, ingen kræsj', () => {
+    localStorage.setItem('mintrener_weekly_goal_log_v1', '{{{');
+    expect(getGoalForWeek('2026-01-05')).toBe(getWeeklyGoal());
+  });
+});
+
+describe('makeGoalForWeek', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('gir samme svar som getGoalForWeek for alle uker', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 0, 7)); setWeeklyGoal(5);
+    vi.setSystemTime(new Date(2026, 0, 20)); setWeeklyGoal(2);
+    const goalFor = makeGoalForWeek();
+    for (const wk of ['2024-06-03', '2026-01-05', '2026-01-12', '2026-01-19', '2026-02-02']) {
+      expect(goalFor(wk)).toBe(getGoalForWeek(wk));
+    }
+  });
+
+  it('leser localStorage ved opprettelse, ikke per kall (ytelse i UI-effekten)', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 0, 7));
+    setWeeklyGoal(5);
+    const goalFor = makeGoalForWeek();
+    const getItemSpy = vi.spyOn(Storage.prototype, 'getItem');
+    goalFor('2026-01-05');
+    goalFor('2026-01-12');
+    goalFor('2026-02-02');
+    expect(getItemSpy).not.toHaveBeenCalled();
+  });
+
+  it('er et snapshot: senere lagringsendringer påvirker ikke closuren', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 0, 7));
+    localStorage.setItem('mintrener_weekly_goal', '3'); // eksisterende mål → ENDRING
+    setWeeklyGoal(5);
+    const goalFor = makeGoalForWeek();
+    localStorage.clear();
+    expect(goalFor('2026-01-12')).toBe(5); // neste uke: nytt mål, fra snapshotet
+    expect(goalFor('2026-01-05')).toBe(3); // inneværende: gammelt mål
   });
 });

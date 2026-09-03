@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TRAINING_PROGRAMS } from '../../data/programs';
 import { STARTER_CHALLENGES } from '../../data/challenges';
 import { CONTEXT_PROFILES, TrainingMode } from '../../data/contextProfiles';
@@ -8,6 +8,8 @@ import { ChallengeDetailModal } from '../challenges/ChallengeDetailModal';
 import { getChallengeProgress, getActiveChallengeId } from '../../services/challengeService';
 import { getFavoriteProgramIds, toggleFavoriteProgramId } from '../../services/favoritesService';
 import { applyProgramOverrides } from '../../services/programOverrideService';
+import { fetchCustomWorkouts, calculateWorkoutDuration } from '../../services/customWorkoutsService';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   Play,
   Clock,
@@ -25,12 +27,25 @@ import {
   Edit3,
   CalendarDays,
   ChevronRight,
+  Plus,
 } from 'lucide-react';
 
 interface ProgramCatalogViewProps {
   onStartProgram: (workout: WorkoutTemplate) => void;
+  /** Katalogprogram → lag din egen variant av det (ny mal, nytt navn). */
   onCustomizeProgram?: (workout: WorkoutTemplate) => void;
+  /** Eget program → rediger det som det er. Skiller seg fra linjen over
+      nettopp fordi kopiering ville laget dubletter av ditt eget innhold. */
+  onEditOwnProgram?: (workout: WorkoutTemplate) => void;
+  onCreateProgram?: () => void;
   onNavigateToTimer?: () => void;
+}
+
+/** «1 min 40 sek» — samme form som byggeren bruker. */
+function formatOwnDuration(totalSeconds: number): string {
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${mins} min ${secs.toString().padStart(2, '0')} sek`;
 }
 
 const CHALLENGE_CATEGORIES: Array<{ id: 'alle' | ChallengeCategory; label: string }> = [
@@ -45,8 +60,17 @@ const CHALLENGE_CATEGORIES: Array<{ id: 'alle' | ChallengeCategory; label: strin
 export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({
   onStartProgram,
   onCustomizeProgram,
+  onEditOwnProgram,
+  onCreateProgram,
   onNavigateToTimer,
 }) => {
+  const { user } = useAuth();
+  const [ownPrograms, setOwnPrograms] = useState<WorkoutTemplate[]>([]);
+
+  useEffect(() => {
+    fetchCustomWorkouts(user?.uid).then(setOwnPrograms);
+  }, [user]);
+
   const [mainTab, setMainTab] = useState<'okter' | 'utfordringer'>('okter');
   const [selectedProfileId, setSelectedProfileId] = useState<string>('alle');
   const [selectedCategory, setSelectedCategory] = useState<string>('alle');
@@ -228,7 +252,85 @@ export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({
             </div>
           </div>
 
-          {/* 3. Programliste */}
+          {/* 3. MINE PROGRAM — brukerens eget innhold står først.
+              Katalogen leste tidligere kun TRAINING_PROGRAMS, så en økt du
+              hadde bygget selv fantes ingen andre steder enn nederst i
+              byggeren. Da ble byggeren eneste vei tilbake til eget innhold —
+              og derfor måtte den ha en egen fane i bunnmenyen. */}
+          <div data-testid="egne-program" className="space-y-1.5 pb-2 shrink-0">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">
+                Mine program{ownPrograms.length > 0 ? ` (${ownPrograms.length})` : ''}
+              </span>
+              {onCreateProgram && (
+                <button
+                  onClick={onCreateProgram}
+                  aria-label="Lag nytt program"
+                  className="flex items-center gap-1 px-2 py-1 -mr-1 rounded-lg text-xs font-bold text-emerald-400 hover:text-emerald-300 hover:bg-zinc-900/60 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Nytt program</span>
+                </button>
+              )}
+            </div>
+
+            {ownPrograms.length === 0 ? (
+              <p className="text-[11px] text-zinc-500 px-1 pb-1">
+                Du har ingen egne program ennå. Bygg ett, så dukker det opp her.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {ownPrograms.map((w) => (
+                  <div
+                    key={w.id}
+                    className="p-2.5 bg-zinc-900/80 border border-zinc-800 rounded-xl flex items-center justify-between gap-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-white truncate">{w.name}</p>
+                      <p className="text-[10px] text-zinc-400">
+                        {w.items.length} øvelser • {formatOwnDuration(calculateWorkoutDuration(w))}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleToggleFavorite(w.id)}
+                        aria-label={
+                          favoriteIds.includes(w.id)
+                            ? `Fjern ${w.name} fra favoritter`
+                            : `Legg ${w.name} til favoritter`
+                        }
+                        aria-pressed={favoriteIds.includes(w.id)}
+                        className="p-1.5 rounded-lg text-zinc-400 hover:text-amber-400 transition-colors"
+                      >
+                        <Star
+                          className={`w-3.5 h-3.5 ${
+                            favoriteIds.includes(w.id) ? 'text-amber-400 fill-current' : ''
+                          }`}
+                        />
+                      </button>
+                      {onEditOwnProgram && (
+                        <button
+                          onClick={() => onEditOwnProgram(w)}
+                          aria-label={`Rediger ${w.name}`}
+                          className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => onStartProgram(w)}
+                        aria-label={`Start ${w.name}`}
+                        className="p-1.5 rounded-lg bg-emerald-500 text-zinc-950 hover:bg-emerald-400 active:scale-95 transition-all"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* 4. Katalogens programliste */}
           <div className="flex-1 overflow-y-auto space-y-2.5 pr-0.5 mt-1 pb-4">
             {filteredPrograms.length === 0 ? (
               <div className="text-center py-12 space-y-2 text-zinc-400">

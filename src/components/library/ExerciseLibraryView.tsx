@@ -176,11 +176,19 @@ export const ExerciseLibraryView: React.FC<ExerciseLibraryViewProps> = ({
           filtered.map((ex) => {
             const isCustom = Boolean((ex as CustomExerciseItem).isCustom || ex.id.startsWith('custom-'));
             return (
+              // Raden er en ekte <button> (WCAG 2.1.1, nivå A). Slettekontrollen
+              // ligger som søsken, ikke nestet — nestede knapper er ugyldig HTML
+              // og gir uforutsigbar fokusrekkefølge.
               <div
                 key={ex.id}
-                onClick={() => setSelectedExercise(ex)}
-                className="p-3 bg-zinc-900/80 border border-zinc-800 rounded-2xl hover:border-zinc-700 transition-all flex items-center justify-between gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
+                className="bg-zinc-900/80 border border-zinc-800 rounded-2xl hover:border-zinc-700 transition-all flex items-center justify-between gap-2 shadow-sm overflow-hidden"
               >
+                <button
+                  type="button"
+                  onClick={() => setSelectedExercise(ex)}
+                  aria-label={`Åpne øvelsen ${ex.navn.nb}`}
+                  className="p-3 flex items-center gap-2 flex-1 text-left cursor-pointer active:scale-[0.99] transition-transform min-w-0"
+                >
                 <div className="space-y-0.5 overflow-hidden flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] uppercase font-bold text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800/40">
@@ -207,15 +215,15 @@ export const ExerciseLibraryView: React.FC<ExerciseLibraryViewProps> = ({
                   </div>
                 </div>
 
+                </button>
+
                 {isCustom && (
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setExerciseToDelete(ex);
-                    }}
+                    type="button"
+                    onClick={() => setExerciseToDelete(ex)}
                     aria-label={`Slett ${ex.navn.nb}`}
                     title="Slett egendefinert øvelse"
-                    className="p-2 text-zinc-400 hover:text-rose-400 hover:bg-rose-950/30 rounded-xl transition-all mr-1"
+                    className="p-2 text-zinc-400 hover:text-rose-400 hover:bg-rose-950/30 rounded-xl transition-all mr-1 shrink-0"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

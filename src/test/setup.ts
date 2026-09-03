@@ -68,3 +68,24 @@ global.requestAnimationFrame = (callback: FrameRequestCallback) => {
 global.cancelAnimationFrame = (id: number) => {
   clearTimeout(id);
 };
+
+/**
+ * jsdom implementerer ikke `window.matchMedia`.
+ *
+ * Komponenter som spør om `(display-mode: standalone)` eller
+ * `prefers-reduced-motion` kaster derfor i test, og feilen ser ut som en feil i
+ * komponenten. Stubben svarer «nei» på alt, som er riktig utgangspunkt: i en
+ * testkjøring er appen hverken installert eller satt til redusert bevegelse.
+ */
+if (typeof window !== 'undefined' && !window.matchMedia) {
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+}

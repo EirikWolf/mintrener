@@ -12,8 +12,10 @@ import {
 import { User } from 'firebase/auth';
 import { db } from './firebase';
 import { UserProfile, CompletedWorkoutLog, UserSettings } from '../types/models';
+import { WORKOUT_HISTORY_KEY } from './workoutHistoryStorage';
 import { CompletedWorkoutLogSchema, filterValidListItems } from '../schemas/workoutSchema';
 import { showErrorToast } from './errorToastService';
+import { clearAllLocalUserData } from '../constants/storageKeys';
 
 const DEFAULT_SETTINGS: UserSettings = {
   soundEnabled: true,
@@ -51,7 +53,7 @@ export async function syncUserProfile(user: User): Promise<UserProfile> {
   return newProfile;
 }
 
-const LOCAL_HISTORY_KEY = 'mintrener_local_workout_history';
+const LOCAL_HISTORY_KEY = WORKOUT_HISTORY_KEY;
 
 /**
  * Leser lokal historikk med skjemavalidering (revisjon § 2.4): korrupt lagring
@@ -234,18 +236,17 @@ export async function deleteUserData(userId: string): Promise<void> {
     await deleteDoc(d.ref);
   }
 
-  // 5. Slett brukerprofil-dokument
+  // 5. Slett personlige rekorder
+  const prsRef = collection(db, 'users', userId, 'personal_records');
+  const prsSnap = await getDocs(prsRef);
+  for (const d of prsSnap.docs) {
+    await deleteDoc(d.ref);
+  }
+
+  // 6. Slett brukerprofil-dokument
   const userRef = doc(db, 'users', userId);
   await deleteDoc(userRef);
 
-  // 6. Tøm lokale lagringsnøkler
-  try {
-    localStorage.removeItem('mintrener_local_history');
-    localStorage.removeItem('mintrener_custom_workouts');
-    localStorage.removeItem('mintrener_custom_exercises');
-    localStorage.removeItem('mintrener_local_strength_logs');
-    localStorage.removeItem('mintrener_favorites');
-  } catch (e) {
-    // Ignore localStorage errors
-  }
+  // 7. Tøm samtlige lokale lagringsnøkler (GDPR Art. 17)
+  clearAllLocalUserData();
 }
