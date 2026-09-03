@@ -16,6 +16,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { AVVISTE } from './avvisteKandidater';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const KILDE = path.join(ROOT, 'pipeline', 'candidates', 'dybdebatch');
@@ -37,17 +38,32 @@ function main() {
 
   const manifest: Record<string, string[]> = {};
   let kopiert = 0;
+  let avvist = 0;
+
+  // Rydd ut publiserte kandidater fra forrige kjøring. Uten dette blir en
+  // kandidat som senere er avvist liggende igjen i public/ og dukker opp i
+  // kuratoren selv om den er strøket.
+  for (const gammel of fs.existsSync(UT) ? fs.readdirSync(UT) : []) {
+    if (gammel.endsWith('.png')) fs.unlinkSync(path.join(UT, gammel));
+  }
 
   for (const fil of fs.readdirSync(KILDE).sort()) {
     const delt = delOppNavn(fil);
     if (!delt) continue;
+    if (AVVISTE[`${delt.nøkkel}-${delt.seed}`]) {
+      avvist++;
+      continue;
+    }
     fs.copyFileSync(path.join(KILDE, fil), path.join(UT, fil));
     (manifest[delt.nøkkel] ??= []).push(delt.seed);
     kopiert++;
   }
 
   fs.writeFileSync(path.join(UT, MANIFEST), JSON.stringify(manifest, null, 2));
-  console.log(`${kopiert} kandidater for ${Object.keys(manifest).length} bilder → ${path.relative(ROOT, UT)}`);
+  console.log(
+    `${kopiert} kandidater for ${Object.keys(manifest).length} bilder → ${path.relative(ROOT, UT)}` +
+      (avvist > 0 ? ` (${avvist} avvist ved gjennomsyn)` : '')
+  );
   for (const [k, s] of Object.entries(manifest)) console.log(`  ${k.padEnd(28)} ${s.join(' ')}`);
 }
 

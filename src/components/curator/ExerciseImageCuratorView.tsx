@@ -42,6 +42,14 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
 }) => {
   const { user } = useAuth();
   const [kandidater, setKandidater] = useState<Kandidatmanifest>({});
+  /**
+   * Nøkkelen som vises i stor visning, eller null.
+   *
+   * Miniatyrene er for små til å bedømme en positur — det er nettopp det som
+   * skal vurderes, om albuen er 90 grader og ryggen er strak. Valget tas derfor
+   * i stor visning, ikke fra stripa.
+   */
+  const [forstørret, setForstørret] = useState<string | null>(null);
   const [valg, setValg] = useState<Record<string, string>>(() => {
     try {
       return JSON.parse(localStorage.getItem(VALG_KEY) ?? '{}');
@@ -58,6 +66,20 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
       .then(setKandidater)
       .catch(() => setKandidater({}));
   }, []);
+
+  // Esc lukker, 1–3 velger. En kurering er hundrevis av valg; da teller det å
+  // slippe å flytte hånda til musa for hvert enkelt.
+  useEffect(() => {
+    if (!forstørret) return;
+    const påTast = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setForstørret(null);
+      const n = Number(e.key);
+      const seeds = kandidater[forstørret] ?? [];
+      if (n >= 1 && n <= seeds.length) velgKandidat(forstørret, seeds[n - 1]);
+    };
+    window.addEventListener('keydown', påTast);
+    return () => window.removeEventListener('keydown', påTast);
+  });
 
   const velgKandidat = (nøkkel: string, seed: string) => {
     const neste = { ...valg };
@@ -368,7 +390,7 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
                       <div className="space-y-1">
                         <span className="text-[10px] font-bold text-zinc-400 flex items-center gap-1">
                           <Sparkles className="w-3 h-3 text-sky-400" />
-                          Velg kandidat ({kandidater[key].length} seeds)
+                          Velg kandidat ({kandidater[key].length} seeds) — klikk for stor visning
                         </span>
                         <div
                           className="grid grid-cols-3 gap-1.5"
@@ -381,9 +403,8 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
                               <button
                                 key={seed}
                                 type="button"
-                                onClick={() => velgKandidat(key, seed)}
-                                aria-pressed={valgt}
-                                aria-label={`${exercise.navn.nb}, fase ${phaseIdx + 1}, kandidat ${seed}${valgt ? ' (valgt)' : ''}`}
+                                onClick={() => setForstørret(key)}
+                                aria-label={`Vis kandidat ${seed} for ${exercise.navn.nb}, fase ${phaseIdx + 1} i stor visning${valgt ? ' (valgt)' : ''}`}
                                 className={`relative rounded-lg overflow-hidden border-2 transition-all ${
                                   valgt
                                     ? 'border-sky-400 ring-2 ring-sky-500/40'
@@ -394,7 +415,7 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
                                   src={`/images/kandidater/${key}-${seed}.png`}
                                   alt=""
                                   loading="lazy"
-                                  className="w-full h-20 object-cover"
+                                  className="w-full h-28 object-cover"
                                 />
                                 <span
                                   className={`absolute bottom-0 inset-x-0 text-[9px] font-bold py-0.5 ${
@@ -456,6 +477,70 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
           </div>
         ))}
       </div>
+
+      {/* Stor visning: der valget faktisk tas */}
+      {forstørret && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Velg kandidat for ${forstørret}`}
+          className="fixed inset-0 z-50 bg-black/95 flex flex-col p-4"
+          onClick={() => setForstørret(null)}
+        >
+          <div className="flex items-center justify-between mb-3 shrink-0">
+            <div className="text-white">
+              <span className="font-black">{forstørret}</span>
+              <span className="text-xs text-zinc-400 ml-3">
+                Klikk et bilde for å velge · tast 1–3 · Esc lukker
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setForstørret(null)}
+              className="px-3 py-1.5 rounded-2xl bg-zinc-900 border border-zinc-700 text-xs font-bold text-zinc-200 hover:bg-zinc-800"
+            >
+              Lukk
+            </button>
+          </div>
+
+          {/* Kandidatene fyller hele høyden. object-contain, ikke cover:
+              en beskåret positur er nettopp det som ikke kan bedømmes. */}
+          <div
+            className="flex-1 grid gap-3 min-h-0"
+            style={{ gridTemplateColumns: `repeat(${(kandidater[forstørret] ?? []).length}, minmax(0, 1fr))` }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {(kandidater[forstørret] ?? []).map((seed, i) => {
+              const valgt = valg[forstørret] === seed;
+              return (
+                <button
+                  key={seed}
+                  type="button"
+                  onClick={() => velgKandidat(forstørret, seed)}
+                  aria-pressed={valgt}
+                  aria-label={`Velg kandidat ${seed}${valgt ? ' (valgt)' : ''}`}
+                  className={`relative rounded-2xl overflow-hidden border-2 bg-zinc-950 min-h-0 ${
+                    valgt ? 'border-sky-400 ring-4 ring-sky-500/40' : 'border-zinc-800 hover:border-zinc-500'
+                  }`}
+                >
+                  <img
+                    src={`/images/kandidater/${forstørret}-${seed}.png`}
+                    alt=""
+                    className="w-full h-full object-contain"
+                  />
+                  <span
+                    className={`absolute bottom-0 inset-x-0 text-xs font-bold py-1.5 ${
+                      valgt ? 'bg-sky-500 text-white' : 'bg-black/80 text-zinc-200'
+                    }`}
+                  >
+                    {valgt ? `✓ valgt — ${seed}` : `${i + 1}  ·  ${seed}`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
