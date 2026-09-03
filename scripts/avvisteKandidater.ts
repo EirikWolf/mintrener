@@ -27,4 +27,5 @@ export const AVVISTE: Record<string, string> = {
   'planke-0-s0': 'Halvknelende med hånden på kneet, ikke en plankeforberedelse på underarmer.',
   'planke-0-s1': 'Samme.',
   'planke-0-s2': 'Samme.',
+  'sideplanke-0-s9': 'En pølle er dukket opp under hoften. Sideplanken har ingen rekvisitt.',
 };
