@@ -55,7 +55,7 @@ const BASIS = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/e
  */
 export const REFERANSER: Record<
   string,
-  { mappe: string; bilde: 0 | 1; speil?: true; vindu?: number }
+  { mappe: string; bilde: 0 | 1; speil?: true; vindu?: number; gulv?: false }
 > = {
   'planke-1': { mappe: 'Plank', bilde: 1 },
   'push-ups-0': { mappe: 'Pushups', bilde: 0 },
@@ -88,6 +88,22 @@ export const REFERANSER: Record<
   // Startstillingen er ryggliggende flat på matta, og det er nøyaktig bilde 0
   // av jackknife. Vi bruker den for orienteringen, ikke for øvelsen.
   'hulekroppshold-0': { mappe: 'Jackknife_Sit-Up', bilde: 0 },
+  /**
+   * PRØVE: apparatøvelser.
+   *
+   * Personmasken sletter alt som ikke er mennesket — det er grunnen til at
+   * rommet ble rent. For en pull-up forsvinner da også stanga, og hun blir
+   * hengende og holde i ingenting.
+   *
+   * Men for nettopp denne øvelsen er det å SVEVE riktig. Vi slår derfor av det
+   * syntetiske gulvet (som ellers er der for å gi bakkekontakt) og lar
+   * prompten levere stanga mens dybdekartet leverer den hengende kroppen.
+   *
+   * Virker det, åpner det de øvrige apparatøvelsene: bord-roing, muscle-up,
+   * negative pull-ups. Virker det ikke, er grensen reell og skal skrives ned.
+   */
+  'pull-ups-0': { mappe: 'Pullups', bilde: 0, gulv: false },
+  'pull-ups-1': { mappe: 'Pullups', bilde: 1, gulv: false },
 };
 
 /**
