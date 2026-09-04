@@ -126,7 +126,7 @@ describe('TimerDisplay – idle-gren', () => {
   it('viser START-knapp, toppkrom og hurtigstart-grid — og ingen fokusmodus-stripe', () => {
     renderDisplay(makeState({ status: 'idle' }));
 
-    expect(screen.getByRole('button', { name: 'START' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /START/i })).toBeInTheDocument();
     // Toppkrom (logo-rad) er synlig i idle
     expect(screen.getByText('Min Trener')).toBeInTheDocument();
     // Fokusmodus-stripen skal IKKE finnes i idle
@@ -141,7 +141,7 @@ describe('TimerDisplay – idle-gren', () => {
   it('starter økten ved trykk på START og velger økt ved trykk i griden', () => {
     const { handlers } = renderDisplay(makeState({ status: 'idle' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+    fireEvent.click(screen.getByRole('button', { name: /START/i }));
     expect(handlers.onStart).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByText('Tabata Klassisk'));

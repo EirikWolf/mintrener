@@ -222,9 +222,14 @@ export class BluetoothHeartRateService {
    * fullføres) — selve tilkoblingen lever videre i denne singleton-tjenesten,
    * men den forrige komponentinstansens callbacks peker på avmontert state.
    */
-  public reattach(onData: (data: HeartRateData) => void, onDisconnect?: () => void) {
+  public reattach(
+    onData: (data: HeartRateData) => void,
+    onDisconnect?: () => void,
+    onReconnecting?: (attempt: number) => void
+  ) {
     this.onDataCallback = onData;
     this.onDisconnectCallback = onDisconnect || null;
+    this.onReconnectingCallback = onReconnecting || null;
   }
 
   public getDeviceName(): string {

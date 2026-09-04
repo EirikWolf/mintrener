@@ -28,6 +28,10 @@ import {
   CalendarDays,
   ChevronRight,
   Plus,
+  Flame,
+  Sparkles,
+  ShieldCheck,
+  Dumbbell,
 } from 'lucide-react';
 
 interface ProgramCatalogViewProps {
@@ -74,6 +78,7 @@ export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({
   const [mainTab, setMainTab] = useState<'okter' | 'utfordringer'>('okter');
   const [selectedProfileId, setSelectedProfileId] = useState<string>('alle');
   const [selectedCategory, setSelectedCategory] = useState<string>('alle');
+  const [selectedEquipmentFilter, setSelectedEquipmentFilter] = useState<'alle' | 'uten_utstyr' | 'med_utstyr'>('alle');
   const [selectedChallengeCategory, setSelectedChallengeCategory] = useState<'alle' | ChallengeCategory>('alle');
   const [selectedChallenge, setSelectedChallenge] = useState<ChallengeItem | null>(null);
   const [trainingMode, setTrainingMode] = useState<TrainingMode>('alene');
@@ -101,10 +106,17 @@ export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({
   // Filtrering av enkeltøkter
   const filteredPrograms = TRAINING_PROGRAMS.filter((prog) => {
     if (selectedProfileId !== 'alle') {
-      return prog.targetProfileId === selectedProfileId || prog.category === selectedProfileId;
+      const matchProfile = prog.targetProfileId === selectedProfileId || prog.category === selectedProfileId;
+      if (!matchProfile) return false;
     }
     if (selectedCategory !== 'alle') {
-      return prog.category === selectedCategory;
+      if (prog.category !== selectedCategory) return false;
+    }
+    if (selectedEquipmentFilter !== 'alle') {
+      const eq = prog.equipment || ['ingen'];
+      const kreverUtstyr = eq.some((e) => e !== 'ingen' && e !== 'matte');
+      if (selectedEquipmentFilter === 'uten_utstyr' && kreverUtstyr) return false;
+      if (selectedEquipmentFilter === 'med_utstyr' && !kreverUtstyr) return false;
     }
     return true;
   });
@@ -123,11 +135,11 @@ export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({
           {onNavigateToTimer && (
             <button
               onClick={onNavigateToTimer}
-              title="Tilbake til Timer / Forside"
-              aria-label="Tilbake til Timer"
+              title="Tilbake til I dag / Forside"
+              aria-label="Tilbake til I dag"
               className="p-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all flex items-center gap-1"
             >
-              <span className="text-xs font-bold text-emerald-400">← Timer</span>
+              <span className="text-xs font-bold text-emerald-400">← I dag</span>
             </button>
           )}
           <h1 className="text-lg font-black tracking-tight text-white">Programmer</h1>
@@ -202,17 +214,142 @@ export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({
             </button>
           </div>
 
-          {/* 2. Kontekstprofiler (Kontor, Barn, etc.) */}
+          {/* 2. Format & Varighet (Mikropauser vs Korte økter vs CrossFit / HIIT) */}
           <div className="space-y-1.5 pb-2 shrink-0">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">Målgruppe & Profiler</span>
+              <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">Treningsform & Varighet</span>
+              {selectedCategory !== 'alle' && (
+                <button
+                  onClick={() => setSelectedCategory('alle')}
+                  className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                >
+                  Nullstill
+                </button>
+              )}
+            </div>
+            <div className="relative">
+              <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1.5 pt-0.5 overscroll-x-contain touch-pan-x">
+                <button
+                  onClick={() => setSelectedCategory('alle')}
+                className={`min-h-[44px] py-2 px-3.5 rounded-full text-xs font-bold transition-all whitespace-nowrap flex items-center justify-center ${
+                  selectedCategory === 'alle'
+                    ? 'bg-zinc-200 text-zinc-950 font-black'
+                    : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white'
+                }`}
+              >
+                Alle varigheter
+              </button>
+
+              {/* CrossFit & HIIT (30-60 min) — Godt synlig og prioritert */}
+              <button
+                onClick={() => setSelectedCategory(selectedCategory === 'crossfit_hiit' ? 'alle' : 'crossfit_hiit')}
+                className={`min-h-[44px] py-2 px-3.5 rounded-full text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap shadow-sm ${
+                  selectedCategory === 'crossfit_hiit'
+                    ? 'bg-gradient-to-r from-amber-500 to-rose-500 text-zinc-950 font-black'
+                    : 'bg-rose-950/40 border border-rose-500/50 text-rose-300 hover:bg-rose-900/50'
+                }`}
+              >
+                <Flame className="w-4 h-4 fill-current" />
+                <span>CrossFit & HIIT (30–60 min)</span>
+              </button>
+
+              <button
+                onClick={() => setSelectedCategory(selectedCategory === 'intervall' ? 'alle' : 'intervall')}
+                className={`min-h-[44px] py-2 px-3.5 rounded-full text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                  selectedCategory === 'intervall'
+                    ? 'bg-amber-500 text-zinc-950 font-black'
+                    : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Zap className="w-4 h-4" />
+                <span>Intervall / Tabata (4–10 min)</span>
+              </button>
+
+              <button
+                onClick={() => setSelectedCategory(selectedCategory === 'mobilitet' ? 'alle' : 'mobilitet')}
+                className={`min-h-[44px] py-2 px-3.5 rounded-full text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                  selectedCategory === 'mobilitet'
+                    ? 'bg-emerald-500 text-zinc-950 font-black'
+                    : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Mobilitet & Rygg (2–10 min)</span>
+              </button>
+            </div>
+            {/* Subtil fade-gradient til høyre som indikerer mer innhold */}
+            <div className="pointer-events-none absolute right-0 top-0 bottom-1.5 w-6 bg-gradient-to-l from-zinc-950 to-transparent" />
+          </div>
+        </div>
+
+          {/* 3. Utstyrsfilter (Uten utstyr / Med apparater & vekter) */}
+          <div className="space-y-1.5 pb-2 shrink-0">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">Utstyr</span>
+              {selectedEquipmentFilter !== 'alle' && (
+                <button
+                  onClick={() => setSelectedEquipmentFilter('alle')}
+                  className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                >
+                  Nullstill
+                </button>
+              )}
+            </div>
+            <div className="relative">
+              <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1.5 pt-0.5 overscroll-x-contain touch-pan-x">
+                <button
+                  onClick={() => setSelectedEquipmentFilter('alle')}
+                  className={`min-h-[44px] py-2 px-3.5 rounded-full text-xs font-bold transition-all whitespace-nowrap flex items-center justify-center ${
+                    selectedEquipmentFilter === 'alle'
+                      ? 'bg-emerald-500 text-zinc-950 font-black'
+                      : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  Alt utstyr
+                </button>
+                <button
+                  onClick={() => setSelectedEquipmentFilter(selectedEquipmentFilter === 'uten_utstyr' ? 'alle' : 'uten_utstyr')}
+                  className={`min-h-[44px] py-2 px-3.5 rounded-full text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                    selectedEquipmentFilter === 'uten_utstyr'
+                      ? 'bg-emerald-500 text-zinc-950 font-black shadow-sm'
+                      : 'bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white'
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span>Kun kroppsvekt (uten utstyr)</span>
+                </button>
+                <button
+                  onClick={() => setSelectedEquipmentFilter(selectedEquipmentFilter === 'med_utstyr' ? 'alle' : 'med_utstyr')}
+                  className={`min-h-[44px] py-2 px-3.5 rounded-full text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                    selectedEquipmentFilter === 'med_utstyr'
+                      ? 'bg-cyan-500 text-zinc-950 font-black shadow-sm'
+                      : 'bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white'
+                  }`}
+                >
+                  <Dumbbell className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Med ekstra utstyr (vekter / strikk / stang)</span>
+                </button>
+              </div>
+              <div className="pointer-events-none absolute right-0 top-0 bottom-1.5 w-6 bg-gradient-to-l from-zinc-950 to-transparent" />
+            </div>
+          </div>
+
+          {/* 4. Kontekstprofiler (Målgruppe: Kontor, Barn, Senior, etc.) */}
+          <div className="space-y-1.5 pb-2 shrink-0">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">Målgruppe & Roller</span>
+              {selectedProfileId !== 'alle' && (
+                <button
+                  onClick={() => setSelectedProfileId('alle')}
+                  className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                >
+                  Nullstill
+                </button>
+              )}
             </div>
             <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
               <button
-                onClick={() => {
-                  setSelectedProfileId('alle');
-                  setSelectedCategory('alle');
-                }}
+                onClick={() => setSelectedProfileId('alle')}
                 className={`py-1 px-3 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
                   selectedProfileId === 'alle'
                     ? 'bg-emerald-500 text-zinc-950'
@@ -230,8 +367,7 @@ export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({
                     aria-disabled={isPlanned}
                     onClick={() => {
                       if (isPlanned) return;
-                      setSelectedProfileId(profile.id);
-                      setSelectedCategory('alle');
+                      setSelectedProfileId(selectedProfileId === profile.id ? 'alle' : profile.id);
                     }}
                     className={`py-1 px-2.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
                       selectedProfileId === profile.id
@@ -340,6 +476,7 @@ export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({
                   onClick={() => {
                     setSelectedProfileId('alle');
                     setSelectedCategory('alle');
+                    setSelectedEquipmentFilter('alle');
                   }}
                   className="text-xs text-emerald-400 font-bold hover:underline"
                 >
@@ -347,16 +484,37 @@ export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({
                 </button>
               </div>
             ) : (
-              filteredPrograms.map((prog) => (
+              filteredPrograms.map((prog) => {
+                const eq = prog.equipment || ['ingen'];
+                const harUtstyr = eq.some((e) => e !== 'ingen' && e !== 'matte');
+                return (
                 <div
                   key={prog.id}
                   className="p-3.5 bg-zinc-900/80 border border-zinc-800 rounded-2xl hover:border-zinc-700 transition-all space-y-2.5 shadow-sm"
                 >
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-950 text-emerald-400 border border-emerald-800/60">
-                        {prog.category}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                          prog.category === 'crossfit_hiit'
+                            ? 'bg-rose-950/80 text-rose-300 border-rose-800/80 font-black'
+                            : 'bg-emerald-950 text-emerald-400 border-emerald-800/60'
+                        }`}>
+                          {prog.category === 'crossfit_hiit' ? 'CrossFit / HIIT' : prog.category}
+                        </span>
+
+                        {harUtstyr ? (
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-cyan-950/60 text-cyan-400 border border-cyan-800/50 flex items-center gap-1">
+                            <Dumbbell className="w-2.5 h-2.5" />
+                            <span>{eq.filter((e) => e !== 'matte').join(', ')}</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-zinc-950 text-zinc-400 border border-zinc-800 flex items-center gap-1">
+                            <ShieldCheck className="w-2.5 h-2.5 text-emerald-400" />
+                            <span>Kroppsvekt</span>
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2 text-zinc-400 text-xs font-mono font-bold">
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3 text-cyan-400" />
@@ -420,7 +578,8 @@ export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({
                     </div>
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
         </>

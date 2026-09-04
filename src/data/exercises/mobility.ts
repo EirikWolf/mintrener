@@ -181,9 +181,14 @@ export const MOBILITY_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Sitt oppreist på stolen med stolt brystkasse og senkede skuldre.',
-        'Løft begge armene strake opp over hodet, pust dypt inn og senk rolig ned.',
+        'Sitt oppreist på stolen med stolt brystkasse, fotsålene flatt i gulvet og senkede skuldre.',
+        'Løft begge armene strake opp over hodet i en vid V-form mens du puster dypt inn.',
+        'Åpne brystkassen på toppen og hold i ett sekund.',
+        'Senk armene rolig og kontrollert ned langs siden mens du puster ut.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Svaier kraftig i korsryggen for å få armene høyere opp', 'Heiser skuldrene opp mot ørene'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -203,9 +208,14 @@ export const MOBILITY_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Sitt behagelig med ryggen fri fra stolryggen.',
-        'Rull skuldrene bakover i store, rolige sirkler mens du puster rolig og slipper spenninger.',
+        'Sitt behagelig med rett rygg og skuldrene fullstendig avspent.',
+        'Trekk skuldrene opp mot ørene, rull dem bakover og klem skulderbladene lett sammen.',
+        'Før skuldrene helt ned og frem i en stor, myk og sammenhengende sirkelbevegelse.',
+        'Pust rolig og slipp alle spenninger i nakke og kjeve.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Gjør bevegelsen for raskt og rykkete', 'Skyter hodet frem i stedet for å bevege skuldrene'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -225,9 +235,14 @@ export const MOBILITY_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Sett den ene foten rett foran den andre slik at hælen berører fremre tå.',
-        'Hold balansen med armene ut til siden eller lett støtte på en stolrygg.',
+        'Plasser den ene foten rett foran den andre slik at hælen berører tærne på bakre fot.',
+        'Fordel kroppsvekten jevnt mellom begge føttene.',
+        'Hold blikket festet på et fast punkt i øyehøyde for å stabilisere balansen.',
+        'Bruk armene ut til siden eller ha en stolrygg tilgjengelig for lett fingerstøtte.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Ser ned i gulvet i stedet for frem', 'Lener hele kroppsvekten kun på bakre fot'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -247,9 +262,14 @@ export const MOBILITY_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Stå på ett bein med lett fingerstøtte på en stolrygg eller vegg.',
-        'Fest blikket på et fast punkt foran deg og hold kjernen lett aktivert.',
+        'Stå stødig ved siden av en stolrygg eller vegg med én hånd klar for støtte.',
+        'Flytt tyngdepunktet over på standbeinet med et svakt bøyd kne.',
+        'Løft den andre foten rolig fra bakken og finn likevekten.',
+        'Stram setet og magen, og forsøk gradvis å slippe fingerstøtten etter hvert som balansen sitter.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Overstrekker (låser) kneet på standbeinet', 'Slipper hoften ned på siden som er løftet'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -269,9 +289,14 @@ export const MOBILITY_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Hold i stolryggen med begge hender for trygghet.',
-        'Ta kontrollerte steg ut til siden og tilbake i jevnt tempo.',
+        'Stå med føttene samlet bak en solid stol og hold lett i stolryggen med begge hender.',
+        'Ta et kontrollert og passe bredt skritt ut til siden med det ene beinet.',
+        'Flytt vekten rolig over før du fører det andre beinet inntil.',
+        'Gjenta til motsatt side med jevne, stabile bevegelser.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Subber føttene langs gulvet', 'Lener overkroppen kraftig sideveis i stedet for å ta et rent steg'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -291,9 +316,14 @@ export const MOBILITY_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Strekk den ene armen over hodet og bøy overkroppen rolig over til motsatt side.',
-        'Pust dypt inn i ribbeina på den åpne siden for å utvide brystkassen.',
+        'Stå stødig med hoftebreddes avstand mellom føttene og stram magen lett.',
+        'Løft den ene armen strakt opp og bøy overkroppen rolig sideveis til motsatt side.',
+        'Pust dypt inn i ribbeina på den åpne siden slik at mellomrommet mellom ribbeina strekkes.',
+        'Kom rolig tilbake til midten ved utpust og gjenta til den andre siden.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Roterer overkroppen forover under strekken', 'Kollapser i nedsiden i stedet for å forlenge oppsiden'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -313,14 +343,19 @@ export const MOBILITY_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Legg en hånd på magen og senk skuldrene helt ned.',
-        'Pust dypt inn gjennom nesen slik at magen løfter seg, og pust rolig ut.',
+        'Plasser en hånd på magen like under navlen og en hånd på brystkassen.',
+        'Pust rolig og dypt inn gjennom nesen slik at magen hever seg uten at brystkassen løftes nevneverdig.',
+        'Pust langsomt og passivt ut gjennom munnen eller nesen mens magen synker naturlig inn igjen.',
+        'Hold skuldrene og kjeven helt avspent gjennom hele øvelsen.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Puster høyt i brystet og heiser skuldrene', 'Tvinger eller presser luften ut i stedet for å slippe den passivt'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
-      '0': 'full body standing in side-diagonal view with one hand on belly and one on chest, shoulders relaxed',
-      '1': 'full body captured in side-diagonal view taking a deep belly inhale, abdomen visibly expanded beneath lower hand while upper chest stays calm and relaxed, shoulders dropped',
+      '0': 'full body standing in three-quarter view, calm upright posture, left hand gently resting flat on lower ribcage and right hand on upper chest, shoulders lowered and relaxed, looking straight ahead',
+      '1': 'full body captured in three-quarter view in a calm standing breathing pose, upright natural posture, with left palm placed flat on stomach below navel and right hand on chest, relaxed shoulders, peaceful focused expression, gentle deep breath',
     },
     bildeVinkel: 'skrå',
     bildeStatus: 'mangler',
@@ -335,9 +370,14 @@ export const MOBILITY_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Pust inn rolig gjennom nesen i 4 sekunder, og hold pusten i 4 sekunder.',
-        'Pust langsomt og fullstendig ut gjennom munnen over 8 sekunder.',
+        'Sitt eller ligg i en behagelig stilling med nøytral rygg og lukkede øyne.',
+        'Pust langsomt inn gjennom nesen mens du teller rolig til 4 i magen.',
+        'Hold pusten rolig og uten anstrengelse i 4 sekunder med åpent svelg.',
+        'Pust mykt og kontrollert ut gjennom leppene mens du teller rolig til 8.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Lukker halsen og klemmer kjeven når pusten holdes', 'Tømmer lungene for fort på utpusten'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -357,9 +397,14 @@ export const MOBILITY_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Form leppene som om du skal puste gjennom et smalt sugerør.',
-        'Pust langsomt ut mot lett leppemotstand for å aktivere den dype støttemuskulaturen.',
+        'Innta en god holdning med stolt bryst og senkede skuldre.',
+        'Ta en rolig innpust gjennom nesen og la luften fylle de nederste delene av lungene.',
+        'Form leppene som om du skal blåse forsiktig gjennom et tynt sugerør.',
+        'Blås en jevn, smal og uavbrutt luftstrøm ut til lungene er behagelig tømt, og merk at magemusklene strammes forsiktig.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Biter tennene sammen eller anspenner nakken', 'Blåser for hardt slik at luften tar slutt umiddelbart'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -379,9 +424,14 @@ export const MOBILITY_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Fyll lungene med en dyp og uanstrengt mageinnpust.',
-        'Slipp luften ut på en jevn og kontrollert "ssss"-lyd så lenge du klarer uten å presse.',
+        'Stå med føttene stødig i bakken og hendene hvilende på nedre ribbein.',
+        'Trekk pusten dypt og lydløst inn slik at ribbeina vider seg ut sideveis.',
+        'Plasser tungen lett bak fortennene og slipp luften ut på en lang og jevn «ssss»-lyd.',
+        'Hold lydstyrken og trykket konstant helt til utpusten er fullført uten å kollapse i brystet.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Kollapser i holdningen og krummer ryggen mot slutten av utpusten', 'Ujevn luftstrøm med varierende s-lyd'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -401,9 +451,14 @@ export const MOBILITY_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Roter håndleddene i rolige sirkler, først med klokken og deretter mot klokken.',
-        'Flett fingrene sammen og strekk håndflatene utover for å tøye underarmene.',
+        'Strekk armene frem foran deg i brysthøyde med løse hender.',
+        'Roter begge håndleddene i store, rolige sirkler – 10 ganger med klokken og 10 ganger mot klokken.',
+        'Strekk deretter den ene armen strak frem med håndflaten pekende opp/frem.',
+        'Bruk motsatt hånd til å trekke fingrene forsiktig bakover til du kjenner en god strekk på undersiden av underarmen.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Trekker for hardt i fingrene slik at det oppstår smerte i håndleddet', 'Beveger albuene i stedet for selve håndleddet'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -423,9 +478,14 @@ export const MOBILITY_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Spred fingrene så bredt som mulig og hold spenningen i 2 sekunder.',
-        'Lukk hånden til en myk knyttneve og gjenta i jevn rytme.',
+        'Hold hendene foran brystet og spred alle ti fingre så langt fra hverandre du klarer.',
+        'Hold den maksimale spredningen og strekkingen i 2 sekunder.',
+        'Knytt hendene deretter til faste knyttnever i 2 sekunder.',
+        'Gjenta vekslingen rytmisk for å stimulere blodsirkulasjonen og redusere stivhet etter tastaturbruk.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Gjør bevegelsen halvhjertet uten reell strekk i ytterstilling', 'Spenningssmerter i skuldrene under utførelse'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -445,9 +505,14 @@ export const MOBILITY_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Ta tak i vristen bak setet med hånden på samme side.',
-        'Press hoften lett frem, hold knærne samlet og kjenn strekken foran på låret.',
+        'Stå på ett bein med lett støtte til en vegg eller stolrygg om nødvendig.',
+        'Bøy det andre beinet bakover og ta tak rundt vristen eller ankelen med hånden på samme side.',
+        'Hold knærne parallelle og tett inntil hverandre, og skyv hoften forsiktig fremover.',
+        'Kjenn en behagelig og tydelig strekk på forsiden av låret uten å svaie i korsryggen.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Kneet dras ut til siden i stedet for å holdes parallelt', 'Svaier kraftig i korsryggen for å kompensere'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -467,9 +532,14 @@ export const MOBILITY_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Sett den ene hælen i bakken foran deg med tærne pekende opp mot taket.',
-        'Len overkroppen lett frem fra hoften med rett rygg til du kjenner strekken på baksiden.',
+        'Sett det ene beinet et lite skritt foran deg med hælen i bakken og tærne pekende rett opp.',
+        'Bøy lett i det bakre kneet og plasser hendene støttende på det bøyde låret.',
+        'Skyv hoften og setet bakover med strak og flat rygg til du kjenner strekken bak i låret og leggen.',
+        'Hold brystet hevet og pust rolig i posisjonen.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Krummer ryggen og prøver å nå tærne med hendene', 'Legger trykk på kneet i stedet for låret'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {

@@ -10,6 +10,7 @@ import {
 } from '../../services/strengthLogService';
 import { Dumbbell, X, Plus, Trash2, CheckCircle2, Trophy } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { audioService } from '../../services/audioService';
 
 interface StrengthLoggerModalProps {
   onClose: () => void;
@@ -54,6 +55,7 @@ export const StrengthLoggerModal: React.FC<StrengthLoggerModalProps> = ({
 
   // Hviletimer med veggklokke-differanse (Date.now()) slik at den overlever bakgrunnsmodus
   const restTargetTimeRef = useRef<number | null>(null);
+  const lastBeepSecondRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (restSecondsRemaining !== null && restSecondsRemaining > 0) {
@@ -65,13 +67,24 @@ export const StrengthLoggerModal: React.FC<StrengthLoggerModalProps> = ({
         const diffMs = restTargetTimeRef.current - Date.now();
         const remaining = Math.max(0, Math.ceil(diffMs / 1000));
         setRestSecondsRemaining(remaining);
-        if (remaining === 0) {
+
+        if (remaining <= 0) {
+          audioService.playWorkStart(true);
           restTargetTimeRef.current = null;
+          lastBeepSecondRef.current = null;
           if (restTimerRef.current) clearInterval(restTimerRef.current);
+          setRestSecondsRemaining(null);
+          return;
         }
-      }, 500);
+
+        if (remaining <= 3 && lastBeepSecondRef.current !== remaining) {
+          lastBeepSecondRef.current = remaining;
+          audioService.playCountdownBeep(true);
+        }
+      }, 250);
     } else {
       restTargetTimeRef.current = null;
+      lastBeepSecondRef.current = null;
       if (restTimerRef.current) clearInterval(restTimerRef.current);
     }
     return () => {

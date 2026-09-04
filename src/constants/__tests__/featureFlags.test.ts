@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isCuratorEnabled } from '../featureFlags';
+import { isCuratorEnabled, isExerciseImagesEnabled } from '../featureFlags';
 
 /**
  * Bildekuratoren er et internt QA-verktøy og skal ikke være tilgjengelig for
@@ -7,22 +7,29 @@ import { isCuratorEnabled } from '../featureFlags';
  * appen er åpen for alle med Google-konto.
  */
 describe('isCuratorEnabled', () => {
-  it('er AV i et produksjonsbygg uten eksplisitt flagg', () => {
+  it('er permanent deaktivert', () => {
     expect(isCuratorEnabled({ DEV: false })).toBe(false);
     expect(isCuratorEnabled({})).toBe(false);
+    expect(isCuratorEnabled({ DEV: true, VITE_ENABLE_EXERCISE_IMAGES: 'true' })).toBe(false);
+    expect(isCuratorEnabled({ DEV: true })).toBe(false);
+    expect(
+      isCuratorEnabled({
+        DEV: false,
+        VITE_ENABLE_CURATOR: 'true',
+        VITE_ENABLE_EXERCISE_IMAGES: 'true',
+      })
+    ).toBe(false);
+  });
+});
+
+describe('isExerciseImagesEnabled', () => {
+  it('er standard AV uten eksplisitt miljøvariabel', () => {
+    expect(isExerciseImagesEnabled({})).toBe(false);
   });
 
-  it('er PÅ i utvikling', () => {
-    expect(isCuratorEnabled({ DEV: true })).toBe(true);
-  });
-
-  it('kan slås på eksplisitt i et produksjonsbygg', () => {
-    expect(isCuratorEnabled({ DEV: false, VITE_ENABLE_CURATOR: 'true' })).toBe(true);
-  });
-
-  it('godtar bare strengen «true» — ikke vilkårlige verdier', () => {
-    expect(isCuratorEnabled({ DEV: false, VITE_ENABLE_CURATOR: 'false' })).toBe(false);
-    expect(isCuratorEnabled({ DEV: false, VITE_ENABLE_CURATOR: '1' })).toBe(false);
-    expect(isCuratorEnabled({ DEV: false, VITE_ENABLE_CURATOR: '' })).toBe(false);
+  it('er PÅ kun når VITE_ENABLE_EXERCISE_IMAGES er nøyaktig true', () => {
+    expect(isExerciseImagesEnabled({ VITE_ENABLE_EXERCISE_IMAGES: 'true' })).toBe(true);
+    expect(isExerciseImagesEnabled({ VITE_ENABLE_EXERCISE_IMAGES: 'false' })).toBe(false);
+    expect(isExerciseImagesEnabled({ VITE_ENABLE_EXERCISE_IMAGES: '1' })).toBe(false);
   });
 });

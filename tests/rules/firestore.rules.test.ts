@@ -446,3 +446,53 @@ describe('clock_sync (regresjonsvern for q1-herdingen)', () => {
     );
   });
 });
+
+describe('organizations (Fase 2 sikkerhet & B2B-regler)', () => {
+  const ORG_ID = 'org-test-bedrift';
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'organizations', ORG_ID), {
+        id: ORG_ID,
+        name: 'Test Bedrift AS',
+        joinCode: 'BEDRIFT26',
+        isActive: true,
+      });
+    });
+  });
+
+  it('NEGATIV: uautentisert bruker kan IKKE lese organisasjoner', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(db, 'organizations', ORG_ID)));
+  });
+
+  it('POSITIV: autentisert bruker KAN lese organisasjoner', async () => {
+    const db = testEnv.authenticatedContext('vanlig-bruker-uid').firestore();
+    await assertSucceeds(getDoc(doc(db, 'organizations', ORG_ID)));
+  });
+
+  it('NEGATIV: vanlig bruker kan IKKE opprette eller endre en organisasjon', async () => {
+    const db = testEnv.authenticatedContext('vanlig-bruker-uid', { email: 'vanlig@bruker.no' }).firestore();
+    await assertFails(
+      setDoc(doc(db, 'organizations', 'ny-org'), {
+        id: 'ny-org',
+        name: 'Hacket Bedrift',
+        joinCode: 'HACK26',
+      })
+    );
+  });
+
+  it('POSITIV: autorisert administrator kan opprette og endre en organisasjon', async () => {
+    const db = testEnv.authenticatedContext('admin-uid', { email: 'admin@mintrener.no' }).firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'organizations', 'ny-admin-org'), {
+        id: 'ny-admin-org',
+        name: 'Ny Pilotbedrift AS',
+        joinCode: 'PILOT26',
+        isActive: true,
+      })
+    );
+  });
+});
+

@@ -72,6 +72,21 @@ export const STORAGE_KEYS = {
   // ── Tilstand og verktøy ────────────────────────────────────────────────
   INTERRUPTED_SESSION: 'mintrener_interrupted_session',
   ORGANIZATION: 'mintrener_organization',
+  ORGANIZATION_MEMBER_PROFILE: 'mintrener_org_member_profile_v1',
+  /** Egendefinerte organisasjonsavtaler opprettet av administrator */
+  ADMIN_ORGANIZATIONS: 'mintrener_admin_organizations_v1',
+  /** Brukerinnsendte øvelsesbilder (crowdsourcing) */
+  EXERCISE_CONTRIBUTIONS: 'mintrener_exercise_contributions_v1',
+  /** Admin-godkjente standardbilder per øvelsesfase */
+  APPROVED_EXERCISE_IMAGES: 'mintrener_approved_exercise_images_v1',
+  /** Tilbakemeldinger og feilrapporter fra testere */
+  TESTER_FEEDBACK: 'mintrener_tester_feedback_v1',
+  /** Progresjon på strukturert test-sjekkliste */
+  TESTER_CHECKLIST_PROGRESS: 'mintrener_tester_checklist_progress_v1',
+  /** Tester-status / adgangsflagg */
+  IS_TESTER_ROLE: 'mintrener_is_tester_role_v1',
+  /** Admin-status overstyring (for passord/kode-tilgang) */
+  IS_ADMIN_ROLE: 'mintrener_is_admin_role_v1',
   /** Internt QA-verktøy, ikke brukerdata. Med i registeret for slettingens skyld. */
   CURATOR_FEEDBACK: 'mintrener_image_curator_feedback',
   /** Valgt kandidatbilde per øvelsesfase. Samme klasse som CURATOR_FEEDBACK. */

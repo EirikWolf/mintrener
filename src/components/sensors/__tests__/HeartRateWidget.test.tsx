@@ -73,4 +73,24 @@ describe('HeartRateWidget – gjenoppretting av tilstand ved remount (fokusmodus
     expect(mockedService.reattach).not.toHaveBeenCalled();
     expect(screen.getByLabelText('Åpne pulsmåler')).toBeInTheDocument();
   });
+
+  it('viser pulserende søker-badge når reattach mottar reconnect-forsøk', () => {
+    mockedService.isConnected.mockReturnValue(true);
+
+    let capturedOnReconnecting: ((attempt: number) => void) | undefined;
+    mockedService.reattach.mockImplementation(
+      (_onData: any, _onDisconnect: any, onReconnecting: (attempt: number) => void) => {
+        capturedOnReconnecting = onReconnecting;
+      }
+    );
+
+    render(<HeartRateWidget />);
+
+    act(() => {
+      capturedOnReconnecting?.(1); // Forsøk 2 (0-indeksert)
+    });
+
+    expect(screen.getByLabelText('Gjenoppretter pulsmåler')).toBeInTheDocument();
+    expect(screen.getByText('Søker... (2)')).toBeInTheDocument();
+  });
 });

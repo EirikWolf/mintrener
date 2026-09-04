@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { StrengthProgramTemplate, StrengthSetLog } from '../../schemas/strengthSchema';
 import { EXERCISE_LIBRARY } from '../../data/exercises';
 import { ExerciseIllustration } from '../exercises/ExerciseIllustration';
+import { ENABLE_EXERCISE_IMAGES } from '../../constants/featureFlags';
 import {
   getLatestExerciseLog,
   saveExerciseSetsLog,
@@ -351,8 +352,12 @@ export const StrengthWorkoutModal: React.FC<StrengthWorkoutModalProps> = ({
         {/* Aktiv Øvelse Visning */}
         <div className="flex-1 overflow-y-auto space-y-4 pr-1">
           <div className="flex items-center gap-4 p-3 bg-zinc-900/60 border border-zinc-850 rounded-2xl">
-            <div className="w-20 h-20 rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 shrink-0">
-              <ExerciseIllustration exercise={exerciseObj} phaseIndex={0} className="w-full h-full" />
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 shrink-0 flex items-center justify-center">
+              {ENABLE_EXERCISE_IMAGES ? (
+                <ExerciseIllustration exercise={exerciseObj} phaseIndex={0} className="w-full h-full" />
+              ) : (
+                <Dumbbell className="w-6 h-6 text-emerald-400" />
+              )}
             </div>
             <div className="space-y-1">
               <h3 className="font-black text-base text-white">{activeExercise.name}</h3>

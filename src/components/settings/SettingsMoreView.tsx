@@ -12,7 +12,6 @@ import { SensorStatusModal } from '../sensors/SensorStatusModal';
 import { AboutGuideModal } from '../help/AboutGuideModal';
 import { PrivacyPolicyModal } from '../legal/PrivacyPolicyModal';
 import { ProfileOnboardingModal } from '../profile/ProfileOnboardingModal';
-import { OfficeKioskScreen } from '../kiosk/OfficeKioskScreen';
 import { getActiveContextProfiles } from '../../services/profileCompositionService';
 import { ContextProfile } from '../../schemas/profileSchema';
 import {
@@ -21,6 +20,17 @@ import {
   SUPPORTED_LANGUAGES,
   SupportedLanguage,
 } from '../../services/i18nService';
+import { TesterFeedbackModal } from '../tester/TesterFeedbackModal';
+import { isAdmin, unlockAdminAccess } from '../../services/adminService';
+
+// PWA-optimalisering (Revisjon C): kode-splitt tunge admin- og kiosk-komponenter
+const OfficeKioskScreen = React.lazy(() =>
+  import('../kiosk/OfficeKioskScreen').then((m) => ({ default: m.OfficeKioskScreen }))
+);
+const AdminDashboardModal = React.lazy(() =>
+  import('../admin/AdminDashboardModal').then((m) => ({ default: m.AdminDashboardModal }))
+);
+import { isTesterRoleActive, verifyAndSetTesterCode } from '../../services/testerService';
 import {
   Volume2,
   VolumeX,
@@ -47,6 +57,8 @@ import {
   Tv,
   Mic,
   HeartPulse,
+  Timer,
+  Bell,
 } from 'lucide-react';
 import { CoachPersonaModal } from './CoachPersonaModal';
 import {
@@ -62,6 +74,8 @@ import {
   soundLevelFromFlags,
   type SoundLevel,
 } from '../../services/soundLevelService';
+import { audioService } from '../../services/audioService';
+import { loadPersistedSettings, savePersistedSettings } from '../../services/settingsStorageService';
 
 interface SettingsMoreViewProps {
   soundEnabled: boolean;
@@ -72,7 +86,10 @@ interface SettingsMoreViewProps {
   speechEnabled: boolean;
   /** Setter begge lydbryterne i ett grep. */
   onSetSoundLevel?: (level: SoundLevel) => void;
-  onOpenCurator?: () => void;
+  countdownDurationSeconds?: 3 | 5;
+  onSetCountdownDurationSeconds?: (seconds: 3 | 5) => void;
+  countdownAudioStyle?: 'beep' | 'buzzer';
+  onSetCountdownAudioStyle?: (style: 'beep' | 'buzzer') => void;
 }
 
 export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
@@ -83,7 +100,10 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
   onToggleWakeLock,
   speechEnabled,
   onSetSoundLevel,
-  onOpenCurator,
+  countdownDurationSeconds,
+  onSetCountdownDurationSeconds,
+  countdownAudioStyle,
+  onSetCountdownAudioStyle,
 }) => {
   // Nivået er en LESNING av bryterne, ikke en fjerde tilstand å holde i synk.
   const aktivtNivå = soundLevelFromFlags({ soundEnabled, speechEnabled });
@@ -123,6 +143,53 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
   const [currentLang, setCurrentLang] = useState<SupportedLanguage>(() => getCurrentLanguage());
   const [isCoachPersonaModalOpen, setIsCoachPersonaModalOpen] = useState(false);
   const [currentPersonaId, setCurrentPersonaId] = useState<CoachPersonaId>(() => getActiveCoachPersona());
+  const [isTesterModalOpen, setIsTesterModalOpen] = useState(false);
+  const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
+
+  const [localCountdownDuration, setLocalCountdownDuration] = useState<3 | 5>(() => {
+    return countdownDurationSeconds ?? loadPersistedSettings().countdownDurationSeconds;
+  });
+  const [localCountdownAudioStyle, setLocalCountdownAudioStyle] = useState<'beep' | 'buzzer'>(() => {
+    return countdownAudioStyle ?? loadPersistedSettings().countdownAudioStyle;
+  });
+
+  React.useEffect(() => {
+    if (countdownDurationSeconds !== undefined) {
+      setLocalCountdownDuration(countdownDurationSeconds);
+    }
+  }, [countdownDurationSeconds]);
+
+  React.useEffect(() => {
+    if (countdownAudioStyle !== undefined) {
+      setLocalCountdownAudioStyle(countdownAudioStyle);
+    }
+  }, [countdownAudioStyle]);
+
+  const handleSetCountdownDuration = (sec: 3 | 5) => {
+    setLocalCountdownDuration(sec);
+    if (onSetCountdownDurationSeconds) {
+      onSetCountdownDurationSeconds(sec);
+    } else {
+      savePersistedSettings({ countdownDurationSeconds: sec });
+    }
+  };
+
+  const handleSetCountdownAudioStyle = (style: 'beep' | 'buzzer') => {
+    setLocalCountdownAudioStyle(style);
+    if (onSetCountdownAudioStyle) {
+      onSetCountdownAudioStyle(style);
+    } else {
+      savePersistedSettings({ countdownAudioStyle: style });
+    }
+    if (style === 'buzzer') {
+      audioService.playCountdownBuzzer(true);
+    } else {
+      audioService.playCountdownBeep(true);
+    }
+  };
+
+  const adminAccess = isAdmin(user?.email);
+  const testerAccess = isTesterRoleActive();
 
   const currentPersona = COACH_PERSONAS.find(p => p.id === currentPersonaId) || COACH_PERSONAS[0];
 
@@ -347,6 +414,130 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
             >
               <div className={`w-5 h-5 rounded-full bg-white transition-transform ${wakeLockEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
+          </div>
+
+          {/* Nedtelling til neste fase */}
+          <div className="py-2.5 border-t border-zinc-800/60 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Timer className="w-4 h-4 text-emerald-400" />
+                <div>
+                  <p className="text-xs font-bold text-white">Nedtelling til neste fase</p>
+                  <p className="text-[10px] text-zinc-400">Varsel før øvelsen eller pausen starter</p>
+                </div>
+              </div>
+            </div>
+            <div
+              role="radiogroup"
+              aria-label="Nedtelling"
+              className="grid grid-cols-2 gap-1.5 p-1 bg-zinc-950/60 border border-zinc-800 rounded-2xl"
+            >
+              <button
+                type="button"
+                role="radio"
+                aria-checked={localCountdownDuration === 3}
+                onClick={() => handleSetCountdownDuration(3)}
+                className={`min-h-[42px] py-2 px-3 rounded-xl text-xs font-bold transition-all active:scale-95 flex flex-col items-center justify-center ${
+                  localCountdownDuration === 3
+                    ? 'bg-emerald-500 text-zinc-950 shadow-sm'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                }`}
+              >
+                <span>3 sekunder</span>
+                <span className={`text-[10px] font-normal ${localCountdownDuration === 3 ? 'text-zinc-900 font-medium' : 'text-zinc-400'}`}>Standard</span>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={localCountdownDuration === 5}
+                onClick={() => handleSetCountdownDuration(5)}
+                className={`min-h-[42px] py-2 px-3 rounded-xl text-xs font-bold transition-all active:scale-95 flex flex-col items-center justify-center ${
+                  localCountdownDuration === 5
+                    ? 'bg-emerald-500 text-zinc-950 shadow-sm'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                }`}
+              >
+                <span>5 sekunder</span>
+                <span className={`text-[10px] font-normal ${localCountdownDuration === 5 ? 'text-zinc-900 font-medium' : 'text-zinc-400'}`}>CrossFit / Storskjerm</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Varselsignal (pip vs buzzer) */}
+          <div className="py-2.5 border-t border-zinc-800/60 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Bell className="w-4 h-4 text-amber-400" />
+                <div>
+                  <p className="text-xs font-bold text-white">Varselsignal</p>
+                  <p className="text-[10px] text-zinc-400">Type signal ved nedtelling og arbeidsstart</p>
+                </div>
+              </div>
+            </div>
+            <div
+              role="radiogroup"
+              aria-label="Varselsignal"
+              className="grid grid-cols-2 gap-1.5 p-1 bg-zinc-950/60 border border-zinc-800 rounded-2xl"
+            >
+              <button
+                type="button"
+                role="radio"
+                aria-checked={localCountdownAudioStyle === 'beep'}
+                onClick={() => handleSetCountdownAudioStyle('beep')}
+                className={`min-h-[42px] py-2 px-3 rounded-xl text-xs font-bold transition-all active:scale-95 flex flex-col items-center justify-center ${
+                  localCountdownAudioStyle === 'beep'
+                    ? 'bg-amber-500 text-zinc-950 shadow-sm'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                }`}
+              >
+                <span>Klassisk pip</span>
+                <span className={`text-[10px] font-normal ${localCountdownAudioStyle === 'beep' ? 'text-zinc-900 font-medium' : 'text-zinc-400'}`}>Diskré (520 Hz)</span>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={localCountdownAudioStyle === 'buzzer'}
+                onClick={() => handleSetCountdownAudioStyle('buzzer')}
+                className={`min-h-[42px] py-2 px-3 rounded-xl text-xs font-bold transition-all active:scale-95 flex flex-col items-center justify-center ${
+                  localCountdownAudioStyle === 'buzzer'
+                    ? 'bg-amber-500 text-zinc-950 shadow-sm'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                }`}
+              >
+                <span>Gym-buzzer</span>
+                <span className={`text-[10px] font-normal ${localCountdownAudioStyle === 'buzzer' ? 'text-zinc-900 font-medium' : 'text-zinc-400'}`}>Boksing / Storskjerm</span>
+              </button>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  if (localCountdownAudioStyle === 'buzzer') {
+                    audioService.playCountdownBuzzer(true);
+                  } else {
+                    audioService.playCountdownBeep(true);
+                  }
+                }}
+                className="text-[11px] px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/80 font-medium transition-all active:scale-95 flex items-center gap-1.5"
+              >
+                <Volume2 className="w-3.5 h-3.5 text-amber-400" />
+                <span>Test nedtelling</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (localCountdownAudioStyle === 'buzzer') {
+                    audioService.playBuzzerStart(true);
+                  } else {
+                    audioService.playWorkStart(true);
+                  }
+                }}
+                className="text-[11px] px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/80 font-medium transition-all active:scale-95 flex items-center gap-1.5"
+              >
+                <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Test startsignal</span>
+              </button>
+            </div>
           </div>
 
           {/* Ukesmål for trening */}
@@ -661,13 +852,70 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
           <ChevronRight className="w-4 h-4 text-zinc-400" />
         </button>
 
-        {user && onOpenCurator && (
+
+
+        {/* Tester-knapp eller Lås opp tester-status */}
+        {testerAccess ? (
           <button
-            onClick={onOpenCurator}
-            className="w-full flex items-center justify-between py-2 px-3 bg-zinc-950/50 hover:bg-zinc-800/50 rounded-xl border border-zinc-800/50 text-left text-zinc-400 hover:text-zinc-300 text-xs transition-all"
+            onClick={() => setIsTesterModalOpen(true)}
+            className="w-full flex items-center justify-between py-2.5 px-3 bg-purple-950/40 hover:bg-purple-900/60 rounded-xl border border-purple-800/60 text-left transition-all text-purple-300"
           >
-            <span>Bildekurator (Utviklerverktøy)</span>
-            <ChevronRight className="w-3.5 h-3.5" />
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">📋</span>
+              <div>
+                <p className="text-xs font-bold text-white">Betatester Tilbakemelding</p>
+                <p className="text-[10px] text-purple-400">Testsjekkliste og fri innmelding</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-purple-400" />
+          </button>
+        ) : (
+          <button
+            onClick={() => {
+              const code = prompt('Skriv inn invitasjonskode for testere:');
+              if (code) {
+                const res = verifyAndSetTesterCode(code);
+                alert(res.message);
+                if (res.success) window.location.reload();
+              }
+            }}
+            className="w-full flex items-center justify-between py-2 px-3 bg-zinc-950/60 hover:bg-zinc-800/60 rounded-xl border border-zinc-850 text-left transition-all text-zinc-400 hover:text-zinc-200 text-xs"
+          >
+            <span>Har du fått en tester-kode?</span>
+            <span className="text-[10px] text-purple-400 font-bold">Lås opp her</span>
+          </button>
+        )}
+
+        {/* Admin Kontrollpanel eller Lås opp admin */}
+        {adminAccess ? (
+          <button
+            onClick={() => setIsAdminDashboardOpen(true)}
+            className="w-full flex items-center justify-between py-2.5 px-3 bg-amber-950/40 hover:bg-amber-900/60 rounded-xl border border-amber-800/60 text-left transition-all text-amber-300"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">🛡️</span>
+              <div>
+                <p className="text-xs font-bold text-white">Admin Kontrollpanel</p>
+                <p className="text-[10px] text-amber-400">Bildegodkjenning og QA-oversikt</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-amber-400" />
+          </button>
+        ) : (
+          <button
+            onClick={() => {
+              if (!user) {
+                alert('Administrator-adgang krever at du logger inn med en autorisert Google-konto.');
+                return;
+              }
+              const res = unlockAdminAccess();
+              alert(res.message);
+              if (res.success) window.location.reload();
+            }}
+            className="w-full flex items-center justify-between py-2 px-3 bg-zinc-950/60 hover:bg-zinc-800/60 rounded-xl border border-zinc-850 text-left transition-all text-zinc-500 hover:text-zinc-300 text-xs"
+          >
+            <span>Administratoradgang</span>
+            <span className="text-[10px] text-zinc-500 font-bold">Lås opp</span>
           </button>
         )}
 
@@ -721,10 +969,20 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
         />
       )}
       {isKioskOpen && (
-        <OfficeKioskScreen onClose={() => setIsKioskOpen(false)} />
+        <React.Suspense fallback={null}>
+          <OfficeKioskScreen onClose={() => setIsKioskOpen(false)} />
+        </React.Suspense>
       )}
       {isCoachPersonaModalOpen && (
         <CoachPersonaModal onClose={() => setIsCoachPersonaModalOpen(false)} />
+      )}
+      {isTesterModalOpen && (
+        <TesterFeedbackModal onClose={() => setIsTesterModalOpen(false)} />
+      )}
+      {isAdminDashboardOpen && (
+        <React.Suspense fallback={null}>
+          <AdminDashboardModal onClose={() => setIsAdminDashboardOpen(false)} />
+        </React.Suspense>
       )}
     </div>
   );

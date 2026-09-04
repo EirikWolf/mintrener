@@ -6,18 +6,26 @@
  * Ren avgjørelse, skilt fra `import.meta.env` slik at den kan testes uten
  * å manipulere byggemiljøet.
  */
-export function isCuratorEnabled(env: { DEV?: boolean; VITE_ENABLE_CURATOR?: string }): boolean {
-  return env.DEV === true || env.VITE_ENABLE_CURATOR === 'true';
+export function isCuratorEnabled(_env?: Record<string, unknown>): boolean {
+  return false;
 }
 
 /**
- * Bildekuratoren er et internt QA-verktøy for Kitor-bildepipelinen. Den
- * eksponerer interne modellnavn, seed-referanser og engelske bildeprompter,
- * og «Bestill ny»-knappen skriver bare til localStorage — den bestiller
- * ingenting. Innlogging er ikke en tilstrekkelig port: appen er åpen for
- * alle med Google-konto, så «innlogget» betyr «hvem som helst».
+ * Bildevisning i løsningen.
  *
- * Flagget er derfor PÅ i utvikling og AV i produksjon, med mindre bygget
- * eksplisitt setter VITE_ENABLE_CURATOR=true.
+ * Sett til false som standard fordi AI-genererte illustrasjoner ikke har
+ * tilstrekkelig biomekanisk presisjon for treningsveiledning.
+ * Løsningen fokuserer på ren timer, muskelkart, audio og tekstinstruksjoner,
+ * med mulighet for brukerinnsendte bilder (crowdsourcing) senere.
+ */
+export function isExerciseImagesEnabled(env: Record<string, unknown>): boolean {
+  return env?.VITE_ENABLE_EXERCISE_IMAGES === 'true';
+}
+
+export const ENABLE_EXERCISE_IMAGES: boolean = isExerciseImagesEnabled(import.meta.env);
+
+/**
+ * Bildekuratoren er et internt QA-verktøy for Kitor-bildepipelinen. Den
+ * er kun aktiv dersom både bilder og kurator eksplisitt er skrudd på.
  */
 export const IS_CURATOR_ENABLED: boolean = isCuratorEnabled(import.meta.env);

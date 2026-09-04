@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Info, X } from 'lucide-react';
 import {
   subscribeErrorToast,
   getErrorToast,
@@ -9,10 +9,8 @@ import {
 const AUTO_DISMISS_MS = 6000;
 
 /**
- * Global feil-toast (revisjon § 2.4). Live-regionen er alltid montert slik at
- * skjermlesere annonserer meldinger som settes inn — også de som oppstår før
- * første render (f.eks. avvist delingslenke ved oppstart, som plukkes opp av
- * useSyncExternalStore ved mount).
+ * Global toast (revisjon C): støtter feil, suksess og info.
+ * Live-regionen er alltid montert slik at skjermlesere annonserer meldinger.
  */
 export function ErrorToast() {
   const toast = useSyncExternalStore(subscribeErrorToast, getErrorToast);
@@ -23,6 +21,8 @@ export function ErrorToast() {
     return () => clearTimeout(timer);
   }, [toast]);
 
+  const type = toast?.type || 'error';
+
   return (
     <div
       aria-live="assertive"
@@ -31,15 +31,33 @@ export function ErrorToast() {
       {toast && (
         <div
           role="alert"
-          className="pointer-events-auto flex w-full max-w-md items-start gap-2.5 rounded-xl border border-red-500/50 bg-red-950/95 px-3.5 py-2.5 text-red-100 shadow-xl backdrop-blur-sm"
+          className={`pointer-events-auto flex w-full max-w-md items-start gap-2.5 rounded-xl border px-3.5 py-2.5 shadow-xl backdrop-blur-sm ${
+            type === 'success'
+              ? 'border-emerald-500/50 bg-emerald-950/95 text-emerald-100'
+              : type === 'info'
+              ? 'border-blue-500/50 bg-blue-950/95 text-blue-100'
+              : 'border-red-500/50 bg-red-950/95 text-red-100'
+          }`}
         >
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+          {type === 'success' ? (
+            <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+          ) : type === 'info' ? (
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" aria-hidden="true" />
+          ) : (
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+          )}
           <p className="flex-1 text-sm font-medium leading-snug">{toast.message}</p>
           <button
             type="button"
             onClick={dismissErrorToast}
-            aria-label="Lukk feilmelding"
-            className="shrink-0 rounded-md p-0.5 text-red-300 transition-colors hover:bg-red-900/70 hover:text-white"
+            aria-label={type === 'error' ? 'Lukk feilmelding' : 'Lukk melding'}
+            className={`shrink-0 rounded-md p-0.5 transition-colors ${
+              type === 'success'
+                ? 'text-emerald-300 hover:bg-emerald-900/70 hover:text-white'
+                : type === 'info'
+                ? 'text-blue-300 hover:bg-blue-900/70 hover:text-white'
+                : 'text-red-300 hover:bg-red-900/70 hover:text-white'
+            }`}
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>

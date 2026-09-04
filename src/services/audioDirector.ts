@@ -762,13 +762,22 @@ export function createAudioDirector(engine: AudioDirectorEngine): AudioDirectorH
 
   function handleCountdown(): void {
     const snap = engine.getSnapshot();
+    const isBuzzer = snap.countdownAudioStyle === 'buzzer';
     if (getActiveCoachPersona() === 'standard') {
-      // Adapter-speiling: standard-stiens reaktive pip, uendret.
-      audioService.playCountdownBeep(snap.soundEnabled);
+      // Adapter-speiling: standard-stiens reaktive pip eller buzzer.
+      if (isBuzzer) {
+        audioService.playCountdownBuzzer(snap.soundEnabled);
+      } else {
+        audioService.playCountdownBeep(snap.soundEnabled);
+      }
     } else if (beepFallback) {
       // β-degradering (plan Task β2): når lookahead ikke fikk plass, markerer
-      // pipene grensen i stedet for taushet — «aldri avkuttet tale, kun pip».
-      audioService.playCountdownBeep(snap.soundEnabled);
+      // pipene/buzzer grensen i stedet for taushet.
+      if (isBuzzer) {
+        audioService.playCountdownBuzzer(snap.soundEnabled);
+      } else {
+        audioService.playCountdownBeep(snap.soundEnabled);
+      }
     }
   }
 
@@ -956,7 +965,11 @@ function mirrorWork(ctx: DirectorCtx, event: PhaseStartedEvent): void {
   const { exercise, tone, silent } = event;
   if (!silent) {
     if (getActiveCoachPersona() === 'standard') {
-      audioService.playWorkStart(snap.soundEnabled);
+      if (snap.countdownAudioStyle === 'buzzer') {
+        audioService.playBuzzerStart(snap.soundEnabled);
+      } else {
+        audioService.playWorkStart(snap.soundEnabled);
+      }
       if (snap.speechEnabled) {
         speechService.announceWork(exercise?.name, tone);
       }

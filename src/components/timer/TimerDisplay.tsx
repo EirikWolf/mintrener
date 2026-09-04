@@ -16,8 +16,9 @@ import { AboutGuideModal } from '../help/AboutGuideModal';
 import { AiCoachModal } from '../coach/AiCoachModal';
 import { ChallengeCatalogModal } from '../challenges/ChallengeCatalogModal';
 import { StrengthWorkoutModal } from '../strength/StrengthWorkoutModal';
-import { TvBigScreenDisplay } from '../instructor/TvBigScreenDisplay';
 import { SkillTreeModal } from '../skills/SkillTreeModal';
+
+import { TvBigScreenDisplay } from '../instructor/TvBigScreenDisplay';
 import { AiWorkoutGeneratorModal } from '../ai/AiWorkoutGeneratorModal';
 import { PainFilterModal } from './PainFilterModal';
 import { voiceCommandService, TimerVoiceCommand } from '../../services/voiceCommandService';
@@ -136,7 +137,7 @@ const START_SCREEN_TOOLS: StartScreenTool[] = [
   {
     id: 'generator',
     label: 'Lag økt',
-    ariaLabel: 'Lag økt med AI-generator',
+    ariaLabel: 'Smart øktbygger',
     icon: Wand2,
     iconClass: 'text-indigo-400',
     primary: false,
@@ -262,7 +263,6 @@ interface TimerDisplayProps {
   onToggleVibrate: () => void;
   onToggleWakeLock: () => void;
   onToggleSpeech?: () => void;
-  onOpenCurator?: () => void;
   onOpenPrograms?: () => void;
 }
 
@@ -283,7 +283,6 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
   onToggleVibrate: _onToggleVibrate,
   onToggleWakeLock: _onToggleWakeLock,
   onToggleSpeech: _onToggleSpeech,
-  onOpenCurator,
   onOpenPrograms,
 }) => {
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
@@ -545,7 +544,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
         <div className="flex items-center justify-between">
           {/* Venstre: Bruker & Tittel */}
           <div className="flex items-center gap-2">
-            <UserMenu onOpenCurator={onOpenCurator} />
+            <UserMenu />
             <div className="flex items-center gap-1.5">
               <Dumbbell className="w-4 h-4 text-emerald-400" />
               <span className="font-black text-xs sm:text-sm tracking-tight text-white">Min Trener</span>
@@ -678,7 +677,9 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
               {/* 2. Adaptiv Progresjon forslag */}
               {adaptiveSuggestion && (
                 <div className={`p-2.5 rounded-2xl border flex items-center justify-between gap-2 shadow-md animate-in fade-in ${
-                  adaptiveSuggestion.type === 'increase'
+                  adaptiveSuggestion.type === 'deload'
+                    ? 'bg-amber-950/90 border-amber-500/70 text-amber-300'
+                    : adaptiveSuggestion.type === 'increase'
                     ? 'bg-emerald-950/90 border-emerald-500/70 text-emerald-300'
                     : 'bg-blue-950/90 border-blue-500/70 text-blue-300'
                 }`}>
@@ -922,6 +923,14 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             ) : (
               <span>INTERVALL {state.currentItemIndex + 1} AV {state.totalItems}</span>
             )}
+            {isFocusMode && state.totalRemainingSeconds !== undefined && (
+              <>
+                <span aria-hidden="true" className="text-zinc-600">·</span>
+                <span className="font-mono text-zinc-300 font-semibold tracking-normal lowercase text-xs sm:text-sm bg-zinc-900/60 px-2 py-0.5 rounded-md border border-zinc-800/80">
+                  totalt {formatTime(state.totalRemainingSeconds)}
+                </span>
+              </>
+            )}
           </div>
 
           {/* Fase-badge beholdes alltid (aldri kun farge, jf. WCAG 1.4.1) og
@@ -1050,10 +1059,10 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             <button
               onClick={onStart}
               disabled={state.isLocked}
-              className="flex-[2.5] py-3.5 px-5 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-zinc-950 font-black text-lg rounded-2xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 transition-all"
+              className="flex-[2.5] py-4 px-6 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 active:scale-95 text-zinc-950 font-black text-lg rounded-2xl shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2.5 transition-all border border-emerald-400/40"
             >
               <Play className="w-6 h-6 fill-current" />
-              START
+              START ØKT
             </button>
           ) : state.status === 'running' ? (
             <button

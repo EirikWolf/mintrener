@@ -107,6 +107,35 @@ export function completeChallengeDay(challengeId: string, day: number): Challeng
 }
 
 /**
+ * Tillater erfarne utøvere å starte på et høyere nivå / inngangsgulv (Revisjon C § 7 Horisont 3.1 & Pilar 4.4).
+ * Forhåndsutfyller alle dager opp til targetDay - 1 som bestått.
+ */
+export function startChallengeAtDay(challengeId: string, startDay: number): ChallengeUserProgress {
+  const prog = getChallengeProgress(challengeId);
+  const challenge = STARTER_CHALLENGES.find((c) => c.id === challengeId);
+  const totalDays = challenge ? challenge.durationDays : 30;
+
+  const validDay = Math.max(1, Math.min(startDay, totalDays));
+  const newCompleted = new Set(prog.completedDays);
+
+  for (let d = 1; d < validDay; d++) {
+    newCompleted.add(d);
+  }
+
+  prog.completedDays = Array.from(newCompleted).sort((a, b) => a - b);
+  prog.currentDay = validDay;
+  prog.startedAt = prog.startedAt || new Date().toISOString();
+
+  if (prog.completedDays.length >= totalDays) {
+    prog.isCompleted = true;
+    prog.completedAt = new Date().toISOString();
+  }
+
+  saveChallengeProgress(prog);
+  return prog;
+}
+
+/**
  * Nullstiller en utfordring
  */
 export function resetChallengeProgress(challengeId: string): void {

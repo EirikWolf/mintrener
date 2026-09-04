@@ -18,6 +18,7 @@ export const HeartRateWidget: React.FC<HeartRateWidgetProps> = ({ onHeartRateUpd
   // videre uavhengig av React-treet, så vi initialiserer fra tjenestens
   // faktiske tilstand i stedet for å anta «ikke tilkoblet» ved hver remount.
   const [isConnected, setIsConnected] = useState(() => bluetoothHeartRateService.isConnected());
+  const [reconnectAttempt, setReconnectAttempt] = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -33,13 +34,18 @@ export const HeartRateWidget: React.FC<HeartRateWidgetProps> = ({ onHeartRateUpd
         (hrData) => {
           setData(hrData);
           setIsConnected(true);
+          setReconnectAttempt(null);
           if (onHeartRateUpdate) {
             onHeartRateUpdate(hrData.heartRate);
           }
         },
         () => {
           setIsConnected(false);
+          setReconnectAttempt(null);
           setData(null);
+        },
+        (attempt) => {
+          setReconnectAttempt(attempt + 1);
         }
       );
     }
@@ -54,13 +60,18 @@ export const HeartRateWidget: React.FC<HeartRateWidgetProps> = ({ onHeartRateUpd
         (hrData) => {
           setData(hrData);
           setIsConnected(true);
+          setReconnectAttempt(null);
           if (onHeartRateUpdate) {
             onHeartRateUpdate(hrData.heartRate);
           }
         },
         () => {
           setIsConnected(false);
+          setReconnectAttempt(null);
           setData(null);
+        },
+        (attempt) => {
+          setReconnectAttempt(attempt + 1);
         }
       );
       if (ok) {
@@ -166,7 +177,17 @@ export const HeartRateWidget: React.FC<HeartRateWidgetProps> = ({ onHeartRateUpd
   return (
     <>
       {/* Liten puls-badge eller ikon i topplinjen */}
-      {isConnected && data ? (
+      {reconnectAttempt !== null ? (
+        <button
+          onClick={() => setIsModalOpen(true)}
+          title={`Gjenoppretter Bluetooth-kontakt (forsøk ${reconnectAttempt}/5)...`}
+          aria-label="Gjenoppretter pulsmåler"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-amber-500/60 bg-amber-950/80 text-amber-300 text-[10px] font-bold transition-all shadow-sm animate-pulse"
+        >
+          <Bluetooth className="w-3.5 h-3.5 text-amber-400" />
+          <span>Søker... ({reconnectAttempt})</span>
+        </button>
+      ) : isConnected && data ? (
         <button
           onClick={() => setIsModalOpen(true)}
           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold transition-all shadow-sm ${data.zoneColor}`}

@@ -6,47 +6,85 @@
 import { EXERCISE_LIBRARY } from '../data/exercises';
 import { WorkoutTemplate, IntervalItem } from '../types/workout';
 
+export type WorkoutPacingRatio = 'rolig_1_1' | 'standard_2_1' | 'tabata_2_1' | 'emom_5_1';
+
 export interface AiWorkoutPrompt {
-  durationMinutes: number; // 3 - 30 minutter
+  durationMinutes: number; // 2 - 60 minutter
   focus: 'helkropp' | 'kontor_nakke' | 'kjerne' | 'bein' | 'puls' | 'rolig_strekk' | 'styrke';
   equipment?: 'none' | 'chair' | 'mat' | 'dumbbells';
   energyLevel?: 'lav' | 'middels' | 'høy';
   avoidInjuries?: string[]; // f.eks. ['knær', 'korsrygg', 'skuldre', 'hopp']
+  pacingRatio?: WorkoutPacingRatio; // Valgfritt intervalltempo
 }
 
 export function generateCustomAiWorkout(prompt: AiWorkoutPrompt): WorkoutTemplate {
-  const duration = Math.max(2, Math.min(45, prompt.durationMinutes));
+  const duration = Math.max(2, Math.min(60, prompt.durationMinutes));
   const energy = prompt.energyLevel || 'middels';
   const avoid = prompt.avoidInjuries || [];
 
   // 1. Filtrer biblioteket for egnede øvelser
-  let candidates = EXERCISE_LIBRARY.filter((ex) => {
+  const isSafeExercise = (ex: typeof EXERCISE_LIBRARY[number]): boolean => {
     // Unngå hopp hvis bruker har vonde knær eller 'hopp' i unngå-listen
     if (avoid.includes('hopp') || avoid.includes('knær')) {
-      if (ex.id.includes('hopp') || ex.id.includes('burpee') || ex.id.includes('jump')) {
+      if (
+        ex.id.includes('hopp') ||
+        ex.id.includes('burpee') ||
+        ex.id.includes('jump') ||
+        ex.id.includes('kneboy') ||
+        ex.id.includes('squat') ||
+        ex.id.includes('utfall') ||
+        ex.id.includes('lunge')
+      ) {
         return false;
       }
     }
 
     // Unngå skuldre/håndledd ved behov
     if (avoid.includes('skuldre') || avoid.includes('håndledd')) {
-      if (ex.id.includes('push-up') || ex.id.includes('planke') || ex.muskler?.primær?.includes('skuldre')) {
+      if (
+        ex.id.includes('push-up') ||
+        ex.id.includes('planke') ||
+        ex.id.includes('plank') ||
+        ex.id.includes('dips') ||
+        ex.id.includes('press') ||
+        ex.muskler?.primær?.includes('skuldre') ||
+        ex.muskler?.sekundær?.includes('skuldre')
+      ) {
         return false;
       }
     }
 
     // Unngå korsrygg-kompresjon
     if (avoid.includes('korsrygg')) {
-      if (ex.id.includes('deadlift') || ex.id.includes('superman')) {
+      if (
+        ex.id.includes('deadlift') ||
+        ex.id.includes('markloft') ||
+        ex.id.includes('superman') ||
+        ex.id.includes('rygghev') ||
+        ex.id.includes('good-morning')
+      ) {
         return false;
       }
     }
 
     return true;
-  });
+  };
 
+  let candidates = EXERCISE_LIBRARY.filter(isSafeExercise);
+
+  // Sikkerhet (Revisjon C § 4.3): Hvis filteret gir færre enn 4 øvelser, skal vi ALDRI
+  // falle tilbake til hele biblioteket (som ville gjeninnført skadelige øvelser).
+  // I stedet supplerer vi utelukkende med trygge mobilitets- og tøyeøvelser som passerer filteret.
   if (candidates.length < 4) {
-    candidates = EXERCISE_LIBRARY; // Fallback
+    const safeMobility = EXERCISE_LIBRARY.filter((e) => e.kategori === 'mobilitet' && isSafeExercise(e));
+    const mergedSafe = Array.from(new Set([...candidates, ...safeMobility]));
+    candidates = mergedSafe.length > 0 ? mergedSafe : candidates;
+  }
+
+  // Hvis det mot formodning fortsatt er færre enn 2 øvelser, gjenta de trygge kandidatene
+  if (candidates.length === 0) {
+    // Siste skanse: rene skånsomme puste- og strekkøvelser
+    candidates = EXERCISE_LIBRARY.filter((e) => e.kategori === 'mobilitet').slice(0, 3);
   }
 
   // 2. Velg øvelser basert på fokus
@@ -77,17 +115,32 @@ export function generateCustomAiWorkout(prompt: AiWorkoutPrompt): WorkoutTemplat
     selectedExercises = [mobility, upper, lower, core, fin].filter(Boolean);
   }
 
-  // 3. Beregn intervalltider og runder basert på ønsket varighet og energi
+  // 3. Beregn intervalltider og runder basert på ønsket tempo/ratio eller energinivå
   let workSeconds = 30;
   let restSeconds = 15;
   let rounds = 1;
 
-  if (energy === 'lav') {
-    workSeconds = 35;
-    restSeconds = 25;
-  } else if (energy === 'høy') {
+  if (prompt.pacingRatio === 'rolig_1_1') {
+    workSeconds = 30;
+    restSeconds = 30;
+  } else if (prompt.pacingRatio === 'tabata_2_1') {
+    workSeconds = 20;
+    restSeconds = 10;
+  } else if (prompt.pacingRatio === 'emom_5_1') {
+    workSeconds = 50;
+    restSeconds = 10;
+  } else if (prompt.pacingRatio === 'standard_2_1') {
     workSeconds = 40;
-    restSeconds = 15;
+    restSeconds = 20;
+  } else {
+    // Fallback basert på energinivå
+    if (energy === 'lav') {
+      workSeconds = 35;
+      restSeconds = 25;
+    } else if (energy === 'høy') {
+      workSeconds = 40;
+      restSeconds = 15;
+    }
   }
 
   const cycleDuration = selectedExercises.length * (workSeconds + restSeconds);

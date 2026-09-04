@@ -451,3 +451,183 @@ Full målehistorikk: `docs/kitor-tilrettelegging-2026-09-02.md` og
   4. `MuscleIcon` slår opp kanonisk gruppe og bruker `Record<MuskelGruppe, IkonKomponent>`. Legger noen til en gruppe uten å velge ikon, **nekter TypeScript å kompilere** — sterkere enn en test, fordi det ikke kan glemmes. Seks grupper uten eget ikon deler et beslektet, med kompromisset skrevet ned.
   5. Kvaliteter gir **ingen ikon**. Et magemuskel-ikon ved siden av «kondisjon» er en påstand om anatomi der det ikke finnes noen.
 * **Konsekvens:** Ni tester binder ordforrådet, hvorav den viktigste er uttømmenhet: hvert eneste navn i katalogen må være kjent. Neste person som skriver «rumpemuskler» får rød test i stedet for et stilltiende feil ikon. Kvalitetene bør på sikt flyttes til et eget felt i `ExerciseSchema` — de er reell informasjon om øvelsen, men de hører ikke i et muskelfelt.
+
+---
+
+## [2026-09-04] Beslutning 51: B2B Bedriftsadministrasjon, 1-klikks onboarding og rike testerrapporter
+* **Kontekst:** Organisasjonsportalen trengte administrative mekanismer for å administrere bedriftsavtaler uten direkte database-inngrep. Testerne trengte en rask måte å rapportere feil på direkte under en økt (inkl. tale og skjermbilde), og admin trengte et format som enkelt kan overleveres som oppdrag for Claude Code / Antigravity.
+* **Valg:**
+  1. **Utvidet bedriftsskjema:** `organizationSchema.ts` utvidet med feltene: `orgNr` (9 siffer norsk org.nr), `contactPerson` (navn, e-post, telefon), `billing` (fakturaEpost, fakturaAdresse, kontonummer, kid), `agreementType` (`pilot`, `standard`, `senior_kommune`, `idrettslag`, `tilpasset`), `maxLicenses` og `notes`.
+  2. **Full livssyklus i `organizationService.ts`:**
+     - Funksjoner for `createOrganization`, `updateOrganization`, `deleteOrganization`, `toggleOrganizationStatus` og `extendOrganizationExpiry`.
+     - Sikkerhet: Systemorganisasjoner (`pilot`, `bedrift-as`) er beskyttet mot sletting.
+  3. **1-klikks distribusjon:** Støtte for URL-parametere `?org=KODE` (automatisk registrering av ansatt) og `?tester=KODE` (aktiverer testermodus).
+  4. **Tale-til-tekst og bildeopplasting for testerrapportering:**
+     - Web Speech API (`webkitSpeechRecognition`/`SpeechRecognition`) integrert i `FeedbackModal.tsx` for håndfri tale-til-tekst rapportering.
+     - Filopplasting av skjermbilder (konverteres trygt til Base64 data-URL).
+     - Eksport-knapp: «Kopier for Claude/AI» som produserer ferdig strukturerte markdown-oppdrag med miljøinfo, transkripsjon og tekniske detaljer.
+  5. **Øvelses- og illustrasjonsadministrasjon:** Lagt inn direkte forhåndsvisning og URL-overstyring for fase 1 og fase 2 i administrasjonspanelet.
+
+---
+
+## [2026-09-04] Beslutning 52: Fullverdige økter – CrossFit, HIIT & 60-minutters AI Generator
+* **Kontekst:** Min Trener har spesialisert seg på mikrotrening (30 sekunder til 10 minutter), men brukere etterspurte klassiske fullverdige treningsøkter (30–60 minutter) for dager der man har god tid og ønsker høyere metabolsk intensitet (CrossFit / HIIT / WOD).
+* **Valg:**
+  1. **Ny kategori:** `CrossFit & HIIT (30–60 min)` lagt til i `ProgramFilter` og `ProgramCatalogModal.tsx`.
+  2. **Klassiske CrossFit- og HIIT-økter:** 6 nye strukturerte programmer lagt til i `src/data/programs.ts`:
+     - *Klassisk Cindy WOD (30m)* – AMRAP-stil med pushups, pullups og knebøy.
+     - *Metabolsk Svettefest 45 (45m)* – Høyintensiv fullkroppsintervall.
+     - *EMOM Klokkestriden 35 (35m)* – Hvert minutt på minuttet med variasjon.
+     - *Fullkropps Styrkefest 50 (50m)* – Tunge baseøvelser og kjernemuskulatur.
+     - *Kroppsvekt Hero-WOD 60 (60m)* – Krevende utholdenhet og viljestyrke.
+     - *Makspuls Teampartner 40 (40m)* – Par-/intervall-kompatibel intensitet.
+  3. **Skalering av AI Treningsgenerator:**
+     - `WorkoutGeneratorModal.tsx` utvidet fra 3–20 minutter til trinnløs 3–60 minutter.
+     - Hurtigknapper utvidet med: `3m`, `5m`, `10m`, `20m`, `30m`, `45m`, `60m`.
+  4. **Strukturert sortering og utstyrsfiltrering:**
+     - Løftet treningsform og varighet (`CrossFit & HIIT 30–60m`, `Intervall 4–10m`, `Mobilitet 2–10m`) ut i en egen synlig hurtigrad for å hindre at knappen forsvinner bak horisontal rulling.
+     - Lagt til utstyrsfilter: «Kun kroppsvekt (uten utstyr)» vs «Med ekstra utstyr (vekter / strikk / stang)» (yogamatte/stol ekskluderes som utstyrshinder).
+     - Visuelle utstyrsmerker på programkortene for umiddelbar oversikt.
+  5. **Navigasjonskorreksjon:**
+     - Rettet tilbakeknapp fra `← Timer` til `← I dag` på tvers av samtlige katalog- og verktøyvisninger.
+  6. **VoiceTone-integritet:** Alle nye programmer benytter strengt typede stemmetoner fra `profileSchema.ts` (`'gira'`, `'rolig'`, `'lek'`, `'tørr'`).
+
+---
+
+## [2026-09-04] Beslutning 53: Konfigurerbar nedtelling (3s vs 5s) og varselsignaler (Klassisk pip vs Gym-buzzer)
+* **Kontekst:** Ved trening på storskjerm, i boks/CrossFit-miljøer eller med bakgrunnsmusikk trengs lengre forvarsel og kraftigere lydsignaler enn diskré hjemmetrening og kontormikropauser.
+* **Valg:**
+  1. **Konfigurerbar nedtellingsvarighet:**
+     - Brukeren kan velge mellom `3 sekunder (Standard)` og `5 sekunder (CrossFit / Storskjerm)` i Innstillinger (`SettingsMoreView.tsx`).
+     - Lagres i `PersistedUserSettings` (`settingsStorageService.ts`) og propageres via `TimerEngine` og `useIntervalTimer`.
+     - `TimerEngine` avgir `countdown`-events (`1 | 2 | 3 | 4 | 5`) dynamisk basert på innstillingen ved faser med tilstrekkelig varighet (>= 4s for 3s, >= 5s for 5s).
+  2. **Valgfri lydprofil for varselsignal:**
+     - `Klassisk pip`: Diskré 520 Hz elektronisk pip, ideelt for kontor og leilighet.
+     - `Kraftig gym-buzzer`: Syntetisert autentisk CrossFit-/boks-horn (Web Audio API med sagtannbølge og fyldige kvint-overtoner ved ~190–200 Hz). Skjærer markant gjennom musikk i rommet.
+  3. **Integrert i AudioDirector:**
+     - `audioDirector.ts` lytter på valgt lydprofil og ruter nedtelling og startsignal (`playBuzzerStart` vs `playWorkStart`) automatisk.
+  4. **Brukertesting og forhåndsvisning:**
+     - Direkte «Test nedtelling» og «Test startsignal»-knapper i `SettingsMoreView.tsx` slik at brukeren umiddelbart kan høre forskjellen før økten starter.
+
+---
+
+## [2026-09-04] Beslutning 54: Horisont 1 – Skadefilter-sikring, WCAG Touch Targets, Total gjenværende tid og Onboarding-feedback (Revisjon C)
+* **Kontekst:** Systemrevisjon C avdekket 5 umiddelbare forbedringspunkter i systemarkitekturen:
+  1. `aiWorkoutGeneratorService.ts` falt stille tilbake til hele øvelsesbiblioteket dersom filtre for skader (f.eks. knær eller skuldre) resulterte i for få øvelser.
+  2. `TimerDisplay.tsx` manglet visning av total gjenstående tid under aktiv økt i fokusmodus (viste kun tid igjen på gjeldende intervall og gjeldende runde).
+  3. `App.tsx` brukte rød feiltoast med feil-ikon for å bekrefte vellykket tester- og organisasjonsaktivering ved URL-onboarding (`?tester=` og `?org=`).
+  4. `organizationService.ts` opprettet automatisk en dummy-organisasjon i localStorage ved ukjent kode i stedet for å avvise ugyldige invitasjonskoder.
+  5. Filterknappene i `ProgramCatalogView.tsx` manglet tilstrekkelig trykkflate (touch target) ihht. WCAG 2.2 AA (minst 44x44 px).
+* **Valg:**
+  1. **Tett skadefilter i AI-generator:** Fjernet usikker fallback (`EXERCISE_LIBRARY`). Introdusert `isSafeExercise` med eksplisitt anatomisk sjekk mot knebøy, utfall, markløft, pushups, planker, dips og skulderbelastning. Ved færre enn 4 kandidater fylles det opp utelukkende med garantert trygge mobilitets- og tøyeøvelser.
+  2. **Total gjenværende tid i fokusmodus:** Lagt til formatert gjenstående tid (`totalt MM:SS`) ved siden av rundenummeret i fokusmodus i `TimerDisplay.tsx`.
+  3. **Dedikert suksess-toast:** Utvidet `errorToastService.ts` og `ErrorToast.tsx` med `type: 'success'` og `showSuccessToast` (grønn smaragd-styling, `CheckCircle`-ikon og riktig `aria-label`).
+  4. **Entydig validering av organisasjonskoder:** Fjernet automatisk opprettelse av `Avdeling <KODE>` ved ukjent kode. `joinOrganizationByCode` returnerer nå entydig `{ success: false, error: '...' }` dersom koden ikke eksisterer i databasen.
+  5. **WCAG 2.2 AA Touch Targets:** Økt minstehøyde for filterknapper i `ProgramCatalogView.tsx` til `min-h-[44px]` med utvidet polstring (`py-2 px-3.5`).
+
+---
+
+## [2026-09-04] Beslutning 55: Horisont 2 – Konfigurerbar intervall-ratio, Timer-benchmark og Sensor-fallback (Revisjon C)
+* **Kontekst:** For å styrke motortoleranse, tilpasningsdyktighet og sensorstabilitet i tråd med Horisont 2 fra Revisjon C:
+  1. Brukere i AI Treningsgeneratoren trengte fleksibilitet på arbeids-/hvile-forhold (Tabata vs Rolig vs Standard vs EMOM).
+  2. Manglet en formell CI-benchmark for `TimerEngine` som beviser at timeren aldri drifter under CPU-throttling eller uregelmessige ticks på eldre enheter.
+  3. Pulsmåler-widgeten (`HeartRateWidget.tsx`) manglet visuell tilbakemelding til brukeren under automatisk gjennoppkobling (BLE reconnect-backoff) hvis et pulsbelte mistet signalet midt i en økt.
+* **Valg:**
+  1. **Konfigurerbart Intervalltempo i AI Generator:**
+     - Utvidet `AiWorkoutPrompt` og `generateCustomAiWorkout` med `pacingRatio`:
+       - `standard_2_1`: 40s arbeid / 20s hvile (balansert).
+       - `rolig_1_1`: 30s arbeid / 30s hvile (rolig/teknikk).
+       - `tabata_2_1`: 20s arbeid / 10s hvile (høy puls).
+       - `emom_5_1`: 50s arbeid / 10s hvile (høyt volum/styrke).
+     - Lagt til dedikert radiovelger i `AiWorkoutGeneratorModal.tsx`.
+  2. **Automatisert Benchmark-test for Klokkedrift:**
+     - `src/services/__tests__/timerDrift.benchmark.test.ts` implementert.
+     - Simulerer 60 sekunders løp med 30–250 ms tilfeldig jitter og måler totalElapsed mot veggklokke. Verifiserer < 1 ms avvik.
+     - Tester dvale/sleep catch-up (42 sekunder frys) og verifiserer at motor lander i nøyaktig fase og beregner `phaseRemaining` og `totalElapsed` feilfritt.
+  3. **Sensor-fallback & UI-reconnect indikator:**
+     - `bluetoothHeartRateService.ts`: `reattach()` tar nå imot `onReconnecting`-callback.
+     - `HeartRateWidget.tsx`: Viser en pulserende oransje badge `Søker... (<forsøk>/5)` under aktiv bakgrunns-reconnect, slik at brukeren vet at appen automatisk henter inn signalet igjen.
+
+---
+
+## [2026-09-04] Beslutning 56: Revisjon C Fase 1 & 2 – PWA Kode-splitting, Sikkerhet og B2B-arkitektur
+* **Kontekst:** Fullføring av de to første fasene fra helhetlig systemrevisjon C (`docs/revisjon-C-innovasjon-2026-09-04.md`):
+  1. Hoved-bundlen på mobil inneholdt administrative og perifere komponenter (`AdminDashboardModal`, `WorkoutBuilderView`, `OfficeKioskScreen`).
+  2. `adminService.ts` benyttet et hardkodet klartekst-passord (`MINTRENER-ADMIN-2026`) for å låse opp admin-rettigheter lokalt.
+  3. `firestore.rules` manglet eksplisitte sikkerhetsregler for `/organizations/{orgId}`, noe som etterlot bedriftsavtaler uten databasenivå-autorisasjon.
+* **Valg:**
+  1. **Kode-splitting & PWA-slanking (Fase 1):**
+     - `AdminDashboardModal`, `WorkoutBuilderView` og `OfficeKioskScreen` er konvertert til `React.lazy()` og pakket inn i `React.Suspense fallback={null}`.
+     - `index-*.js` bundle redusert med over 70 kB.
+     - `ProgramCatalogView` har fått `touch-pan-x overscroll-x-contain` og visuelle rulle-indikatorer.
+  2. **Eliminering av klartekstpassord & Sikker Admin-tilgang (Fase 2):**
+     - Fjernet hemmelig passord i `adminService.ts`. Admin-adgang krever nå autentisering via `AuthContext` der e-post må matche autoriserte administratorer (`ADMIN_EMAILS`).
+     - Lokal overstyring via `localStorage` er sperret i produksjon og kun tillatt i lokale utviklermiljøer (`import.meta.env.DEV`).
+     - `SettingsMoreView.tsx` oppdatert med informativ tilbakemelding om Google-innlogging for administratorer.
+     - Enhetstester opprettet og verifisert i `src/services/__tests__/adminService.test.ts`.
+  3. **B2B-arkitektur & Firestore-sikkerhet (Fase 2):**
+     - Lagt til `isAdmin()` hjelpefunksjon og eksplisitte regler for `/organizations/{orgId}` i `firestore.rules`.
+     - Kun autoriserte administratorer har skriverettigheter til organisasjoner, mens innloggede medlemmer har lesetilgang.
+     - Skrevet formelle sikkerhetstester i `tests/rules/firestore.rules.test.ts`.
+
+---
+
+## [2026-09-04] Beslutning 57: Revisjon C Fase 3 – Bevaring av Fane-tilstand, Scroll og Kognitiv Avlastning
+* **Kontekst:** Systemrevisjon C avdekket et kognitivt irritasjonsmoment i brukerflyten:
+  - Faner ble tidligere unmountet og remountet via en streng ternær switch i `App.tsx` (`activeTab === 'timer' ? <TimerDisplay /> : ...`).
+  - Når en bruker søkte i Øvelsesbiblioteket eller bladde dypt ned i Programkatalogen for så å ta en rask tur innom Timeren for å sjekke innstillinger, ble hele visningstilstanden, søkeordet og scrollposisjonen nullet ut ved retur.
+* **Valg:**
+  1. **Bevaring av besøkte faner i DOM-en (`visitedTabs`):**
+     - `App.tsx` sporer nå et sett med besøkte faner (`Set<AppTab>`).
+     - Faner monteres ved første gangs besøk (lazy mount), og forblir i DOM-en skjult med standard CSS (`hidden` vs `block`) i stedet for å unmountes.
+     - Dette bevarer scrollposisjon, søkestreng, filtervalg og eventuelle påbegynte skjemadata sømløst mellom fanebytter.
+  2. **Unntak for Byggeren:**
+     - Egendefinert programbygger (`WorkoutBuilderView`) fortsetter å unmountes når den forlates, slik at neste åpning fra programkatalogen alltid starter med en fersk, ren mal (kopi eller ny økt).
+  3. **Verifisering:**
+     - Egen enhetstest i `src/__tests__/App.test.tsx` verifiserer at tidligere besøkte faner holdes i DOM-en med riktig skjuling og synlighet ved fanebytte.
+
+---
+
+## [2026-09-04] Beslutning 58: Revisjon C Fase 4 – Harmonisert Styrke-hviletimer og Robust Periferi
+* **Kontekst:** Systemrevisjon C avdekket inkonsistens i tidsstyring og lydopplevelse under styrkeøkter:
+  - Mens `StrengthWorkoutModal.tsx` brukte en sanntids veggklokke-beregning mot bakgrunnsdvale og ga 3s nedtellingspip samt fløytesignal ved ny arbeidsstart, manglet `StrengthLoggerModal.tsx` disse fysiologiske og auditive signalene og var utsatt for dvaledrift.
+* **Valg:**
+  1. **Harmonisert Hviletimer i Styrkelogg:**
+     - `StrengthLoggerModal.tsx` beregner nå gjenstående hviletid direkte mot veggklokkens måltidspunkt (`restTargetTimeRef = Date.now() + restDuration * 1000`). Timeren tikker uforstyrret selv om mobilskjermen dimmes eller nettleseren legges i bakgrunnen.
+     - Lagt til 3-sekunders advarselspip (`audioService.playCountdownBeep(true)`) og umiskjennelig startfløyte (`audioService.playWorkStart(true)`) når pausen er over.
+  2. **Verifisering:**
+     - `src/components/strength/__tests__/StrengthLoggerModal.timer.test.tsx` bekrefter automatisk oppstart av hviletimer ved fullført sett, akustiske signaler på nøyaktige sekunder og ren opprydding ved fullføring/hopp over.
+
+---
+
+## [2026-09-05] Beslutning 59: Treningsfysiologisk Progresjon, Autoregulerende Deload og Inngangsgulv for Utfordringer
+* **Kontekst:** Oppfølging av Revisjon C (Horisont 1–3, fysiologi og progresjonsarkitektur):
+  - `adaptiveProgressionService.ts` økte tidligere både volum (+5s) og kuttet pause (-2s) samtidig ved "for_lett", som brøt med fysiologisk overload-teori og ga for bratt metabolsk sprang.
+  - Vedvarende tretthet og avbrutte økter manglet en aktiv kobling til deload-anbefalinger.
+  - Erfarne utøvere som tok 30-dagers utfordringer (f.eks. Planke) ble tvunget til å starte på 20s på dag 1 uavhengig av form.
+* **Valg:**
+  1. **Trinnvis Overload-prinsipp:**
+     - Hvis hviletid allerede er kort (<= 20s), økes arbeidstiden (+5s) mens pausetiden beholdes intakt.
+     - Hvis hviletid er romslig (> 20s), reduseres pausetiden (-2s, med et fysiologisk gulv på 10s) for å øke treningsdensitet, mens arbeidstid beholdes intakt.
+     - Aldri begge justeringer i samme trinn.
+  2. **Aktiv Deload-anbefaling:**
+     - Ved 3 påfølgende "for_tungt"-logger eller avbrutte runder, foreslår motoren en skånsom Deload-økt (40 % volumkutt) med egen visuell oransje/amber-profil i `TimerDisplay.tsx`.
+  3. **Inngangsgulv for Utfordringer:**
+     - `challengeService.ts` har fått `startChallengeAtDay(challengeId, startDay)` som forhåndsutfyller dager opp til valgt startnivå.
+     - `ChallengeDetailModal.tsx` lar utøvere starte direkte på fase 2, 3 eller 4.
+
+---
+
+## [2026-09-05] Beslutning 60: B2B Firestore-synkronisering og Kognitiv Avlastning på Startskjermen
+* **Kontekst:** Fullføring av rapportens B2B- og grensesnittpunkter:
+  - B2B-organisasjoner eksisterte kun i lokal `localStorage` til tross for etablerte regler i `firestore.rules`.
+  - Startskjermen hadde 7 distinkte kognitive soner som skapte mental nøling før oppstart.
+* **Valg:**
+  1. **B2B Skysynkronisering:**
+     - `organizationService.ts` synkroniserer nå automatisk opprettelse, redigering og deaktivering/sletting mot Firestore `/organizations/{orgId}` i bakgrunnen med `sanitizeForFirestore` for å unngå ugyldige felter.
+     - Innført `syncOrganizationsFromFirestore()` for toveis synkronisering mot skyen når administrator eller ansatte er tilkoblet.
+  2. **Kognitiv Avlastning og Start-dominans:**
+     - Primærknappen i hviletilstand (`TimerDisplay.tsx`) er forsterket til en fremtredende "START ØKT" med myk gradient og forhøyet kontrast, slik at blikket naturlig ledes mot å starte dagens bevegelse.
+
+
+

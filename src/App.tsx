@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PRESET_WORKOUTS, TABATA_WORKOUT } from './data/mockWorkouts';
 import { WorkoutTemplate } from './types/workout';
 import { useIntervalTimer } from './hooks/useIntervalTimer';
@@ -11,21 +11,18 @@ import { WorkoutSummary } from './components/timer/WorkoutSummary';
 import { ExerciseLibraryView } from './components/library/ExerciseLibraryView';
 import { WorkoutHistoryView } from './components/history/WorkoutHistoryView';
 import { ProgramCatalogView } from './components/programs/ProgramCatalogView';
-import { WorkoutBuilderView } from './components/builder/WorkoutBuilderView';
-import { IS_CURATOR_ENABLED } from './constants/featureFlags';
-
-// Lat import: kuratoren er et internt verktøy og skal ikke ligge i
-// produksjonsbundelen. Med flagget av blir chunken aldri hentet.
-const ExerciseImageCuratorView = lazy(() =>
-  import('./components/curator/ExerciseImageCuratorView').then((m) => ({
-    default: m.ExerciseImageCuratorView,
-  }))
-);
 import { SettingsMoreView } from './components/settings/SettingsMoreView';
+
+// PWA-optimalisering (Revisjon C): kode-splitt byggeren
+const WorkoutBuilderView = React.lazy(() =>
+  import('./components/builder/WorkoutBuilderView').then((m) => ({ default: m.WorkoutBuilderView }))
+);
 import { BottomNav, AppTab } from './components/navigation/BottomNav';
 import { ErrorToast } from './components/feedback/ErrorToast';
-import { showErrorToast } from './services/errorToastService';
+import { showErrorToast, showSuccessToast } from './services/errorToastService';
 import { registrerFullførtFerdighetsøkt } from './services/skillTreeService';
+import { recordWorkoutForCompetition, joinOrganizationByCode } from './services/organizationService';
+import { verifyAndSetTesterCode } from './services/testerService';
 import { getSharedWorkoutFromUrl } from './services/shareWorkoutService';
 import { useAuth } from './contexts/AuthContext';
 import { saveCompletedWorkout } from './services/firestoreService';
@@ -38,6 +35,19 @@ import { shouldShowOnboarding } from './services/onboardingService';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('timer');
+  // Bevaring av fane-tilstand (Revisjon C, Fase 3): Hold faner montert når de
+  // først er besøkt for å unngå tap av søk, scrollposisjon og skjemainndata ved fanebytte.
+  const [visitedTabs, setVisitedTabs] = useState<Set<AppTab>>(() => new Set(['timer']));
+
+  useEffect(() => {
+    setVisitedTabs((prev) => {
+      if (prev.has(activeTab)) return prev;
+      const next = new Set(prev);
+      next.add(activeTab);
+      return next;
+    });
+  }, [activeTab]);
+
   // Byggeren kan åpnes på to måter: som kopi av et katalogprogram, eller som
   // redigering av brukerens eget. Forskjellen avgjør om lagring lager dublett.
   const [builderMode, setBuilderMode] = useState<'kopi' | 'rediger'>('kopi');
@@ -69,6 +79,41 @@ export function App() {
     const openWelcome = () => setShowWelcomeOnboarding(true);
     window.addEventListener('open-welcome-onboarding', openWelcome);
     return () => window.removeEventListener('open-welcome-onboarding', openWelcome);
+  }, []);
+
+  // 1-klikks onboarding fra URL: ?tester=KODE og ?org=KODE
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const testerParam = params.get('tester');
+    const orgParam = params.get('org');
+
+    if (testerParam) {
+      const res = verifyAndSetTesterCode(testerParam);
+      if (res.success) {
+        showSuccessToast(res.message);
+      } else {
+        showErrorToast(res.message);
+      }
+    }
+
+    if (orgParam) {
+      const res = joinOrganizationByCode(orgParam);
+      if (res.success) {
+        showSuccessToast(res.message);
+      } else {
+        showErrorToast(res.message);
+      }
+    }
+
+    if (testerParam || orgParam) {
+      try {
+        const clean = new URL(window.location.href);
+        clean.searchParams.delete('tester');
+        clean.searchParams.delete('org');
+        window.history.replaceState({}, document.title, clean.toString());
+      } catch {}
+    }
   }, []);
   const [selectedWorkout, setSelectedWorkout] = useState<WorkoutTemplate>(
     () => sharedWorkoutArrival || TABATA_WORKOUT
@@ -108,6 +153,8 @@ export function App() {
     toggleWakeLock,
     toggleSpeech,
     setSoundLevel,
+    setCountdownDurationSeconds,
+    setCountdownAudioStyle,
   } = useIntervalTimer({ workout: selectedWorkout });
 
   const [latestLogId, setLatestLogId] = useState<string | undefined>(undefined);
@@ -122,6 +169,13 @@ export function App() {
       // ble bygget i SkillTreeModal og lest av ingen, så eneste vei til
       // progresjon var å skrive et tall i en boks etterpå.
       registrerFullførtFerdighetsøkt(selectedWorkout.id);
+
+      // Oppdater poeng og minutter i organisasjonskonkurransen dersom brukeren er tilknyttet en bedrift
+      recordWorkoutForCompetition({
+        userId: user?.uid,
+        durationSeconds: state.totalElapsedSeconds,
+        workoutType: selectedWorkout.type,
+      });
 
       saveCompletedWorkout(user?.uid, {
         workoutId: selectedWorkout.id,
@@ -210,9 +264,12 @@ export function App() {
 
       {/* Hovedvisning basert på aktiv fane. inert (B4): mens velkomstflyten
           ligger over, skal innholdet bak være utilgjengelig for fokus og
-          skjermleser — overlayet er visuelt dekkende, inert gjør det reelt. */}
-      <div className="flex-1 overflow-hidden" inert={showWelcomeOnboarding || undefined}>
-        {activeTab === 'timer' ? (
+          skjermleser — overlayet er visuelt dekkende, inert gjør det reelt.
+          Revisjon C (Fase 3): Besøkte faner holdes montert slik at scroll, søk
+          og skjemainnhold ikke nullstilles ved raske sjekker i en annen fane. */}
+      <div className="flex-1 overflow-hidden relative" inert={showWelcomeOnboarding || undefined}>
+        {/* Timer / I dag */}
+        <div className={`h-full w-full ${activeTab === 'timer' ? 'block' : 'hidden'}`}>
           <TimerDisplay
             workout={selectedWorkout}
             state={state}
@@ -230,61 +287,84 @@ export function App() {
             onToggleVibrate={toggleVibrate}
             onToggleWakeLock={toggleWakeLock}
             onToggleSpeech={toggleSpeech}
-            onOpenCurator={IS_CURATOR_ENABLED ? () => setActiveTab('curator') : undefined}
             onOpenPrograms={() => setActiveTab('programs')}
           />
-        ) : activeTab === 'programs' ? (
-          <ProgramCatalogView
-            onStartProgram={handleStartCustomWorkout}
-            onCustomizeProgram={(progWorkout) => {
-              setBuilderMode('kopi');
-              setBuilderInitialWorkout(progWorkout);
-              setActiveTab('builder');
-            }}
-            onEditOwnProgram={(ownWorkout) => {
-              setBuilderMode('rediger');
-              setBuilderInitialWorkout(ownWorkout);
-              setActiveTab('builder');
-            }}
-            onCreateProgram={() => {
-              setBuilderMode('kopi');
-              setBuilderInitialWorkout(null);
-              setActiveTab('builder');
-            }}
-            onNavigateToTimer={() => setActiveTab('timer')}
-          />
-        ) : activeTab === 'builder' ? (
-          <WorkoutBuilderView
-            initialWorkout={builderInitialWorkout}
-            initialWorkoutMode={builderMode}
-            onStartCustomWorkout={handleStartCustomWorkout}
-            onNavigateToTimer={() => setActiveTab('timer')}
-          />
-        ) : activeTab === 'exercises' ? (
-          <ExerciseLibraryView
-            onNavigateToTimer={() => setActiveTab('timer')}
-          />
-        ) : activeTab === 'history' ? (
-          <WorkoutHistoryView
-            onNavigateToTimer={() => setActiveTab('timer')}
-          />
-        ) : activeTab === 'curator' && IS_CURATOR_ENABLED ? (
-          <Suspense fallback={null}>
-            <ExerciseImageCuratorView
+        </div>
+
+        {/* Programmer */}
+        {visitedTabs.has('programs') && (
+          <div className={`h-full w-full ${activeTab === 'programs' ? 'block' : 'hidden'}`}>
+            <ProgramCatalogView
+              onStartProgram={handleStartCustomWorkout}
+              onCustomizeProgram={(progWorkout) => {
+                setBuilderMode('kopi');
+                setBuilderInitialWorkout(progWorkout);
+                setActiveTab('builder');
+              }}
+              onEditOwnProgram={(ownWorkout) => {
+                setBuilderMode('rediger');
+                setBuilderInitialWorkout(ownWorkout);
+                setActiveTab('builder');
+              }}
+              onCreateProgram={() => {
+                setBuilderMode('kopi');
+                setBuilderInitialWorkout(null);
+                setActiveTab('builder');
+              }}
               onNavigateToTimer={() => setActiveTab('timer')}
             />
-          </Suspense>
-        ) : (
-          <SettingsMoreView
-            soundEnabled={state.soundEnabled}
-            onSetSoundLevel={setSoundLevel}
-            vibrateEnabled={state.vibrateEnabled}
-            onToggleVibrate={toggleVibrate}
-            wakeLockEnabled={state.wakeLockEnabled}
-            onToggleWakeLock={toggleWakeLock}
-            speechEnabled={state.speechEnabled}
-            onOpenCurator={IS_CURATOR_ENABLED ? () => setActiveTab('curator') : undefined}
-          />
+          </div>
+        )}
+
+        {/* Egendefinert Programbygger (unmountes når den ikke er aktiv slik at den nullstilles ved ny opprettelse) */}
+        {activeTab === 'builder' && (
+          <div className="h-full w-full">
+            <React.Suspense fallback={null}>
+              <WorkoutBuilderView
+                initialWorkout={builderInitialWorkout}
+                initialWorkoutMode={builderMode}
+                onStartCustomWorkout={handleStartCustomWorkout}
+                onNavigateToTimer={() => setActiveTab('timer')}
+              />
+            </React.Suspense>
+          </div>
+        )}
+
+        {/* Øvelsesbibliotek */}
+        {visitedTabs.has('exercises') && (
+          <div className={`h-full w-full ${activeTab === 'exercises' ? 'block' : 'hidden'}`}>
+            <ExerciseLibraryView
+              onNavigateToTimer={() => setActiveTab('timer')}
+            />
+          </div>
+        )}
+
+        {/* Historikk */}
+        {visitedTabs.has('history') && (
+          <div className={`h-full w-full ${activeTab === 'history' ? 'block' : 'hidden'}`}>
+            <WorkoutHistoryView
+              onNavigateToTimer={() => setActiveTab('timer')}
+            />
+          </div>
+        )}
+
+        {/* Mer / Innstillinger */}
+        {visitedTabs.has('settings') && (
+          <div className={`h-full w-full overflow-y-auto ${activeTab === 'settings' ? 'block' : 'hidden'}`}>
+            <SettingsMoreView
+              soundEnabled={state.soundEnabled}
+              onSetSoundLevel={setSoundLevel}
+              vibrateEnabled={state.vibrateEnabled}
+              onToggleVibrate={toggleVibrate}
+              wakeLockEnabled={state.wakeLockEnabled}
+              onToggleWakeLock={toggleWakeLock}
+              speechEnabled={state.speechEnabled}
+              countdownDurationSeconds={state.countdownDurationSeconds}
+              onSetCountdownDurationSeconds={setCountdownDurationSeconds}
+              countdownAudioStyle={state.countdownAudioStyle}
+              onSetCountdownAudioStyle={setCountdownAudioStyle}
+            />
+          </div>
         )}
       </div>
 

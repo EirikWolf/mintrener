@@ -171,32 +171,6 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     bildeStatus: 'mangler',
   },
   {
-    id: 'sideplanke',
-    navn: { nb: 'Sideplanke', en: 'Side Plank' },
-    type: 'tid',
-    kategori: 'kroppsvekt',
-    muskler: { primær: ['skrå magemuskler', 'kjerne'], sekundær: ['skuldre', 'sete'] },
-    utstyr: ['matte', 'ingen'],
-    nivå: 'middels',
-    instruks: {
-      nb: [
-        'Ligg på siden og støtt deg på den ene underarmen med albuen under skulderen.',
-        'Løft hoften fra gulvet slik at kroppen danner en rett linje fra skuldre til ankler.',
-        'Hold posisjonen stabil uten at hoften faller ned eller roterer.',
-      ],
-    },
-    vanligeFeil: {
-      nb: ['Hoften synker ned mot gulvet', 'Overkroppen roterer forover'],
-    },
-    sensorProfil: 'ingen',
-    bildePrompt: {
-      '0': 'full body captured in side-diagonal view performing a lateral side plank (vasisthasana), balancing strictly on right forearm with elbow directly under shoulder and lateral edge of right foot, hips elevated high in a straight diagonal line, left arm extended vertically to ceiling, obliques tight, looking forward',
-      '1': 'full body captured in lateral side plank with top left leg elevated 45 degrees in a star plank variation, torso facing camera sideways, high hips, left arm reaching straight up, powerful core engagement',
-    },
-    bildeVinkel: 'front',
-    bildeStatus: 'mangler',
-  },
-  {
     id: 'rygghev-superman',
     navn: { nb: 'Rygghev (Superman)', en: 'Superman Back Extension' },
     type: 'reps',
@@ -284,9 +258,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Stå en armlengde fra veggen med hendene plassert i brysthøyde.',
-        'Bøy albuene og senk brystet kontrollert mot veggen før du presser tilbake.',
+        'Stå omtrent en armlengde fra en solid vegg med føttene i hoftebredde.',
+        'Plasser håndflatene flatt mot veggen i brysthøyde og litt bredere enn skuldrene.',
+        'Hold kroppen strak som en planke mens du bøyer albuene og senker brystet kontrollert mot veggen.',
+        'Press kraftfullt fra gjennom hendene til armene er strake igjen uten å overstrekke albuene.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Knekker i hoften eller stikker baken ut', 'Plasserer hendene for høyt oppe på veggen'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -306,9 +285,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Plasser hendene på en stabil pult eller benk med kroppen i en strak linje.',
-        'Senk brystet mot kanten og press opp til strake armer.',
+        'Plasser hendene på kanten av et stabilt bord, pult eller benk med skulderbreddes avstand.',
+        'Gå føttene bakover til kroppen danner en rett diagonal linje fra hæler til hode.',
+        'Senk brystkassen kontrollert ned mot bordkanten mens albuene peker ca. 45 grader bakover.',
+        'Press opp til startposisjon med aktiv kjerne og spent sete.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Svaier i korsryggen under løftet', 'Lar skuldrene krype opp mot ørene'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -328,9 +312,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Stå på knær og hender med rett linje fra knær gjennom hofter til skuldre.',
-        'Senk brystet kontrollert mot bakken og press opp.',
+        'Stå på knærne på en matte med hendene plassert litt bredere enn skuldrene.',
+        'Flytt vekten fremover slik at det er en rett linje fra knærne, gjennom hoftene og til skuldrene.',
+        'Brems kontrollert ned til brystet nesten berører matten mens albuene peker 45 grader bakover.',
+        'Skyv fra med brystet og strekk armene opp uten å bøye i hoften.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Beholder baken i været i 90 graders hoftevinkel (knekker i hoften)', 'Slipper magen ned slik at korsryggen svaier'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -350,58 +339,19 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'avansert',
     instruks: {
       nb: [
-        'Sett tomlene og pekefingrene sammen i en diamantform rett under brystet.',
-        'Senk brystet mot hendene og press eksplosivt opp.',
+        'Stå i strak plankeposisjon på tærne med hendene samlet under midten av brystet.',
+        'Form en diamant eller trekant med tomlene og pekefingrene mot matten.',
+        'Senk brystet kontrollert ned mot hendene mens albuene holdes tett inntil overkroppen.',
+        'Press eksplosivt opp til startposisjon og kjenn toppspenningen i triceps.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Lar albuene flakse rett ut til sidene (skal peke bakover)', 'Mister plankeposisjonen i hoften'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
       '0': 'full body captured from front-diagonal angle in a high plank position, thumbs and index fingers joined touching beneath center of chest forming a diamond shape on gym mat, straight arms, rigid athletic core',
       '1': 'full body captured from front-diagonal angle hovering just above mat at bottom of diamond push-up, elbows tucked close to ribcage, chest touching back of diamond-shaped hands, intense triceps contraction',
-    },
-    bildeVinkel: 'skrå',
-    bildeStatus: 'mangler',
-  },
-  {
-    id: 'archer-pushup',
-    navn: { nb: 'Archer Push-ups', en: 'Archer Push-ups' },
-    type: 'reps',
-    kategori: 'kroppsvekt',
-    muskler: { primær: ['bryst', 'triceps'], sekundær: ['skuldre', 'kjerne'] },
-    utstyr: ['ingen'],
-    nivå: 'avansert',
-    instruks: {
-      nb: [
-        'Innta en bred håndstilling og senk deg over mot én arm.',
-        'Hold den andre armen strak ut til siden, og veksle side for hver repetisjon.',
-      ],
-    },
-    sensorProfil: 'ingen',
-    bildePrompt: {
-      '0': 'full body captured from front view in a wide push-up setup on gym floor, hands placed twice shoulder-width apart with fingers pointing outward, core braced in rigid plank',
-      '1': 'full body captured from front view in an asymmetrical archer push-up, right arm bent deep with chest lowered to right hand, left arm extended straight out laterally to the side with palm flat, intense unilateral chest power',
-    },
-    bildeVinkel: 'front',
-    bildeStatus: 'mangler',
-  },
-  {
-    id: 'one-arm-pushup',
-    navn: { nb: 'Enarms armheving', en: 'One-arm Push-up' },
-    type: 'reps',
-    kategori: 'kroppsvekt',
-    muskler: { primær: ['bryst', 'triceps', 'kjerne'], sekundær: ['skuldre'] },
-    utstyr: ['ingen'],
-    nivå: 'avansert',
-    instruks: {
-      nb: [
-        'Stå med bred beinstilling og én hånd i gulvet under brystet.',
-        'Senk deg kontrollert ned og press opp uten å vri kroppen.',
-      ],
-    },
-    sensorProfil: 'ingen',
-    bildePrompt: {
-      '0': 'full body captured from front-diagonal angle in a wide-legged one-arm push-up stance, feet spread wide, right palm planted firmly under center of chest, left arm resting tucked against lower back, rigid torso',
-      '1': 'full body captured from front-diagonal angle at the bottom of a single-arm push-up, body lowered parallel to floor on right arm, elbow bent at 45 degrees, flat back without torso twisting, left arm pinned to lower back, extreme core tension',
     },
     bildeVinkel: 'skrå',
     bildeStatus: 'mangler',
@@ -416,9 +366,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Stå foran stolen med føttene i skulderbredde.',
-        'Sett deg kontrollert ned til baken berører stolen, og reis deg rett opp.',
+        'Stå med føttene i skulderbredde og tærne pekende svakt utover, rett foran en solid stol.',
+        'Skyv hoften bakover og bøy knærne kontrollert som om du skal sette deg.',
+        'Berør stolsetet lett med setet uten å sette deg helt ned eller miste spenningen.',
+        'Trykk kraftfullt fra gjennom hele foten og reis deg opp til strak posisjon.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Kollapser ned på stolen og mister all muskelspenning', 'Lar knærne falle innover under oppreisingen'],
     },
     sensorProfil: 'knebøy',
     bildePrompt: {
@@ -438,9 +393,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'middels',
     instruks: {
       nb: [
-        'Stå med ett bein foran det andre i et langt steg.',
-        'Senk det bakre kneet nesten i gulvet og press opp gjennom fremre fot.',
+        'Innta et langt utfallsteg med fremre fot flatt i gulvet og bakre hæl løftet.',
+        'Hold overkroppen stolt og senk det bakre kneet loddrett ned mot underlaget.',
+        'Stopp like før bakre kne berører gulvet (begge knær danner ca. 90 graders vinkel).',
+        'Press opp igjen gjennom fremre hæl og midtfot til beina er nesten strake.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Lener overkroppen for langt fremover', 'Lar fremre kne vandre ukontrollert innover'],
     },
     sensorProfil: 'knebøy',
     bildePrompt: {
@@ -460,14 +420,19 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'middels',
     instruks: {
       nb: [
-        'Plasser bakre vrist på en stol eller benk bak deg.',
-        'Bøy fremre kne dypt til låret er parallelt med gulvet og press opp.',
+        'Stå et godt skritt foran en benk eller stol og plasser bakre vrist oppå kanten.',
+        'Hold brystet oppe og senk hoften dypt og kontrollert rett ned.',
+        'Senk deg til det fremre låret er parallelt med underlaget.',
+        'Press bestemt fra gjennom fremre hæl for å returnere til toppen.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Tar et for kort steg slik at fremre hæl løfter seg fra gulvet', 'Krummer overkroppen fremover'],
     },
     sensorProfil: 'knebøy',
     bildePrompt: {
-      '0': 'full body standing in side profile with top of left rear foot elevated resting on a gym bench behind, right front foot planted firmly forward, hands on hips, torso upright',
-      '1': 'full body captured in side profile at the deep bottom of a Bulgarian split squat, front right knee bent at 90 degrees with thigh parallel to floor, rear knee sinking deep toward floor, vertical torso, intense quad and glute loading',
+      '0': 'full body standing in side profile with top of rear left foot elevated resting on a black workout bench behind, front right foot planted forward, hands on hips, torso upright',
+      '1': 'full body captured in side profile at the deep bottom of a Bulgarian split squat, front right knee bent at 90 degrees with thigh parallel to floor, rear left foot elevated resting on a workout bench behind, rear knee sinking deep toward floor, upright vertical torso, intense quad and glute loading',
     },
     bildeVinkel: 'side',
     bildeStatus: 'mangler',
@@ -482,9 +447,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'avansert',
     instruks: {
       nb: [
-        'Stå på ett bein med det andre bøyd bakover i luften.',
-        'Senk deg til det bakre kneet berører bakken lett og press opp igjen.',
+        'Stå på ett bein med det andre beinet bøyd 90 grader bakover i luften.',
+        'Strekk armene frem foran deg for motvekt og bøy standbeinet kontrollert.',
+        'Senk deg ned til det bakre kneet berører gulvet eller en matte veldig lett bak deg.',
+        'Press hardt fra gjennom hele foten for å reise deg opp igjen uten at bakre fot trår nedi.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Dunker det bakre kneet hardt i bakken', 'Mister balansen ved å lene seg sideveis'],
     },
     sensorProfil: 'knebøy',
     bildePrompt: {
@@ -504,9 +474,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'avansert',
     instruks: {
       nb: [
-        'Hold i en stolrygg eller dørkarm for balanse.',
-        'Strekk det ene beinet frem og ta en dyp ettbeins knebøy før du presser opp.',
+        'Stå på ett bein og hold lett i en dørkarm, stolrygg eller slynge med hendene.',
+        'Løft det andre beinet strakt frem foran deg.',
+        'Senk deg ned i en dyp ettbeins knebøy med vekten i hælen på standfoten.',
+        'Bruk armene til minimal assistanse for å hjelpe deg kontrollert opp igjen.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Drifter vekten opp på tærne slik at hælen slipper underlaget', 'Trekker seg opp utelukkende med armene'],
     },
     sensorProfil: 'knebøy',
     bildePrompt: {
@@ -526,9 +501,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'avansert',
     instruks: {
       nb: [
-        'Stå på ett bein med det andre strukket strak foran deg.',
-        'Gå helt ned i dyp knebøy og press eksplosivt opp til stående posisjon.',
+        'Stå stødig på ett bein med det motsatte beinet løftet strakt horisontalt foran deg.',
+        'Strekk armene frem for motvekt og senk deg kontrollert ned i en full, dyp knebøy.',
+        'Hold brystet oppe og hælen klistret til underlaget i bunnposisjonen.',
+        'Eksploder opp igjen til stående posisjon ved å drive gjennom hele fotsålen.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Hælen på standfoten løfter seg fra gulvet', 'Det frie beinet synker ned og berører bakken'],
     },
     sensorProfil: 'knebøy',
     bildePrompt: {
@@ -548,9 +528,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Hvil på underarmene og knærne med kroppen i en strak diagonal linje.',
-        'Stram magen og setet, og pust rolig gjennom hele intervallet.',
+        'Hvil på underarmene og knærne på en myk matte med albuene rett under skuldrene.',
+        'Løft hoften slik at det dannes en strak, skrå linje fra knærne til skuldrene.',
+        'Stram magemusklene aktivt inn mot ryggraden og klem setemusklene sammen.',
+        'Hold hodet i nøytral forlengelse av ryggen og pust med jevne, rolige drag.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Svaier i korsryggen eller lar magen henge ned', 'Skyter baken opp i været slik at magen avlastes'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -570,9 +555,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'middels',
     instruks: {
       nb: [
-        'Støtt deg på høyre underarm og utsiden av høyre fot.',
-        'Løft hoften opp til kroppen danner en rett linje og hold posisjonen.',
+        'Ligg på høyre side og støtt deg på høyre underarm med albuen loddrett under skulderen.',
+        'Plasser venstre fot oppå høyre, eller sett fremre fot foran for bedre støtteflate.',
+        'Løft hoften kraftfullt opp til kroppen danner en rett diagonal linje fra anklene til hodet.',
+        'Hold posisjonen stram uten å vri overkroppen eller la hoften synke mot gulvet.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Hoften siger ned mot underlaget underveis', 'Overkroppen og brystet roterer forover mot gulvet'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -592,9 +582,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'middels',
     instruks: {
       nb: [
-        'Støtt deg på venstre underarm og utsiden av venstre fot.',
-        'Løft hoften opp til kroppen danner en rett linje og hold posisjonen.',
+        'Ligg på venstre side og støtt deg på venstre underarm med albuen loddrett under skulderen.',
+        'Plasser høyre fot oppå venstre, eller sett høyre fot foran for økt stabilitet.',
+        'Løft hoften kraftfullt opp til kroppen danner en rett diagonal linje fra anklene til hodet.',
+        'Hold posisjonen stram uten å vri overkroppen eller la hoften synke mot gulvet.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Hoften siger ned mot underlaget underveis', 'Overkroppen og brystet roterer forover mot gulvet'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -614,9 +609,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'middels',
     instruks: {
       nb: [
-        'Stå i stabil planke på strake armer eller underarmer.',
-        'Løft vekselvis én arm eller ett bein rolig uten å vri i hoften.',
+        'Innta en solid grunnplanke på underarmene med føttene litt bredere enn vanlig for stabilitet.',
+        'Løft rolig den ene armen strak frem, eller løft det ene beinet strakt bakover.',
+        'Hold hoften og skuldrene helt i vater uten rotasjon i overkroppen.',
+        'Sett lemmet rolig ned igjen og veksle kontrollert til motsatt side.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Vrir og vipper hoften kraftig når arm eller bein løftes', 'Løfter beinet for høyt slik at korsryggen svaier'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -636,36 +636,19 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'avansert',
     instruks: {
       nb: [
-        'Plasser albuene under skuldrene og trekk dem aktivt nedover mot tærne.',
-        'Klem setet og lårene sammen med maksimal kraft gjennom hele intervallet.',
+        'Innta en lav underarmsplanke med knyttede never og albuene plassert litt foran skuldrene.',
+        'Trekk albuene aktivt og hardt nedover mot tærne mens tærne trekkes oppover mot albuene.',
+        'Klem setet, lårene og magen sammen med 100 % maksimal viljestyrt kraft.',
+        'Pust grunt og kontrollert bak spenningen i korte, intense intervaller.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Behandler øvelsen som en passiv utholdenhetsplanke i stedet for maksimal spenning', 'Holder pusten fullstendig under maksimal spenning'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
       '0': 'full body captured in side profile in a low forearm plank, elbows tucked slightly ahead of shoulders, fists clenched tight',
       '1': 'full body captured in side profile holding a maximum-tension RKC hardstyle plank, elbows actively pulling toward toes, glutes squeezed like stone, quads locked, whole body trembling with intense isometric power',
-    },
-    bildeVinkel: 'side',
-    bildeStatus: 'mangler',
-  },
-  {
-    id: 'dragon-flag',
-    navn: { nb: 'Dragon Flag', en: 'Dragon Flag' },
-    type: 'reps',
-    kategori: 'kroppsvekt',
-    muskler: { primær: ['kjerne', 'dype magemuskler'], sekundær: ['latissimus'] },
-    utstyr: ['stol/benk'],
-    nivå: 'avansert',
-    instruks: {
-      nb: [
-        'Hold fast i en solid benk bak hodet og løft kroppen strak opp mot taket.',
-        'Senk kroppen langsomt ned som en strak planke uten å bøye i hoften.',
-      ],
-    },
-    sensorProfil: 'ingen',
-    bildePrompt: {
-      '0': 'full body captured in side profile lying supine on a flat gym bench, hands gripping edges of bench beside head, knees slightly tucked',
-      '1': 'full body captured in side profile holding a full dragon flag, body locked completely straight from shoulders to pointed toes at a 30-degree incline above the bench, only upper back touching bench, extreme abdominal tension',
     },
     bildeVinkel: 'side',
     bildeStatus: 'mangler',
@@ -680,9 +663,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Hold i en dørkarm med strake armer og len deg kontrollert bakover.',
-        'Trekk brystet frem mot kanten ved å klemme skulderbladene sammen.',
+        'Stå vendt mot en solid døråpning og grip tak i karmen på begge sider i brysthøyde.',
+        'Flytt føttene nærmere dørkarmen og len overkroppen bakover til armene er strake.',
+        'Trekk brystet kraftfullt frem mot dørkarmen ved å klemme skulderbladene tett sammen.',
+        'Senk deg langsomt og kontrollert tilbake til strake armer.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Drifter skuldrene opp mot ørene i stedet for å trekke skulderbladene ned og bak', 'Knekker i hoften i stedet for å holde kroppen strak'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -702,9 +690,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'middels',
     instruks: {
       nb: [
-        'Ligg under et solid bord og grip kanten med overhåndsgrep.',
-        'Hold kroppen strak som en planke og trekk brystkassen opp mot bordplaten.',
+        'Ligg på ryggen under et solid og stødig bord med brystkassen rett under bordkanten.',
+        'Grip kanten med et overhåndsgrep litt bredere enn skuldrene.',
+        'Hold hælene i gulvet og kroppen helt strak som en planke.',
+        'Trekk brystet helt opp mot undersiden av bordplaten ved å drive albuene bakover, og senk rolig ned.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Lar hoften henge ned slik at kroppen knekker i en V-form', 'Trekker med armene uten å aktivere ryggmusklene'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -724,9 +717,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Heng med strake armer i en stang eller dørribbe med føttene fritt fra bakken.',
-        'Slapp av i skuldrene og hold et fast grep.',
+        'Ta et overhåndsgrep rundt en solid pull-up-stang med skulderbreddes avstand.',
+        'Løft føttene fra bakken og la kroppen henge fritt med strake armer.',
+        'Veksle mellom passivt heng (helt avspente skuldre) og aktivt heng (skulderbladene trukket lett nedover).',
+        'Pust jevnt og fokuser på et fast, sterkt grep.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Svinger eller pendler ukontrollert med beina', 'Holder pusten på grunn av tung grepsbelastning'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -746,9 +744,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'middels',
     instruks: {
       nb: [
-        'Hopp eller ta et steg opp til haken er over stangen.',
-        'Brems og senk deg ned så sakte som mulig over 4–5 sekunder.',
+        'Bruk en kasse eller et lite spensthopp til å starte med haken over pull-up-stangen.',
+        'Klem albuene ned i siden og lås topposisjonen i ett sekund.',
+        'Brems tyngdekraften og senk deg ned så langsomt som mulig (bruk 4–5 sekunder).',
+        'Når armene er helt strake i bunn, sett beina i bakken og gjenta prosessen.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Slipper seg ukontrollert ned de siste centimeterne', 'Spirreller med beina under senkefasen'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -768,58 +771,19 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'avansert',
     instruks: {
       nb: [
-        'Heng i stangen med overhåndsgrep og strake armer.',
-        'Trekk deg opp til haken er over stangen, og senk kontrollert ned igjen.',
+        'Heng i stangen med overhåndsgrep litt bredere enn skuldrene og strake armer (dødt punkt).',
+        'Trekk skulderbladene ned og bak, og dra deg eksplosivt opp til brystet nærmer seg stangen og haken er over.',
+        'Hold topposisjonen kort og kontrollert.',
+        'Senk deg rolig og bremsende ned til fullt utstrakte armer før neste repetisjon.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Kikker/kaster haken opp mot stangen uten å fullføre bevegelsen med ryggen', 'Bruker kipping og svinger med beina'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
       '0': 'full body captured in front-diagonal angle hanging at full extension from pull-up bar with overhand grip, core engaged, legs straight',
       '1': 'full body captured in front-diagonal angle at the peak of a strict pull-up, chin cleared cleanly over bar, chest touching bar height, elbows pulled down into lats, powerful V-taper contraction',
-    },
-    bildeVinkel: 'skrå',
-    bildeStatus: 'mangler',
-  },
-  {
-    id: 'lsit-pullup',
-    navn: { nb: 'L-sit Pull-up', en: 'L-sit Pull-up' },
-    type: 'reps',
-    kategori: 'kroppsvekt',
-    muskler: { primær: ['latissimus', 'kjerne', 'hoftebøyere'], sekundær: ['biceps'] },
-    utstyr: ['stang'],
-    nivå: 'avansert',
-    instruks: {
-      nb: [
-        'Løft beina 90 grader rett ut foran deg i en L-posisjon.',
-        'Utfør kontrollerte pull-ups mens beina holdes helt vannrett.',
-      ],
-    },
-    sensorProfil: 'ingen',
-    bildePrompt: {
-      '0': 'full body captured in side profile hanging from pull-up bar with legs raised straight out horizontally in a strict 90-degree L-sit, arms straight',
-      '1': 'full body captured in side profile at top of L-sit pull-up, chin over bar, elbows back, legs locked completely straight horizontally in front, extreme lat and abdominal contraction',
-    },
-    bildeVinkel: 'side',
-    bildeStatus: 'mangler',
-  },
-  {
-    id: 'muscle-up',
-    navn: { nb: 'Muscle-up', en: 'Muscle-up' },
-    type: 'reps',
-    kategori: 'kroppsvekt',
-    muskler: { primær: ['latissimus', 'bryst', 'triceps'], sekundær: ['skuldre', 'kjerne'] },
-    utstyr: ['stang'],
-    nivå: 'avansert',
-    instruks: {
-      nb: [
-        'Trekk deg eksplosivt opp mot brystet og len overkroppen fremover over stangen.',
-        'Press ut med triceps til strake armer i topposisjonen.',
-      ],
-    },
-    sensorProfil: 'ingen',
-    bildePrompt: {
-      '0': 'full body captured in front-diagonal angle hanging from bar in dynamic transition, pulling chest explosively up toward bar with false grip',
-      '1': 'full body captured in front-diagonal angle at top lockout above the pull-up bar in a straight-bar dip position, arms locked straight down pushing body high, torso upright over bar',
     },
     bildeVinkel: 'skrå',
     bildeStatus: 'mangler',
@@ -834,9 +798,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Sitt oppreist på stolen med ryggen rett.',
-        'Strekk det ene beinet helt ut foran deg, hold i 2 sekunder, og senk rolig.',
+        'Sitt oppreist på en stabil stol med føttene flatt i gulvet og hendene hvilende på stolsetet.',
+        'Strekk det ene beinet kontrollert rett frem til kneet er fullt utstrakt horisontalt.',
+        'Klem forside lår hardt i 2 sekunder med tærne pekende opp mot taket.',
+        'Senk foten rolig ned igjen til gulvet og gjenta på motsatt bein.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Krummer ryggen og lener seg bakover i stolen', 'Kaster eller slenger beinet opp i stedet for å bruke kontrollert muskelkraft'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -856,9 +825,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Stå bak stolen med hendene lett hvilende på stolryggen.',
-        'Løft deg helt opp på tærne, hold på toppen i 1 sekund og senk rolig ned.',
+        'Stå bak en solid stol med føttene i hoftebredde og fingertuppene lett på stolryggen for balanse.',
+        'Løft hælene så høyt opp fra bakken som mulig ved å presse fra over tåballene og storetåen.',
+        'Hold topposisjonen i ett sekund mens leggmusklene spennes maksimalt.',
+        'Senk hælene langsomt og kontrollert tilbake til underlaget.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Ruller ut på utsiden av føttene i stedet for å presse gjennom storetåballen', 'Lener vekten forover mot stolen i stedet for å løfte loddrett opp'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -878,9 +852,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Sitt frempå stolen med føttene godt plantet i gulvet.',
-        'Len overkroppen lett frem og reis deg opp til stående før du setter deg kontrollert ned.',
+        'Sitt på den fremre tredjedelen av stolen med føttene trukket litt inn under knærne.',
+        'Kryss armene over brystet (eller bruk armene for lett støtte ved behov).',
+        'Len overkroppen lett frem fra hoften og reis deg bestemt opp ved å trykke fra gjennom hælene.',
+        'Strekk hoften helt ut på toppen, og senk deg kontrollert ned igjen uten å dumpe i setet.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Dunker tungt ned i stolen på vei ned (mister bremsekontrollen)', 'Lar knærne falle innover mot hverandre'],
     },
     sensorProfil: 'knebøy',
     bildePrompt: {
@@ -900,9 +879,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'avansert',
     instruks: {
       nb: [
-        'Stå på knærne med anklene festet av en partner eller under en solid flate.',
-        'Brems og fall kontrollert fremover med strak hofte så lenge du klarer.',
+        'Stå på knærne på en myk matte med anklene forsvarlig festet under en ribbevegg eller av en treningspartner.',
+        'Hold en strak linje fra knærne opp gjennom hoftene og til skuldrene med hendene klare foran brystet.',
+        'Brems med baksiden av lårene mens du faller langsomt og kontrollert fremover mot matten.',
+        'Ta imot med hendene som en armheving når du ikke lenger klarer å holde igjen, og skyv deg lett tilbake opp.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Bøyer i hoften og stikker baken ut (knekker hoften)', 'Slipper spenningen brått og faller i bakken'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -922,9 +906,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'avansert',
     instruks: {
       nb: [
-        'Plasser øverste ankel på en benk eller stol i sideplankeposisjon.',
-        'Løft hoften og hold nederste bein fritt svevende under benken.',
+        'Ligg i sideplankeposisjon på albuen med innsiden av øverste ankel eller kne plassert oppå en treningsbenk.',
+        'Løft hoften opp slik at kroppen danner en rett linje.',
+        'Løft det nederste beinet opp slik at det svever fritt under benken, eller hold det samlet inntil øverste bein.',
+        'Hold posisjonen stabil mens lyskemusklene og kjernen arbeider intenst mot tyngdekraften.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Lar hoften synke ned mot gulvet', 'Roterer overkroppen forover bort fra loddlinjen'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -944,9 +933,14 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
     nivå: 'middels',
     instruks: {
       nb: [
-        'Hopp fremover eller opp på ett bein.',
-        'Land mykt på samme fot med lett bøyd kne og hold balansen i 2 sekunder.',
+        'Stå stødig på ett bein med lett bøyd kne og finn balansen.',
+        'Hopp et lite kontrollert steg fremover eller sideveis.',
+        'Land mykt på samme fot ved å absorbere støtet i ankel, kne og hofte («fjærende landing»).',
+        'Frys stillingen som en statue i 2–3 sekunder uten å vakle eller sette ned den andre foten.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Kneet faller innover (valgus) ved landing', 'Lander med stivt, låst kne'],
     },
     sensorProfil: 'hopp',
     bildePrompt: {
@@ -954,28 +948,6 @@ export const BODYWEIGHT_EXERCISES: ExerciseInput[] = [
       '1': 'full body captured in front-diagonal angle sticking a clean single-leg landing on right foot, knee bent in athletic shock absorption, chest upright, arms out for balance, rock-solid stability',
     },
     bildeVinkel: 'skrå',
-    bildeStatus: 'mangler',
-  },
-  {
-    id: 'utfall',
-    navn: { nb: 'Utfall forover', en: 'Forward Lunge' },
-    type: 'reps',
-    kategori: 'kroppsvekt',
-    muskler: { primær: ['forside lår', 'sete'], sekundær: ['kjerne', 'legger'] },
-    utstyr: ['ingen'],
-    nivå: 'nybegynner',
-    instruks: {
-      nb: [
-        'Ta et langt steg forover og senk det bakre kneet mot gulvet.',
-        'Hold overkroppen stolt og press tilbake til utgangsposisjon.',
-      ],
-    },
-    sensorProfil: 'ingen',
-    bildePrompt: {
-      '0': 'standing tall in side profile with feet hip-width apart, hands on hips, athletic posture',
-      '1': 'captured in side profile in a deep forward lunge, front knee bent at 90 degrees with vertical shin, back knee hovering just above floor, upright torso, hands on hips',
-    },
-    bildeVinkel: 'side',
     bildeStatus: 'mangler',
   },
 ];

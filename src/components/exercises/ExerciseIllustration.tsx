@@ -1,7 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { ExerciseItem } from '../../schemas/exerciseSchema';
-import { Dumbbell, Eye, Maximize2, ExternalLink, X, Film, Image as ImageIcon } from 'lucide-react';
+import { Dumbbell, Maximize2, ExternalLink, X, Film, Image as ImageIcon } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { ENABLE_EXERCISE_IMAGES } from '../../constants/featureFlags';
+
+import { getApprovedExerciseImageUrl } from '../../services/exerciseContributionService';
 
 interface ExerciseIllustrationProps {
   exercise: ExerciseItem;
@@ -24,9 +27,16 @@ export const ExerciseIllustration: React.FC<ExerciseIllustrationProps> = ({
 
   useFocusTrap(lightboxRef, { isActive: isZoomed, onClose: () => setIsZoomed(false) });
 
-  // Filstier (sjekker video og generert bilde for øvelsen og fasen)
+  if (!ENABLE_EXERCISE_IMAGES) {
+    return null;
+  }
+
+  // Sjekk om det finnes et godkjent bilde fra brukerinnsending / admin
+  const approvedCustomImage = getApprovedExerciseImageUrl(exercise.id, phaseIndex as 0 | 1);
+
+  // Filstier (sjekker video, godkjent bilde eller generert bilde for øvelsen og fasen)
   const videoUrl = exercise.videoUrl || `/videos/exercises/${exercise.id}.mp4`;
-  const imageUrl = exercise.bildeUrl || `/images/exercises/${exercise.id}-${phaseIndex}.png?v=20260827_2`;
+  const imageUrl = approvedCustomImage || exercise.bildeUrl || `/images/exercises/${exercise.id}-${phaseIndex}.png?v=20260827_2`;
   const isVideoAvailable = !videoError && (Boolean(exercise.videoUrl) || viewMode === 'video');
   const isImageReady = !imageError;
 
@@ -52,7 +62,7 @@ export const ExerciseIllustration: React.FC<ExerciseIllustrationProps> = ({
 
           <div className="absolute bottom-2 left-2 px-2.5 py-0.5 rounded-full bg-zinc-950/85 backdrop-blur-md border border-zinc-800 text-[10px] font-bold text-emerald-400 flex items-center gap-1 shadow-sm pointer-events-none">
             <Film className="w-3 h-3" />
-            <span>Kitor Film ({exercise.bildeVinkel || 'side'})</span>
+            <span>Video ({exercise.bildeVinkel || 'side'})</span>
           </div>
 
           <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
@@ -261,11 +271,6 @@ export const ExerciseIllustration: React.FC<ExerciseIllustrationProps> = ({
             {exercise.bildeVinkel ? `${exercise.bildeVinkel}vinkel` : 'Sidevinkel'}
           </p>
         </div>
-      </div>
-
-      <div className="absolute top-2 right-2 flex items-center gap-1 text-[9px] font-bold text-zinc-400 bg-zinc-900/80 px-2 py-0.5 rounded-full border border-zinc-800">
-        <Eye className="w-3 h-3 text-emerald-400" />
-        <span>Kitor Pipeline</span>
       </div>
     </div>
   );

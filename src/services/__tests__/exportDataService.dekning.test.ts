@@ -44,6 +44,14 @@ const UTENFOR_EKSPORT: Partial<Record<keyof typeof STORAGE_KEYS, string>> = {
   TELEMETRY_ENABLED: 'Samtykkeflagg, ikke innsamlet data.',
   SOUND_LEVEL_CHOSEN: 'Flagg for om lydnivået er valgt manuelt. Nivået selv ligger i USER_SETTINGS.',
   ORGANIZATION: 'Organisasjonstilknytning, ikke personlige treningsdata.',
+  ORGANIZATION_MEMBER_PROFILE: 'Konkurranseprofil for bedrift, fornyes ved tilknytning.',
+  ADMIN_ORGANIZATIONS: 'Administrativt opprettede bedriftsavtaler, fellesressurs.',
+  EXERCISE_CONTRIBUTIONS: 'Brukerinnsendte øvelsesbilder for crowdsourcing, offentlig bidrag.',
+  APPROVED_EXERCISE_IMAGES: 'Admin-godkjente standardbilder, fellesressurs.',
+  TESTER_FEEDBACK: 'Testtilbakemeldinger, behandles som feilrapporter.',
+  TESTER_CHECKLIST_PROGRESS: 'Intern framdrift på testsjekkliste.',
+  IS_TESTER_ROLE: 'Tilgangsflagg for betatester.',
+  IS_ADMIN_ROLE: 'Tilgangsflagg for administrator.',
   CHALLENGE_PROGRESS_PREFIX: 'Prefiks, ikke en enkeltnøkkel. Dekkes av ACTIVE_CHALLENGE_ID.',
 };
 

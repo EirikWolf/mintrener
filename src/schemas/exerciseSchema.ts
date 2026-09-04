@@ -99,6 +99,20 @@ export const ExerciseSchema = z.object({
 export type ExerciseItem = z.infer<typeof ExerciseSchema>;
 export type ExerciseInput = z.input<typeof ExerciseSchema>;
 
+export const ExerciseContributionSchema = z.object({
+  id: z.string(),
+  exerciseId: z.string(),
+  phase: z.union([z.literal(0), z.literal(1)]),
+  imageDataUrl: z.string(),
+  notes: z.string().optional(),
+  submittedByUid: z.string().optional(),
+  submittedByName: z.string().default('Anonym bidragsyter'),
+  status: z.enum(['pending', 'approved', 'rejected']).default('pending'),
+  submittedAt: z.string(),
+});
+
+export type ExerciseContribution = z.infer<typeof ExerciseContributionSchema>;
+
 /**
  * Validerer én enkelt øvelse mot JSON Schema
  */

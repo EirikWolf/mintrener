@@ -4,6 +4,7 @@ import { WorkoutTemplate } from '../../types/workout';
 import {
   getChallengeProgress,
   completeChallengeDay,
+  startChallengeAtDay,
   getActiveChallengeId,
   setActiveChallengeId,
 } from '../../services/challengeService';
@@ -275,19 +276,33 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
             const isCurrentPhase =
               progress.currentDay >= phase.dayRange[0] &&
               progress.currentDay <= phase.dayRange[1];
+            const canFastForward = progress.currentDay < phase.dayRange[0];
+
             return (
               <div
                 key={phase.name}
-                className={`p-2 rounded-xl border text-[10px] ${
+                className={`p-2 rounded-xl border text-[10px] flex flex-col justify-between ${
                   isCurrentPhase
                     ? 'bg-emerald-950/60 border-emerald-500 text-emerald-300'
                     : 'bg-zinc-900/40 border-zinc-850 text-zinc-400'
                 }`}
               >
-                <p className="font-bold truncate">{phase.name}</p>
-                <p className="text-[9px] text-zinc-400">
-                  Dag {phase.dayRange[0]}–{phase.dayRange[1]}
-                </p>
+                <div>
+                  <p className="font-bold truncate">{phase.name}</p>
+                  <p className="text-[9px] opacity-75">Dag {phase.dayRange[0]}–{phase.dayRange[1]}</p>
+                </div>
+                {canFastForward && (
+                  <button
+                    onClick={() => {
+                      const updated = startChallengeAtDay(challenge.id, phase.dayRange[0]);
+                      setProgress(updated);
+                    }}
+                    className="mt-1 text-[9px] text-cyan-400 hover:text-cyan-300 hover:underline text-left font-medium"
+                    title={`Start utfordringen direkte på dag ${phase.dayRange[0]}`}
+                  >
+                    Start her (Nivå {phase.dayRange[0]}) →
+                  </button>
+                )}
               </div>
             );
           })}

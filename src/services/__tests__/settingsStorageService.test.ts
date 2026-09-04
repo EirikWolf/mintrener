@@ -26,12 +26,14 @@ describe('settingsStorageService – Brukerinnstillinger (H4)', () => {
   });
 
   it('lagrer og laster endrede innstillinger', () => {
-    savePersistedSettings({ soundEnabled: false, speechEnabled: false });
+    savePersistedSettings({ soundEnabled: false, speechEnabled: false, countdownDurationSeconds: 5, countdownAudioStyle: 'buzzer' });
     const loaded = loadPersistedSettings();
     expect(loaded.soundEnabled).toBe(false);
     expect(loaded.speechEnabled).toBe(false);
     expect(loaded.vibrateEnabled).toBe(true);
     expect(loaded.wakeLockEnabled).toBe(true);
+    expect(loaded.countdownDurationSeconds).toBe(5);
+    expect(loaded.countdownAudioStyle).toBe('buzzer');
   });
 
   it('TimerEngine initialiseres med lagrede innstillinger', () => {
@@ -40,6 +42,8 @@ describe('settingsStorageService – Brukerinnstillinger (H4)', () => {
       vibrateEnabled: false,
       wakeLockEnabled: true,
       speechEnabled: false,
+      countdownDurationSeconds: 5,
+      countdownAudioStyle: 'buzzer',
     }));
 
     const engine = new TimerEngine(mockWorkout);
@@ -49,13 +53,19 @@ describe('settingsStorageService – Brukerinnstillinger (H4)', () => {
     expect(snap.vibrateEnabled).toBe(false);
     expect(snap.speechEnabled).toBe(false);
     expect(snap.wakeLockEnabled).toBe(true);
+    expect(snap.countdownDurationSeconds).toBe(5);
+    expect(snap.countdownAudioStyle).toBe('buzzer');
   });
 
   it('TimerEngine oppdaterer lagrede innstillinger ved endring via setters', () => {
     const engine = new TimerEngine(mockWorkout);
     engine.setSoundEnabled(false);
+    engine.setCountdownDurationSeconds(5);
+    engine.setCountdownAudioStyle('buzzer');
 
     const loaded = loadPersistedSettings();
     expect(loaded.soundEnabled).toBe(false);
+    expect(loaded.countdownDurationSeconds).toBe(5);
+    expect(loaded.countdownAudioStyle).toBe('buzzer');
   });
 });

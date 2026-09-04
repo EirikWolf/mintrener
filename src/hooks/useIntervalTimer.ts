@@ -249,6 +249,20 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     speechService.setEnabled(next);
   }, [engine]);
 
+  const setCountdownDurationSeconds = useCallback(
+    (seconds: 3 | 5) => {
+      engine.setCountdownDurationSeconds(seconds);
+    },
+    [engine]
+  );
+
+  const setCountdownAudioStyle = useCallback(
+    (style: 'beep' | 'buzzer') => {
+      engine.setCountdownAudioStyle(style);
+    },
+    [engine]
+  );
+
   return {
     state,
     startWorkout,
@@ -264,5 +278,7 @@ export function useIntervalTimer({ workout }: UseIntervalTimerProps) {
     toggleWakeLock,
     toggleSpeech,
     setSoundLevel,
+    setCountdownDurationSeconds,
+    setCountdownAudioStyle,
   };
 }

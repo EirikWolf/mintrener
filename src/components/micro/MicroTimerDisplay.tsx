@@ -3,6 +3,7 @@ import { ExerciseItem } from '../../schemas/exerciseSchema';
 import { VoiceTone } from '../../schemas/profileSchema';
 import { VoiceCoachEngine } from '../../services/voiceCoachService';
 import { ExerciseIllustration } from '../exercises/ExerciseIllustration';
+import { ENABLE_EXERCISE_IMAGES } from '../../constants/featureFlags';
 import { getPersonalRecord, savePersonalRecord } from '../../services/personalRecordService';
 import { audioService } from '../../services/audioService';
 import {
@@ -288,10 +289,12 @@ export const MicroTimerDisplay: React.FC<MicroTimerDisplayProps> = ({
         {/* Valg av varighet / Modus før start */}
         {status === 'idle' && (
           <div className="space-y-4 w-full animate-in fade-in">
-            {/* Bildet av øvelsen */}
-            <div className="w-36 h-36 mx-auto rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-900 shadow-xl">
-              <ExerciseIllustration exercise={exercise} phaseIndex={0} className="w-full h-full" />
-            </div>
+            {/* Bildet av øvelsen (kun når bilder er aktivert) */}
+            {ENABLE_EXERCISE_IMAGES && (
+              <div className="w-36 h-36 mx-auto rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-900 shadow-xl">
+                <ExerciseIllustration exercise={exercise} phaseIndex={0} className="w-full h-full" />
+              </div>
+            )}
 
             {/* Hold-modus toggle for statiske øvelser */}
             <div className="flex items-center justify-center gap-2">

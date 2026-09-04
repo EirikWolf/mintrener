@@ -76,12 +76,24 @@ export function answerFromCatalogue(question: string): string | null {
   };
 
   // Lengste navn vinner: «sideplanke» inneholder «planke», og spør brukeren om
-  // sideplanke skal hun ikke få svar om vanlig planke.
-  const kandidater = EXERCISE_LIBRARY.filter(
-    (ex) => treffer(ex.navn.nb) || (ex.navn.en ? treffer(ex.navn.en) : false)
-  ).sort((a, b) => b.navn.nb.length - a.navn.nb.length);
+  // sideplanke skal hun få svar om sideplanke, ikke vanlig planke.
+  // Fullt navnetreff prioriteres over delord-treff (slik at «knebøy» treffer «Knebøy» og ikke «Knebøy til stol»).
+  const kandidater = EXERCISE_LIBRARY.map((ex) => {
+    const fullNb = treffer(ex.navn.nb);
+    const fullEn = Boolean(ex.navn.en && treffer(ex.navn.en));
+    const delOrd = ex.navn.nb.split(/\s+/)[0];
+    const delTreff = Boolean(delOrd && delOrd.length >= 4 && treffer(delOrd));
+    if (!fullNb && !fullEn && !delTreff) return null;
+    return {
+      ex,
+      score: fullNb || fullEn ? 2 : 1,
+      length: ex.navn.nb.length,
+    };
+  })
+    .filter((k): k is { ex: typeof EXERCISE_LIBRARY[0]; score: number; length: number } => k !== null)
+    .sort((a, b) => b.score - a.score || b.length - a.length);
 
-  const ex = kandidater[0];
+  const ex = kandidater[0]?.ex;
   if (!ex) return null;
 
   const linjer: string[] = [`${ex.navn.nb} — slik gjør du den:`];

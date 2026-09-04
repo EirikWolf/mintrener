@@ -430,6 +430,22 @@ describe('TimerEngine – cue- og persist-gating (karakterisering)', () => {
     expect(events.filter((e) => e.type === 'countdown')).toHaveLength(0);
   });
 
+  it('countdown emitteres for 5-4-3-2-1 når countdownDurationSeconds er 5 (CrossFit / storskjerm)', () => {
+    const { clock, engine, events } = createRigg();
+    spyWallClockLockstep(clock);
+    engine.setCountdownDurationSeconds(5);
+    engine.start();
+
+    // Prepare 10s: ticks ved remaining 5, 4, 3, 2, 1
+    for (const t of [5_000, 6_000, 7_000, 8_000, 9_000]) {
+      clock.t = t;
+      engine.tick();
+    }
+
+    const countdowns = events.filter((e) => e.type === 'countdown');
+    expect(countdowns.map((e) => (e.type === 'countdown' ? e.secondsLeft : -1))).toEqual([5, 4, 3, 2, 1]);
+  });
+
   // Portert fra hookens halfway-blokk. AVVIK-BY-DESIGN (α3→α4): hooken sjekket
   // persona !== 'standard' og speechEnabled FØR cuen ble spilt; motoren emitter
   // alltid-når-gatet (firedCues, phaseDuration >= 15, phaseElapsedSec === halfwaySec)

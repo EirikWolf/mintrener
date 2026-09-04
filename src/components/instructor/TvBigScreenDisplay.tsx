@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { TimerState, WorkoutTemplate } from '../../types/workout';
 import { ExerciseIllustration } from '../exercises/ExerciseIllustration';
+import { ENABLE_EXERCISE_IMAGES } from '../../constants/featureFlags';
 import { EXERCISE_LIBRARY } from '../../data/exercises';
 import {
   Tv,
@@ -167,8 +168,8 @@ export const TvBigScreenDisplay: React.FC<TvBigScreenDisplayProps> = ({
           </h2>
         </div>
 
-        {/* Høyre: Stor Øvelsesillustrasjon */}
-        {currentEx && (
+        {/* Høyre: Stor Øvelsesillustrasjon (kun når bilder er aktivert) */}
+        {ENABLE_EXERCISE_IMAGES && currentEx && (
           <div className="w-64 h-64 sm:w-96 sm:h-96 rounded-3xl overflow-hidden bg-zinc-950 border border-zinc-800 shadow-2xl flex items-center justify-center shrink-0">
             <ExerciseIllustration
               exercise={currentExObj}

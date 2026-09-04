@@ -89,9 +89,14 @@ export const CARDIO_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Sitt oppreist på stolen med føttene i gulvet og stram magen lett.',
-        'Løft knærne vekselvis opp i en jevn marsjrytme mens armene pendler naturlig.',
+        'Sitt oppreist på stolen med føttene flatt i gulvet og stolt holdning.',
+        'Stram magen lett og løft knærne vekselvis opp mot brystet i en jevn marsjrytme.',
+        'Pendle motsatt arm naturlig fremover i takt med beina for å få opp pulsen.',
+        'Sett føttene kontrollert ned uten å trampe.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Krummer ryggen og lener seg bakover i stolen', 'Holder pusten underveis'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {
@@ -111,9 +116,14 @@ export const CARDIO_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Jogg lett og spenstig på stedet med myke landinger på tåballene.',
-        'Gjør store, rolige armsirkler forover og bakover for å varme opp skuldrene.',
+        'Jogg lett og spenstig på stedet med myke, elastiske landinger på tåballene.',
+        'Hold blikket rett frem og magen lett aktivert for god holdning.',
+        'Gjør store, rolige armsirkler forover og bakover for å åpne bryst og skuldre.',
+        'Pust jevnt og finn en behagelig, uanstrengt rytme.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Lander tungt på hælene med stive knær', 'Heiser skuldrene opp mot ørene'],
     },
     sensorProfil: 'kadens',
     bildePrompt: {
@@ -133,9 +143,14 @@ export const CARDIO_EXERCISES: ExerciseInput[] = [
     nivå: 'nybegynner',
     instruks: {
       nb: [
-        'Gå i et rolig og uanstrengt tempo på stedet eller rundt i rommet.',
-        'Pust dypt inn med magen og slipp skuldrene ned for å senke hjerterytmen.',
+        'Gå i et rolig, flytende tempo på stedet eller rundt i rommet.',
+        'Slipp armene løst ned langs siden og senk skuldrene helt.',
+        'Pust dypt inn gjennom nesen og la magen utvide seg, pust langsomt ut gjennom munnen.',
+        'Kjenn at pulsen og pustefrekvensen gradvis roer seg ned.',
       ],
+    },
+    vanligeFeil: {
+      nb: ['Går for fort slik at pulsen ikke faller', 'Puster overflatisk kun i øvre brystkasse'],
     },
     sensorProfil: 'ingen',
     bildePrompt: {

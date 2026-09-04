@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import {
   generateCustomAiWorkout,
   AiWorkoutPrompt,
+  WorkoutPacingRatio,
 } from '../../services/aiWorkoutGeneratorService';
 import { WorkoutTemplate } from '../../types/workout';
 import {
@@ -14,6 +15,7 @@ import {
   ShieldAlert,
   Flame,
   Check,
+  Timer,
 } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 
@@ -29,6 +31,7 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
   const [duration, setDuration] = useState<number>(7);
   const [focus, setFocus] = useState<AiWorkoutPrompt['focus']>('helkropp');
   const [energy, setEnergy] = useState<'lav' | 'middels' | 'høy'>('middels');
+  const [pacing, setPacing] = useState<WorkoutPacingRatio>('standard_2_1');
   const [avoidList, setAvoidList] = useState<string[]>([]);
   const [generatedWorkout, setGeneratedWorkout] = useState<WorkoutTemplate | null>(null);
 
@@ -46,6 +49,7 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
       durationMinutes: duration,
       focus,
       energyLevel: energy,
+      pacingRatio: pacing,
       avoidInjuries: avoidList,
     });
     setGeneratedWorkout(workout);
@@ -60,6 +64,7 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
         durationMinutes: duration,
         focus,
         energyLevel: energy,
+        pacingRatio: pacing,
         avoidInjuries: avoidList,
       });
       onStartWorkout(workout);
@@ -98,7 +103,7 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
               <Bot className="w-5 h-5" />
             </div>
             <div>
-              <h3 id="ai-generator-title" className="font-black text-base text-white">AI Treningsgenerator</h3>
+              <h3 id="ai-generator-title" className="font-black text-base text-white">Smart øktbygger</h3>
               <p className="text-xs text-zinc-400">Skreddersydd økt på sekunder</p>
             </div>
           </div>
@@ -112,7 +117,7 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
         </div>
 
         {/* 1. Varighet */}
-        <div className="p-3 bg-zinc-900/70 border border-zinc-800 rounded-2xl space-y-2">
+        <div className="p-3 bg-zinc-900/70 border border-zinc-800 rounded-2xl space-y-2.5">
           <div className="flex items-center justify-between text-xs font-bold">
             <span className="text-zinc-300 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-indigo-400" />
@@ -120,8 +125,10 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
             </span>
             <span className="text-emerald-400 font-mono font-black text-sm">{duration} minutter</span>
           </div>
-          <div role="radiogroup" aria-label="Varighet" className="grid grid-cols-5 gap-1.5">
-            {[3, 5, 8, 12, 20].map((mins) => (
+
+          {/* Hurtigvalg for mikropauser vs. fulle økter */}
+          <div role="radiogroup" aria-label="Varighet" className="grid grid-cols-7 gap-1">
+            {[3, 5, 10, 20, 30, 45, 60].map((mins) => (
               <button
                 key={mins}
                 role="radio"
@@ -136,6 +143,25 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
                 {mins}m
               </button>
             ))}
+          </div>
+
+          {/* Finjustering slider fra 3 til 60 min */}
+          <div className="pt-1">
+            <input
+              type="range"
+              min={3}
+              max={60}
+              step={1}
+              value={duration}
+              onChange={(e) => setDuration(Number(e.target.value))}
+              className="w-full accent-emerald-500 cursor-pointer"
+            />
+            <div className="flex justify-between text-[10px] text-zinc-500 font-mono">
+              <span>3 min (mikropause)</span>
+              <span>20 min</span>
+              <span>45 min</span>
+              <span>60 min (full økt)</span>
+            </div>
           </div>
         </div>
 
@@ -224,6 +250,37 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
                 );
               })}
             </div>
+          </div>
+        </div>
+
+        {/* 4. Intervalltempo & Arbeids-/hvile-ratio (Horisont 2) */}
+        <div className="p-3 bg-zinc-900/70 border border-zinc-800 rounded-2xl space-y-2">
+          <span className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
+            <Timer className="w-3.5 h-3.5 text-cyan-400" />
+            Intervalltempo & Pause:
+          </span>
+          <div role="radiogroup" aria-label="Intervalltempo og ratio" className="grid grid-cols-2 gap-1.5 text-xs">
+            {[
+              { id: 'standard_2_1', label: '⚖️ Standard (40s / 20s)', desc: 'Balansert styrke & puls' },
+              { id: 'rolig_1_1', label: '🌱 Rolig (30s / 30s)', desc: 'God tid til pust & teknikk' },
+              { id: 'tabata_2_1', label: '🔥 Tabata (20s / 10s)', desc: 'Høy puls & korte pauser' },
+              { id: 'emom_5_1', label: '⏱️ EMOM (50s / 10s)', desc: 'Maks arbeidstid per runde' },
+            ].map((r) => (
+              <button
+                key={r.id}
+                role="radio"
+                aria-checked={pacing === r.id}
+                onClick={() => setPacing(r.id as any)}
+                className={`p-2 rounded-xl text-left border transition-all ${
+                  pacing === r.id
+                    ? 'bg-cyan-950/80 border-cyan-500 text-cyan-300 font-bold'
+                    : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white'
+                }`}
+              >
+                <div className="font-bold text-[11px]">{r.label}</div>
+                <div className="text-[9.5px] opacity-75">{r.desc}</div>
+              </button>
+            ))}
           </div>
         </div>
 

@@ -340,7 +340,8 @@ export const WorkoutBuilderView: React.FC<WorkoutBuilderViewProps> = ({
           {onNavigateToTimer && (
             <button
               onClick={onNavigateToTimer}
-              title="Tilbake til Timer / Forside"
+              title="Tilbake til I dag / Forside"
+              aria-label="Tilbake til I dag"
               className="p-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all flex items-center gap-1"
             >
               <ArrowLeft className="w-4 h-4 text-emerald-400" />

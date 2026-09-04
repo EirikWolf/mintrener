@@ -58,6 +58,8 @@ export interface TimerState {
   vibrateEnabled: boolean;
   wakeLockEnabled: boolean;
   speechEnabled: boolean;
+  countdownDurationSeconds?: 3 | 5;
+  countdownAudioStyle?: 'beep' | 'buzzer';
   motionReps?: number;
   /**
    * Antall repetisjoner den pågående fasen venter på, eller undefined for en

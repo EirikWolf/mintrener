@@ -5,10 +5,13 @@
  * useSyncExternalStore i <ErrorToast />.
  */
 
+export type ToastType = 'error' | 'success' | 'info';
+
 export interface ErrorToastState {
   /** Ny identitet per visning slik at UI kan restarte auto-dismiss-timeren */
   id: number;
   message: string;
+  type?: ToastType;
 }
 
 type Listener = () => void;
@@ -21,9 +24,17 @@ function notify(): void {
   listeners.forEach((listener) => listener());
 }
 
-export function showErrorToast(message: string): void {
-  current = { id: nextId++, message };
+export function showToast(message: string, type: ToastType = 'error'): void {
+  current = { id: nextId++, message, type };
   notify();
+}
+
+export function showErrorToast(message: string): void {
+  showToast(message, 'error');
+}
+
+export function showSuccessToast(message: string): void {
+  showToast(message, 'success');
 }
 
 export function dismissErrorToast(): void {

@@ -140,7 +140,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth må brukes innenfor en AuthProvider');
+    return {
+      user: null,
+      profile: null,
+      loading: false,
+      signInWithGoogle: async () => {},
+      logout: async () => {},
+      deleteAccount: async () => {},
+    };
   }
   return context;
 }

@@ -37,6 +37,8 @@ interface EngineState {
   vibrateEnabled: boolean;
   wakeLockEnabled: boolean;
   speechEnabled: boolean;
+  countdownDurationSeconds: 3 | 5;
+  countdownAudioStyle: 'beep' | 'buzzer';
   motionReps: number;
   activeWorkout: WorkoutTemplate;
   // Tidsanker og cue-gating — samme felter som hookens stateRef (α3-ticken leser dem).
@@ -103,6 +105,8 @@ export class TimerEngine {
       vibrateEnabled: initialSettings.vibrateEnabled,
       wakeLockEnabled: initialSettings.wakeLockEnabled,
       speechEnabled: initialSettings.speechEnabled,
+      countdownDurationSeconds: initialSettings.countdownDurationSeconds,
+      countdownAudioStyle: initialSettings.countdownAudioStyle,
       motionReps: 0,
       activeWorkout: workout,
       phaseStartTime: 0,
@@ -304,7 +308,8 @@ export class TimerEngine {
       s.status, s.phase, s.currentRound, s.currentItemIndex, s.phaseDuration,
       Math.ceil(s.phaseRemaining), Math.floor(s.totalElapsed),
       s.isLocked, s.soundEnabled, s.vibrateEnabled, s.wakeLockEnabled,
-      s.speechEnabled && s.soundEnabled, s.motionReps, s.awaitingReps,
+      s.speechEnabled && s.soundEnabled, s.countdownDurationSeconds, s.countdownAudioStyle,
+      s.motionReps, s.awaitingReps,
     ].join('|');
   }
 
@@ -374,6 +379,8 @@ export class TimerEngine {
       // Brukerens valg ligger urørt i s.speechEnabled, så nivået kommer
       // tilbake når lyden slås på igjen.
       speechEnabled: s.speechEnabled && s.soundEnabled,
+      countdownDurationSeconds: s.countdownDurationSeconds,
+      countdownAudioStyle: s.countdownAudioStyle,
       motionReps: s.motionReps,
       // undefined, ikke null, i den utadvendte typen: fraværet av et mål er
       // «ingen repetisjoner å vente på», ikke «null repetisjoner».
@@ -412,6 +419,13 @@ export class TimerEngine {
    */
   getNow(): number {
     return this.now();
+  }
+
+  /**
+   * Eksakt totalt tidsforløp i sekunder (ikke rundet ned av helsekund-gating i snapshot).
+   */
+  getExactTotalElapsedSeconds(): number {
+    return this.state.totalElapsed;
   }
 
   subscribeEvents(handler: (e: EngineEvent) => void): () => void {
@@ -491,17 +505,19 @@ export class TimerEngine {
       this.emit({ type: 'phase:halfway' });
     }
 
-    // 3-2-1-nedtelling per helsekund. wholeSecondsLeft >= 1 ER remaining > 0-vakten
-    // fra a1dc749 (ceil(remaining) >= 1 ⇔ remaining > 0): ingen emisjon på en
-    // allerede utløpt fase rett før catchUpExpiredPhases spoler stille forbi den.
+    // Nedtelling per helsekund (3s standard eller 5s for CrossFit/storskjerm).
+    // wholeSecondsLeft >= 1 ER remaining > 0-vakten fra a1dc749:
+    // ingen emisjon på en allerede utløpt fase rett før catchUpExpiredPhases spoler stille forbi den.
+    const countdownThreshold = s.countdownDurationSeconds ?? 3;
+    const minDuration = countdownThreshold === 3 ? 4 : 5;
     if (
-      wholeSecondsLeft <= 3 &&
+      wholeSecondsLeft <= countdownThreshold &&
       wholeSecondsLeft >= 1 &&
       wholeSecondsLeft !== s.lastCountdownBeep &&
-      s.phaseDuration >= 4
+      s.phaseDuration >= minDuration
     ) {
       s.lastCountdownBeep = wholeSecondsLeft;
-      this.emit({ type: 'countdown', secondsLeft: wholeSecondsLeft as 1 | 2 | 3 });
+      this.emit({ type: 'countdown', secondsLeft: wholeSecondsLeft as 1 | 2 | 3 | 4 | 5 });
     }
   }
 
@@ -596,6 +612,7 @@ export class TimerEngine {
       // Landet korrekt inni denne fasen: bakdater phaseStartTime slik at gjenværende
       // tid blir riktig fremover (uten dette ville fasen fremstå som nylig startet).
       s.phaseStartTime = this.now() - restOvershoot * 1000;
+      s.phaseRemaining = Math.max(0, s.phaseDuration - restOvershoot);
       // Planrettelse (α3-review): landingens nettopp-emitterte phase:started.endsAt
       // er foreldet med restOvershoot (setupPhase satte den fra nå + full varighet)
       // — deadlineChanged rett etterpå bærer korrekt frist for planlagt lyd.
@@ -813,6 +830,18 @@ export class TimerEngine {
     // speechService.setEnabled eies av hook-bindingen (α5).
     this.state.speechEnabled = v;
     savePersistedSettings({ speechEnabled: v });
+    this.notifySnapshotIfChanged();
+  }
+
+  setCountdownDurationSeconds(v: 3 | 5): void {
+    this.state.countdownDurationSeconds = v;
+    savePersistedSettings({ countdownDurationSeconds: v });
+    this.notifySnapshotIfChanged();
+  }
+
+  setCountdownAudioStyle(v: 'beep' | 'buzzer'): void {
+    this.state.countdownAudioStyle = v;
+    savePersistedSettings({ countdownAudioStyle: v });
     this.notifySnapshotIfChanged();
   }
 

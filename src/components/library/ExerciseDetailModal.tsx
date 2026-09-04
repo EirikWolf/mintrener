@@ -5,8 +5,11 @@ import { ExerciseIllustration } from '../exercises/ExerciseIllustration';
 import { MuscleIcon } from '../icons/MuscleIcon';
 import { MuscleMap } from '../exercises/MuscleMap';
 import { EquipmentIcon } from '../icons/EquipmentIcon';
-import { X, CheckCircle2, AlertTriangle, Target } from 'lucide-react';
+import { X, CheckCircle2, AlertTriangle, Target, Camera, Upload, Check } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { ENABLE_EXERCISE_IMAGES } from '../../constants/featureFlags';
+import { submitExerciseImageContribution, compressImageFile } from '../../services/exerciseContributionService';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ExerciseDetailModalProps {
   exercise: ExerciseItem;
@@ -17,9 +20,54 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   exercise,
   onClose,
 }) => {
+  const { user } = useAuth();
   const [activePhase, setActivePhase] = useState<number>(0);
+  const [isContributing, setIsContributing] = useState(false);
+  const [uploadPhase, setUploadPhase] = useState<0 | 1>(0);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   useFocusTrap(modalRef, { onClose });
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsCompressing(true);
+      const compressed = await compressImageFile(file, 1080, 0.85);
+      setPreviewImage(compressed);
+    } catch (err) {
+      console.error('Feil ved bildekomprimering:', err);
+    } finally {
+      setIsCompressing(false);
+    }
+  };
+
+  const handleSubmitContribution = () => {
+    if (!previewImage) return;
+
+    submitExerciseImageContribution({
+      exerciseId: exercise.id,
+      phase: uploadPhase,
+      imageDataUrl: previewImage,
+      notes: notes.trim() || undefined,
+      userId: user?.uid,
+      userName: user?.displayName || 'Anonym bidragsyter',
+    });
+
+    setUploadSuccess(true);
+    setTimeout(() => {
+      setUploadSuccess(false);
+      setIsContributing(false);
+      setPreviewImage(null);
+      setNotes('');
+    }, 1800);
+  };
 
   const modal = (
     <div
@@ -63,38 +111,40 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
         {/* Scrollbart Innhold */}
         <div className="flex-1 overflow-y-auto space-y-3.5 pr-1">
-          {/* Illustrasjon / Fasevisning med velger */}
-          <div className="space-y-1.5">
-            <ExerciseIllustration
-              exercise={exercise}
-              phaseIndex={activePhase}
-              className="w-full h-56 sm:h-64"
-            />
+          {/* Illustrasjon / Fasevisning med velger (kun når bilder er aktivert) */}
+          {ENABLE_EXERCISE_IMAGES && (
+            <div className="space-y-1.5">
+              <ExerciseIllustration
+                exercise={exercise}
+                phaseIndex={activePhase}
+                className="w-full h-56 sm:h-64"
+              />
 
-            {/* Fase-knapper for å veksle mellom Start og Sluttposisjon */}
-            <div className="flex gap-1 p-1 bg-zinc-950 border border-zinc-800 rounded-xl">
-              <button
-                onClick={() => setActivePhase(0)}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center ${
-                  activePhase === 0
-                    ? 'bg-emerald-500 text-zinc-950 shadow-sm'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
-                }`}
-              >
-                Fase 1: Startposisjon
-              </button>
-              <button
-                onClick={() => setActivePhase(1)}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center ${
-                  activePhase === 1
-                    ? 'bg-emerald-500 text-zinc-950 shadow-sm'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
-                }`}
-              >
-                Fase 2: Sluttposisjon
-              </button>
+              {/* Fase-knapper for å veksle mellom Start og Sluttposisjon */}
+              <div className="flex gap-1 p-1 bg-zinc-950 border border-zinc-800 rounded-xl">
+                <button
+                  onClick={() => setActivePhase(0)}
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center ${
+                    activePhase === 0
+                      ? 'bg-emerald-500 text-zinc-950 shadow-sm'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
+                  }`}
+                >
+                  Fase 1: Startposisjon
+                </button>
+                <button
+                  onClick={() => setActivePhase(1)}
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center ${
+                    activePhase === 1
+                      ? 'bg-emerald-500 text-zinc-950 shadow-sm'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
+                  }`}
+                >
+                  Fase 2: Sluttposisjon
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Muskelgrupper & Utstyr med nye SVG-ikoner */}
           <div className="grid grid-cols-2 gap-2 text-xs">
@@ -202,6 +252,131 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
               <span>Støtter automatisk sensor-telling ({exercise.sensorProfil})</span>
             </div>
           )}
+
+          {/* Brukerbidrag: Send inn eget bilde til øvelsen */}
+          <div className="pt-1 border-t border-zinc-800/80">
+            {!isContributing ? (
+              <button
+                type="button"
+                onClick={() => setIsContributing(true)}
+                className="w-full py-2 px-3 rounded-2xl bg-zinc-950 border border-zinc-800 hover:border-emerald-500/50 text-zinc-400 hover:text-emerald-400 text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+              >
+                <Camera className="w-4 h-4 text-emerald-400" />
+                <span>Bidra med eget bilde for denne øvelsen</span>
+              </button>
+            ) : (
+              <div className="p-3 bg-zinc-950 border border-emerald-500/40 rounded-2xl space-y-3 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-emerald-400" />
+                    Send inn øvelsesbilde
+                  </span>
+                  <button
+                    onClick={() => {
+                      setIsContributing(false);
+                      setPreviewImage(null);
+                    }}
+                    className="text-zinc-400 hover:text-white text-xs"
+                  >
+                    Avbryt
+                  </button>
+                </div>
+
+                {uploadSuccess ? (
+                  <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-800/80 text-emerald-300 text-xs flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    <span>Takk! Bildet er sendt til vurdering hos administrator.</span>
+                  </div>
+                ) : (
+                  <>
+                    {/* Valg av fase */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase font-bold text-zinc-400">
+                        Hvilken fase viser bildet?
+                      </label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setUploadPhase(0)}
+                          className={`py-1.5 px-2 rounded-xl text-xs font-bold border transition-all ${
+                            uploadPhase === 0
+                              ? 'bg-emerald-600 border-emerald-500 text-white'
+                              : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                          }`}
+                        >
+                          Fase 1: Start
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setUploadPhase(1)}
+                          className={`py-1.5 px-2 rounded-xl text-xs font-bold border transition-all ${
+                            uploadPhase === 1
+                              ? 'bg-emerald-600 border-emerald-500 text-white'
+                              : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                          }`}
+                        >
+                          Fase 2: Sluttposisjon
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Bildeopplasting / Kameravalg */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+
+                    {previewImage ? (
+                      <div className="space-y-2">
+                        <div className="relative rounded-xl overflow-hidden bg-black max-h-48 border border-zinc-800 flex items-center justify-center">
+                          <img src={previewImage} alt="Forhåndsvisning" className="max-h-48 object-contain" />
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImage(null)}
+                            className="absolute top-2 right-2 p-1 rounded-full bg-black/70 text-white hover:bg-black"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          placeholder="Eventuell kommentar (f.eks. tips til vinkel)"
+                          className="w-full py-1.5 px-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSubmitContribution}
+                          className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Send inn bilde</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isCompressing}
+                        className="w-full py-4 border-2 border-dashed border-zinc-800 hover:border-emerald-500/60 rounded-xl flex flex-col items-center justify-center gap-1.5 text-zinc-400 hover:text-white transition-all bg-zinc-900/40"
+                      >
+                        <Upload className="w-5 h-5 text-emerald-400" />
+                        <span className="text-xs font-semibold">
+                          {isCompressing ? 'Behandler bilde...' : 'Velg bilde eller ta bilde med kamera'}
+                        </span>
+                        <span className="text-[9px] text-zinc-400">Komprimeres automatisk på enheten</span>
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Lukk-knapp */}

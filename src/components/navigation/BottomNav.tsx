@@ -1,7 +1,7 @@
 import React from 'react';
 import { Timer, Dumbbell, History, CalendarDays, Ellipsis } from 'lucide-react';
 
-export type AppTab = 'timer' | 'programs' | 'builder' | 'exercises' | 'history' | 'settings' | 'curator';
+export type AppTab = 'timer' | 'programs' | 'builder' | 'exercises' | 'history' | 'settings';
 
 interface BottomNavProps {
   activeTab: AppTab;

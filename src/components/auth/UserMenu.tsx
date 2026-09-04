@@ -4,22 +4,31 @@ import { useAuth } from '../../contexts/AuthContext';
 import { PrivacyPolicyModal } from '../legal/PrivacyPolicyModal';
 import { AboutGuideModal } from '../help/AboutGuideModal';
 import { OrganizationPortalModal } from '../organization/OrganizationPortalModal';
-import { User as UserIcon, LogOut, Trash2, X, Shield, HelpCircle, Building2 } from 'lucide-react';
+import { TesterFeedbackModal } from '../tester/TesterFeedbackModal';
+
+// PWA-optimalisering (Revisjon C): kode-splitt admin
+const AdminDashboardModal = React.lazy(() =>
+  import('../admin/AdminDashboardModal').then((m) => ({ default: m.AdminDashboardModal }))
+);
+import { User as UserIcon, LogOut, Trash2, X, Shield, HelpCircle, Building2, ClipboardCheck, ShieldAlert } from 'lucide-react';
 import { showErrorToast } from '../../services/errorToastService';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { isAdmin } from '../../services/adminService';
+import { isTesterRoleActive } from '../../services/testerService';
 
-interface UserMenuProps {
-  onOpenCurator?: () => void;
-}
-
-export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
+export const UserMenu: React.FC = () => {
   const { user, loading, signInWithGoogle, logout, deleteAccount } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isOrgOpen, setIsOrgOpen] = useState(false);
+  const [isTesterOpen, setIsTesterOpen] = useState(false);
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const adminAccess = isAdmin(user?.email);
+  const testerAccess = isTesterRoleActive();
 
   const modalRef = useRef<HTMLDivElement>(null);
   useFocusTrap(modalRef, {
@@ -126,19 +135,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
 
         {/* Handlinger */}
         <div className="space-y-2 pt-2 border-t border-zinc-800">
-          {/* Kurator-snarvei for trenere/innholdsskapere */}
-          {onOpenCurator && (
-            <button
-              onClick={() => {
-                setIsOpen(false);
-                onOpenCurator();
-              }}
-              className="w-full py-2.5 px-4 rounded-2xl bg-zinc-950/80 hover:bg-zinc-800 text-amber-400 hover:text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-all border border-amber-900/40"
-            >
-              <span>⭐</span>
-              <span>Treningskurator & Validering</span>
-            </button>
-          )}
+
 
           {/* Logg ut */}
           <button
@@ -151,6 +148,34 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
             <LogOut className="w-4 h-4" />
             Logg ut
           </button>
+
+          {/* Admin Kontrollpanel (kun for admin eller låst opp med passord) */}
+          {adminAccess && (
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                setIsAdminOpen(true);
+              }}
+              className="w-full py-2.5 px-4 rounded-2xl bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 hover:text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all border border-amber-800/80 shadow-sm"
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+              <span>Admin Kontrollpanel (Bilder & QA)</span>
+            </button>
+          )}
+
+          {/* Testerportal & Tilbakemelding */}
+          {testerAccess && (
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                setIsTesterOpen(true);
+              }}
+              className="w-full py-2.5 px-4 rounded-2xl bg-purple-950/60 hover:bg-purple-900/80 text-purple-300 hover:text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all border border-purple-800/80 shadow-sm"
+            >
+              <ClipboardCheck className="w-3.5 h-3.5 text-purple-400" />
+              <span>Betatester Tilbakemelding</span>
+            </button>
+          )}
 
           {/* Organisasjon & Bedriftsavtale */}
           <button
@@ -251,6 +276,18 @@ export const UserMenu: React.FC<UserMenuProps> = ({ onOpenCurator }) => {
       {/* Om Min Trener Modal */}
       {isAboutOpen && (
         <AboutGuideModal onClose={() => setIsAboutOpen(false)} />
+      )}
+
+      {/* Testerportal Modal */}
+      {isTesterOpen && (
+        <TesterFeedbackModal onClose={() => setIsTesterOpen(false)} />
+      )}
+
+      {/* Admin Kontrollpanel Modal */}
+      {isAdminOpen && (
+        <React.Suspense fallback={null}>
+          <AdminDashboardModal onClose={() => setIsAdminOpen(false)} />
+        </React.Suspense>
       )}
     </>
   );

@@ -83,10 +83,11 @@ export const WorkoutHistoryView: React.FC<WorkoutHistoryViewProps> = ({
           {onNavigateToTimer && (
             <button
               onClick={onNavigateToTimer}
-              title="Tilbake til Timer / Forside"
+              title="Tilbake til I dag / Forside"
+              aria-label="Tilbake til I dag"
               className="p-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all flex items-center gap-1"
             >
-              <span className="text-xs font-bold text-emerald-400">← Timer</span>
+              <span className="text-xs font-bold text-emerald-400">← I dag</span>
             </button>
           )}
           <div>

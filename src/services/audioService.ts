@@ -89,6 +89,61 @@ class AudioService {
   }
 
   /**
+   * Markant gym-buzzer for nedtelling (CrossFit / storskjerm)
+   */
+  public playCountdownBuzzer(enabled = true) {
+    if (!enabled) return;
+    this.playBuzzerTone(200, 0.14, 0.75);
+  }
+
+  /**
+   * Kraftig og fyldig horn/buzzer ved start av arbeidsintervall (CrossFit / boks-timer)
+   */
+  public playBuzzerStart(enabled = true) {
+    if (!enabled) return;
+    this.playBuzzerTone(190, 0.55, 0.9);
+  }
+
+  /**
+   * Rik elektronisk buzzer med to sagtann-oscillatorer
+   */
+  private playBuzzerTone(baseFreq: number, duration: number, volume = 0.8) {
+    try {
+      const ctx = this.getContext();
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+
+      const now = ctx.currentTime;
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'sawtooth';
+      osc1.frequency.setValueAtTime(baseFreq, now);
+
+      osc2.type = 'sawtooth';
+      osc2.frequency.setValueAtTime(baseFreq * 1.5, now); // kvint-overtone for fylde
+
+      gain.gain.setValueAtTime(0.01, now);
+      gain.gain.linearRampToValueAtTime(volume, now + 0.02);
+      gain.gain.setValueAtTime(volume, now + duration - 0.03);
+      gain.gain.linearRampToValueAtTime(0.001, now + duration);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + duration);
+      osc2.stop(now + duration);
+    } catch (err) {
+      console.warn('Feil under buzzer-avspilling:', err);
+    }
+  }
+
+  /**
    * Kraftig og oppløftende tone ved start på arbeidsintervall (f.eks. grønt lys)
    */
   public playWorkStart(enabled = true) {

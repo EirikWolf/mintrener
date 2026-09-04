@@ -119,7 +119,7 @@ export const SEVEN_MINUTE_WORKOUT: WorkoutTemplate = {
     },
     {
       id: 'sm-9',
-      exercise: { id: 'sideplanke', name: 'Sideplanke', category: 'bodyweight' },
+      exercise: { id: 'sideplanke-hoyre', name: 'Sideplanke', category: 'bodyweight' },
       workDurationSeconds: 30,
       restDurationSeconds: 10,
     },

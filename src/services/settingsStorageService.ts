@@ -5,6 +5,8 @@ export interface PersistedUserSettings {
   vibrateEnabled: boolean;
   wakeLockEnabled: boolean;
   speechEnabled: boolean;
+  countdownDurationSeconds: 3 | 5;
+  countdownAudioStyle: 'beep' | 'buzzer';
 }
 
 export const DEFAULT_PERSISTED_SETTINGS: PersistedUserSettings = {
@@ -12,6 +14,8 @@ export const DEFAULT_PERSISTED_SETTINGS: PersistedUserSettings = {
   vibrateEnabled: true,
   wakeLockEnabled: true,
   speechEnabled: true,
+  countdownDurationSeconds: 3,
+  countdownAudioStyle: 'beep',
 };
 
 /**
@@ -32,6 +36,8 @@ export function loadPersistedSettings(): PersistedUserSettings {
       vibrateEnabled: typeof parsed.vibrateEnabled === 'boolean' ? parsed.vibrateEnabled : DEFAULT_PERSISTED_SETTINGS.vibrateEnabled,
       wakeLockEnabled: typeof parsed.wakeLockEnabled === 'boolean' ? parsed.wakeLockEnabled : DEFAULT_PERSISTED_SETTINGS.wakeLockEnabled,
       speechEnabled: typeof parsed.speechEnabled === 'boolean' ? parsed.speechEnabled : DEFAULT_PERSISTED_SETTINGS.speechEnabled,
+      countdownDurationSeconds: parsed.countdownDurationSeconds === 5 ? 5 : 3,
+      countdownAudioStyle: parsed.countdownAudioStyle === 'buzzer' ? 'buzzer' : 'beep',
     };
   } catch (e) {
     console.warn('Feil ved lasting av brukerinnstillinger, bruker standard:', e);

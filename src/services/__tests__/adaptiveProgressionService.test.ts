@@ -53,8 +53,9 @@ describe('Adaptive Progression Service', () => {
     const suggestion = checkAdaptiveProgression(sampleWorkout, history);
     expect(suggestion).not.toBeNull();
     expect(suggestion?.type).toBe('increase');
+    // Siden hviletid på sampleWorkout er 10s (<= 20s), skal vi øke arbeidstid (+5s), og beholde hviletid intakt (10s)
     expect(suggestion?.adaptedWorkout.items[0].workDurationSeconds).toBe(25);
-    expect(suggestion?.adaptedWorkout.items[0].restDurationSeconds).toBe(8);
+    expect(suggestion?.adaptedWorkout.items[0].restDurationSeconds).toBe(10);
   });
 
   it('foreslår justering nedover ved 2 "for_tungt" på rad', () => {
@@ -90,6 +91,54 @@ describe('Adaptive Progression Service', () => {
     expect(suggestion?.type).toBe('decrease');
     expect(suggestion?.adaptedWorkout.items[0].workDurationSeconds).toBe(15);
     expect(suggestion?.adaptedWorkout.items[0].restDurationSeconds).toBe(15);
+  });
+
+  it('foreslår Deload ved 3 "for_tungt" på rad eller ufullstendige runder', () => {
+    const history: CompletedWorkoutLog[] = [
+      {
+        id: 'l1',
+        userId: 'u1',
+        workoutId: 'tabata-1',
+        workoutName: 'Klassisk Tabata',
+        workoutType: 'tabata',
+        completedAt: new Date(Date.now() - 1000).toISOString(),
+        durationSeconds: 240,
+        roundsCompleted: 1,
+        totalRounds: 1,
+        difficultyRating: 'for_tungt',
+      },
+      {
+        id: 'l2',
+        userId: 'u1',
+        workoutId: 'tabata-1',
+        workoutName: 'Klassisk Tabata',
+        workoutType: 'tabata',
+        completedAt: new Date(Date.now() - 100000).toISOString(),
+        durationSeconds: 240,
+        roundsCompleted: 1,
+        totalRounds: 1,
+        difficultyRating: 'for_tungt',
+      },
+      {
+        id: 'l3',
+        userId: 'u1',
+        workoutId: 'tabata-1',
+        workoutName: 'Klassisk Tabata',
+        workoutType: 'tabata',
+        completedAt: new Date(Date.now() - 200000).toISOString(),
+        durationSeconds: 240,
+        roundsCompleted: 1,
+        totalRounds: 1,
+        difficultyRating: 'for_tungt',
+      },
+    ];
+
+    const suggestion = checkAdaptiveProgression(sampleWorkout, history);
+    expect(suggestion).not.toBeNull();
+    expect(suggestion?.type).toBe('deload');
+    expect(suggestion?.title).toContain('Deload');
+    // 20s arbeid redusert med 40 % -> 12s
+    expect(suggestion?.adaptedWorkout.items[0].workDurationSeconds).toBe(12);
   });
 
   it('gir null hvis mindre enn 2 logger eller blandet vurdering', () => {

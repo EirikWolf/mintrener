@@ -13,7 +13,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 
-import { INITIAL_CURATION_FEEDBACK, FeedbackEntry } from '../../data/curatorFeedback';
+import { INITIAL_CURATION_FEEDBACK, INITIAL_CURATOR_VALG, FeedbackEntry } from '../../data/curatorFeedback';
 
 interface FeedbackMap {
   [exerciseIdPhase: string]: FeedbackEntry;
@@ -52,10 +52,12 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
   const [forstørret, setForstørret] = useState<string | null>(null);
   const [valg, setValg] = useState<Record<string, string>>(() => {
     try {
-      return JSON.parse(localStorage.getItem(VALG_KEY) ?? '{}');
-    } catch {
-      return {};
-    }
+      const stored = localStorage.getItem(VALG_KEY);
+      if (stored) {
+        return { ...INITIAL_CURATOR_VALG, ...JSON.parse(stored) };
+      }
+    } catch {}
+    return INITIAL_CURATOR_VALG;
   });
 
   // Manifestet er valgfritt: har man ikke kjørt publiserKandidater, skal siden
@@ -117,7 +119,7 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
     } catch {}
   }, []);
 
-  const saveFeedback = (key: string, feedback: string, status: 'mangler' | 'generert' | 'godkjent' | 'regenerer') => {
+  const saveFeedback = (key: string, feedback: string, status: 'mangler' | 'generert' | 'godkjent' | 'regenerer' | 'ubehandlet') => {
     const updated: FeedbackMap = {
       ...feedbackMap,
       [key]: {
@@ -240,7 +242,7 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
             onClick={onNavigateToTimer}
             className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 font-bold text-xs rounded-xl border border-zinc-800 transition-all"
           >
-            ← Tilbake til Timer
+            ← Tilbake til I dag
           </button>
         )}
       </div>
@@ -255,10 +257,11 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
           {onNavigateToTimer && (
             <button
               onClick={onNavigateToTimer}
-              title="Tilbake til Timer / Forside"
+              title="Tilbake til I dag / Forside"
+              aria-label="Tilbake til I dag"
               className="p-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all flex items-center gap-1"
             >
-              <span className="text-xs font-bold text-emerald-400">← Timer</span>
+              <span className="text-xs font-bold text-emerald-400">← I dag</span>
             </button>
           )}
           <div>
@@ -287,6 +290,23 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
             className="px-2.5 py-1.5 rounded-2xl bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all"
           >
             Kopiér
+          </button>
+          <button
+            onClick={() => {
+              if (window.confirm('Nullstill nettleserens lokale overstyringer og synkroniser godkjenninger og kandidatvalg fra kodebasen?')) {
+                localStorage.removeItem(STORAGE_KEY);
+                localStorage.removeItem(VALG_KEY);
+                setFeedbackMap(INITIAL_CURATION_FEEDBACK);
+                setValg(INITIAL_CURATOR_VALG);
+                setSuccessMsg('Synkronisert status og kandidatvalg fra kodebase.');
+                setTimeout(() => setSuccessMsg(null), 2500);
+              }
+            }}
+            title="Hent inn nyeste status, godkjenninger og kandidatvalg fra kodebasen"
+            className="px-2.5 py-1.5 rounded-2xl bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all flex items-center gap-1"
+          >
+            <RotateCcw className="w-3 h-3" />
+            Synk fra kode
           </button>
         </div>
 

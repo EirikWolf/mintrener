@@ -65,25 +65,28 @@ vi.mock('../components/timer/WorkoutSummary', () => ({
   WorkoutSummary: () => <div data-testid="workout-summary" />,
 }));
 vi.mock('../components/library/ExerciseLibraryView', () => ({
-  ExerciseLibraryView: () => null,
+  ExerciseLibraryView: () => <div data-testid="exercise-library-view" />,
 }));
 vi.mock('../components/history/WorkoutHistoryView', () => ({
-  WorkoutHistoryView: () => null,
+  WorkoutHistoryView: () => <div data-testid="workout-history-view" />,
 }));
 vi.mock('../components/programs/ProgramCatalogView', () => ({
-  ProgramCatalogView: () => null,
+  ProgramCatalogView: () => <div data-testid="program-catalog-view" />,
 }));
 vi.mock('../components/builder/WorkoutBuilderView', () => ({
-  WorkoutBuilderView: () => null,
-}));
-vi.mock('../components/curator/ExerciseImageCuratorView', () => ({
-  ExerciseImageCuratorView: () => null,
+  WorkoutBuilderView: () => <div data-testid="workout-builder-view" />,
 }));
 vi.mock('../components/settings/SettingsMoreView', () => ({
-  SettingsMoreView: () => null,
+  SettingsMoreView: () => <div data-testid="settings-more-view" />,
 }));
 vi.mock('../components/navigation/BottomNav', () => ({
-  BottomNav: () => <nav data-testid="bottom-nav" />,
+  BottomNav: ({ onTabChange }: { activeTab?: string; onTabChange: (t: string) => void }) => (
+    <nav data-testid="bottom-nav">
+      <button onClick={() => onTabChange('programs')}>Programmer</button>
+      <button onClick={() => onTabChange('exercises')}>Øvelser</button>
+      <button onClick={() => onTabChange('timer')}>Timer</button>
+    </nav>
+  ),
 }));
 
 // OnboardingFlow rendres EKTE (gaten + flyten sammen) — kun sideeffektene mockes
@@ -168,4 +171,38 @@ describe('App — velkomstflyt-gate (C2)', () => {
     });
     expect(screen.getByRole('heading', { name: WELCOME_HEADING })).toBeInTheDocument();
   });
+
+  it('Fase 3 (Revisjon C): bevarer besøkte faner i DOM-en ved navigering', async () => {
+    // Sett opp eksisterende bruker slik at velkomstflyten ikke overstyrer
+    localStorage.setItem('mintrener_coach_persona', 'standard');
+    localStorage.setItem(
+      'mintrener_user_profiles_v1',
+      JSON.stringify({ profiles: ['kontor'], primaryProfile: 'kontor', hasCompletedOnboarding: true })
+    );
+
+    await renderApp();
+
+    // Initielt: Timer er synlig, andre faner er ennå ikke montert
+    expect(screen.getByTestId('timer-display')).toBeInTheDocument();
+    expect(screen.queryByTestId('program-catalog-view')).not.toBeInTheDocument();
+
+    // Naviger til Programmer
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Programmer' }));
+    });
+    expect(screen.getByTestId('program-catalog-view')).toBeInTheDocument();
+    // Foreldreelementet til program-katalogen er synlig (ikke hidden)
+    expect(screen.getByTestId('program-catalog-view').parentElement).toHaveClass('block');
+    expect(screen.getByTestId('timer-display').parentElement).toHaveClass('hidden');
+
+    // Naviger tilbake til Timer
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Timer' }));
+    });
+    expect(screen.getByTestId('timer-display').parentElement).toHaveClass('block');
+    // Program-katalogen forblir montert i DOM-en (bevarer scroll og tilstand), men skjult med CSS
+    expect(screen.getByTestId('program-catalog-view')).toBeInTheDocument();
+    expect(screen.getByTestId('program-catalog-view').parentElement).toHaveClass('hidden');
+  });
 });
+

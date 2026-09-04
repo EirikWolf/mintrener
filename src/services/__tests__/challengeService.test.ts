@@ -4,6 +4,7 @@ import {
   setActiveChallengeId,
   getChallengeProgress,
   completeChallengeDay,
+  startChallengeAtDay,
   resetChallengeProgress,
 } from '../challengeService';
 
@@ -37,6 +38,16 @@ describe('challengeService', () => {
     const prog = getChallengeProgress('planke-30-dager');
     expect(prog.isCompleted).toBe(true);
     expect(prog.completedAt).toBeDefined();
+  });
+
+  it('lar erfarne utøvere starte på et høyere nivå / inngangsgulv', () => {
+    // Start på dag 15
+    const prog = startChallengeAtDay('planke-30-dager', 15);
+    expect(prog.currentDay).toBe(15);
+    expect(prog.completedDays.length).toBe(14); // Dag 1 til 14 er autoutfylt
+    expect(prog.completedDays).toContain(1);
+    expect(prog.completedDays).toContain(14);
+    expect(prog.completedDays).not.toContain(15);
   });
 
   it('nullstiller utfordring', () => {

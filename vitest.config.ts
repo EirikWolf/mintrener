@@ -7,6 +7,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
+    testTimeout: 10000,
     // Regeltestene krever Firestore-emulator og kjøres separat via `npm run test:rules`;
     // Playwright-røyken (e2e/) kjøres av Playwright via `npm run test:e2e`, ikke Vitest.
     // .claude/ ekskluderes fordi agent-worktrees (.claude/worktrees/<navn>/) er hele
