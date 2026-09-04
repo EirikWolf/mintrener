@@ -392,6 +392,46 @@ Dette dokumentet fører en kronologisk oversikt over tekniske og arkitektoniske 
   - Tre uløste problemer i vedlegg A — orientering, ryggkrumning, rotasjon — er ikke lenger åpne punkter, men bortfalt sammen med metoden.
   - **Lærdom:** vi bestilte revisjonen med invitasjon til å bli motsagt, og fikk det. Men revisors sterkeste argument var feil, og vi gjentok det før vi slo opp i vår egen beslutningslogg. En ekstern vurdering skal etterprøves mot det vi allerede vet, ikke bare leses.
 
+### REVISJON 2026-09-02: to av fire begrunnelser falt
+
+Beslutningen over står **ikke** lenger som skrevet. Den ble tatt før vi testet
+dybdestyring, og to av de fire bærende begrunnelsene holder ikke:
+
+**Falt: «bare illustrasjon kan vise muskler».** Feil da det ble skrevet. Muskelkartet
+(Beslutning 50) er en egen komponent som står ved siden av utførelsesbildet og er
+likegyldig til hvordan det bildet er laget. Argumentet var mitt, og det var dårlig.
+
+**Falt: «2D kan ikke uttrykke kroppsorientering».** Premisset er fortsatt sant — et
+2D-skjelett *kan* ikke — men det er omgått. Vi henter geometrien fra et dybdekart
+i stedet, avledet av et fritt lisensiert referansefoto. Målt samme dag: superman
+kom ut liggende på magen for første gang, og sideplanken med korrekt rotasjon om
+lengdeaksen. Begge var øvelser vi hadde dokumentert som umulige.
+
+**Står: tidsbruken.** Uendret, og den er nå større.
+
+**Står: bransjepraksis.** Uendret.
+
+#### Det som kom i stedet, og hvorfor beslutningen likevel ikke reverseres
+
+Kjeden vi endte med — dybdekart → BiRefNet-personmaske → syntetisk gulv → kort
+kontrollvindu — løser fem konkrete problemer, hvert av dem målt. Men **treffraten
+er 1 av 3–4**, og feilmodusen når den bommer er grov: figurer med hode i begge
+ender.
+
+Vi testet revisors tre foreslåtte tiltak (2026-09-02). Positur-ankeret, som skulle
+gi den semantiske forankringen vår symmetri-hypotese sa manglet, **flyttet ikke
+treffraten**: 1 av 4, mot 1 av 3 uten. Da er hypotesen trolig feil, og vi vet ikke
+hva den riktige forklaringen er.
+
+**Status: åpen, ikke omgjort.** ControlNet-sporet er ikke gjenopptatt som
+produksjonsvei, og illustrasjonsretningen er ikke forkastet. Det som er endret,
+er at nedleggelsen ikke lenger hviler på at problemet er *uløselig* — det hviler
+på at løsningen ikke er *pålitelig nok*. Det er en svakere begrunnelse, og den
+tåler å bli utfordret av en batch som viser noe annet.
+
+Full målehistorikk: `docs/kitor-tilrettelegging-2026-09-02.md` og
+`docs/revisjon-dybdekontroll-svar-2026-09-02.md`.
+
 ## [2026-09-01] Beslutning 50: Kontrollert muskelordforråd, og fire ikonfeil i produksjon
 * **Kontekst:** Første steg mot muskelkartet (Beslutning 49). `muskler.primær` og `muskler.sekundær` i øvelseskatalogen er fritekst, og teksten hadde drevet fra hverandre: **55 unike navn for 75 øvelser**. `sete` og `setemuskulatur`, `bakside lår` og `hamstring`, `latissimus` og `brede ryggmuskel` er samme muskel skrevet på to måter. Rundt en femtedel av navnene er ikke muskler i det hele tatt — `kondisjon`, `balanse`, `restitusjon`, `grep`, `lepper`.
 * **Funn — fire feil sto i produksjon.** `MuscleIcon` normaliserte med delstrengsjekker i fast rekkefølge, og rekkefølgen var feil:

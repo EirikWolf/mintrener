@@ -51,7 +51,7 @@ const FASE = Number(process.env.DYBDE_FASE ?? 1);
 const BREDDE = 1152;
 const HØYDE = 896;
 
-async function uploadRef(token: string, filePath: string, name: string): Promise<string> {
+export async function uploadRef(token: string, filePath: string, name: string): Promise<string> {
   const form = new FormData();
   form.append('image', new Blob([fs.readFileSync(filePath)]), name);
   form.append('overwrite', 'true');
@@ -73,7 +73,7 @@ async function uploadRef(token: string, filePath: string, name: string): Promise
  * skaleres til lerretet, og en preprocessor lager kontrollbildet. ControlNet
  * Union Pro 2.0 er den SAMME modellen — bare `type` byttes fra `openpose`.
  */
-function byggWorkflow(
+export function byggWorkflow(
   prompt: string,
   seed: number,
   filnavn: string,
@@ -113,6 +113,15 @@ function byggWorkflow(
      * delene av den ligger, i stedet for å skjære scenen i et avstandsplan.
      */
     personMaske = false,
+    /**
+     * Speilvend referansen vannrett.
+     *
+     * Sideplanke finnes hos oss som høyre og venstre variant, og de skal være
+     * speilbilder av hverandre. Basen har bare ÉN side. Uten speiling får begge
+     * variantene samme støttearm — dybdekartet bestemmer siden, og prompten
+     * («right forearm» / «left forearm») taper mot den.
+     */
+    speil = false,
     /**
      * Myk maskekant i piksler.
      *
@@ -178,8 +187,17 @@ function byggWorkflow(
     '19': { inputs: { image: refBilde }, class_type: 'LoadImage' },
     // Beskjæres mot midten: kontrollbildet må ha samme sideforhold som latenten,
     // ellers forskyves posituren (vedlegg A § A.6).
+    ...(speil
+      ? { '19b': { inputs: { image: ['19', 0], flip_method: 'y-axis: horizontally' }, class_type: 'ImageFlip' } }
+      : {}),
     '20': {
-      inputs: { image: ['19', 0], upscale_method: 'lanczos', width: BREDDE, height: HØYDE, crop: 'center' },
+      inputs: {
+        image: speil ? ['19b', 0] : ['19', 0],
+        upscale_method: 'lanczos',
+        width: BREDDE,
+        height: HØYDE,
+        crop: 'center',
+      },
       class_type: 'ImageScale',
     },
     '21': { inputs: preprocessor.inputs, class_type: preprocessor.class_type },
@@ -329,27 +347,44 @@ function byggWorkflow(
  */
 const JOBBER = [
   /**
-   * ÉN variabel om gangen. Første forsøk endret seks ting samtidig — revisors
-   * tre tiltak pluss kontrollstyrke, vindu og maskeparametre — og ga 0 av 4.
-   * To av endringene (myk kant 12 px, maskevekst 30 px) gjeninnførte feilmoduser
-   * vi allerede hadde målt bort: glorie og kildens rom.
+   * SKALA-TEST. Spørsmålet Beslutning 49 nå hviler på er om 1-av-3 er en
+   * egenskap ved superman eller ved metoden. Fem øvelser med verifiserte
+   * referanser, tre seeds hver — 15 bilder gir en ærlig rate på tvers.
    *
-   * Her er alt tilbake til det kjent gode oppsettet, og det ENESTE nye er
-   * positur-ankeret (tiltak A) pluss romlig prompt (tiltak C, som er gratis).
-   * Fire seeds: kjent grunnlinje er 1 av 3.
+   * Oppsettet er det som virket: dybdekart, BiRefNet-personmaske med hard
+   * kant, syntetisk gulv, styrke 0,9 og vindu 0,35. Ingen positur-anker —
+   * det ble målt til ikke å hjelpe.
    */
-  { øvelse: 'rygghev-superman', fase: 1, ref: 'superman-1.jpg', navn: 'anker-0', seedTillegg: 0,
-    controlEnd: 0.35, posAnker: 'superman-pose.png', posStyrke: 0.3, maskeVekst: 2,
-    romlig: 'exactly one person with a single head, both arms stretched forward past the head, legs together extending to the opposite end of the body, no duplicate limbs' },
-  { øvelse: 'rygghev-superman', fase: 1, ref: 'superman-1.jpg', navn: 'anker-1', seedTillegg: 1,
-    controlEnd: 0.35, posAnker: 'superman-pose.png', posStyrke: 0.3, maskeVekst: 2,
-    romlig: 'exactly one person with a single head, both arms stretched forward past the head, legs together extending to the opposite end of the body, no duplicate limbs' },
-  { øvelse: 'rygghev-superman', fase: 1, ref: 'superman-1.jpg', navn: 'anker-2', seedTillegg: 2,
-    controlEnd: 0.35, posAnker: 'superman-pose.png', posStyrke: 0.3, maskeVekst: 2,
-    romlig: 'exactly one person with a single head, both arms stretched forward past the head, legs together extending to the opposite end of the body, no duplicate limbs' },
-  { øvelse: 'rygghev-superman', fase: 1, ref: 'superman-1.jpg', navn: 'anker-3', seedTillegg: 3,
-    controlEnd: 0.35, posAnker: 'superman-pose.png', posStyrke: 0.3, maskeVekst: 2,
-    romlig: 'exactly one person with a single head, both arms stretched forward past the head, legs together extending to the opposite end of the body, no duplicate limbs' },
+  { øvelse: 'kneboy', fase: 1, ref: 'ref-Bodyweight_Squat-1.jpg', navn: 'kneboy-s0', seedTillegg: 0,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'kneboy', fase: 1, ref: 'ref-Bodyweight_Squat-1.jpg', navn: 'kneboy-s1', seedTillegg: 1,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'kneboy', fase: 1, ref: 'ref-Bodyweight_Squat-1.jpg', navn: 'kneboy-s2', seedTillegg: 2,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'planke', fase: 0, ref: 'ref-Plank-1.jpg', navn: 'planke-s0', seedTillegg: 0,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'planke', fase: 0, ref: 'ref-Plank-1.jpg', navn: 'planke-s1', seedTillegg: 1,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'planke', fase: 0, ref: 'ref-Plank-1.jpg', navn: 'planke-s2', seedTillegg: 2,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'mountain-climbers', fase: 1, ref: 'ref-Mountain_Climbers-1.jpg', navn: 'mountain-climbers-s0', seedTillegg: 0,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'mountain-climbers', fase: 1, ref: 'ref-Mountain_Climbers-1.jpg', navn: 'mountain-climbers-s1', seedTillegg: 1,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'mountain-climbers', fase: 1, ref: 'ref-Mountain_Climbers-1.jpg', navn: 'mountain-climbers-s2', seedTillegg: 2,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'sideplanke', fase: 0, ref: 'ref-Side_Bridge-1.jpg', navn: 'sideplanke-s0', seedTillegg: 0,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'sideplanke', fase: 0, ref: 'ref-Side_Bridge-1.jpg', navn: 'sideplanke-s1', seedTillegg: 1,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'sideplanke', fase: 0, ref: 'ref-Side_Bridge-1.jpg', navn: 'sideplanke-s2', seedTillegg: 2,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'katte-ku', fase: 1, ref: 'ref-Cat_Stretch-1.jpg', navn: 'katte-ku-s0', seedTillegg: 0,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'katte-ku', fase: 1, ref: 'ref-Cat_Stretch-1.jpg', navn: 'katte-ku-s1', seedTillegg: 1,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
+  { øvelse: 'katte-ku', fase: 1, ref: 'ref-Cat_Stretch-1.jpg', navn: 'katte-ku-s2', seedTillegg: 2,
+    controlEnd: 0.35, posAnker: '', posStyrke: 0.3, maskeVekst: 2, romlig: 'exactly one person with a single head, no duplicate limbs' },
 ];
 
 async function main() {
@@ -439,7 +474,12 @@ async function main() {
   console.log(`\nFerdig: ${ok}/${JOBBER.length} på ${((Date.now() - start) / 60000).toFixed(1)} min → ${UT_DIR}`);
 }
 
-main().catch((err) => {
-  console.error('Testen feilet:', err);
-  process.exit(1);
-});
+// Kjør bare når fila kalles direkte. Uten denne vakta ville produksjons-
+// skriptet, som importerer byggWorkflow herfra, satt i gang HELE testkjøringen
+// bare ved å laste modulen — og tatt en GPU-lease på veien.
+if (process.argv[1]?.includes('testDybdeKontroll')) {
+  main().catch((err) => {
+    console.error('Testen feilet:', err);
+    process.exit(1);
+  });
+}

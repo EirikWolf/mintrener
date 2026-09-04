@@ -13,15 +13,25 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 
+import { INITIAL_CURATION_FEEDBACK, FeedbackEntry } from '../../data/curatorFeedback';
+
 interface FeedbackMap {
-  [exerciseIdPhase: string]: {
-    feedback: string;
-    status: 'mangler' | 'generert' | 'godkjent' | 'regenerer';
-    updatedAt: string;
-  };
+  [exerciseIdPhase: string]: FeedbackEntry;
 }
 
 const STORAGE_KEY = 'mintrener_image_curator_feedback';
+/**
+ * Valgt kandidat per bilde, atskilt fra tilbakemeldingene.
+ *
+ * Et seed-valg og en tekstlig anmerkning er to ulike ting: valget sier hvilken
+ * av tre genereringer som skal inn i appen, anmerkningen sier hva som er galt
+ * med den som ligger der nå. Å blande dem i én nøkkel ville gjort det umulig å
+ * si «denne kandidaten er valgt, men den har fortsatt en feil».
+ */
+const VALG_KEY = 'mintrener_image_curator_valg';
+
+/** Skrives av scripts/publiserKandidater.ts. Nøkkel → tilgjengelige seeds. */
+type Kandidatmanifest = Record<string, string[]>;
 
 interface ExerciseImageCuratorViewProps {
   onNavigateToTimer?: () => void;
@@ -31,16 +41,79 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
   onNavigateToTimer,
 }) => {
   const { user } = useAuth();
+  const [kandidater, setKandidater] = useState<Kandidatmanifest>({});
+  /**
+   * Nøkkelen som vises i stor visning, eller null.
+   *
+   * Miniatyrene er for små til å bedømme en positur — det er nettopp det som
+   * skal vurderes, om albuen er 90 grader og ryggen er strak. Valget tas derfor
+   * i stor visning, ikke fra stripa.
+   */
+  const [forstørret, setForstørret] = useState<string | null>(null);
+  const [valg, setValg] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(VALG_KEY) ?? '{}');
+    } catch {
+      return {};
+    }
+  });
+
+  // Manifestet er valgfritt: har man ikke kjørt publiserKandidater, skal siden
+  // fungere nøyaktig som før i stedet for å feile.
+  useEffect(() => {
+    fetch('/images/kandidater/manifest.json')
+      .then((r) => (r.ok ? r.json() : {}))
+      .then(setKandidater)
+      .catch(() => setKandidater({}));
+  }, []);
+
+  // Esc lukker, 1–3 velger. En kurering er hundrevis av valg; da teller det å
+  // slippe å flytte hånda til musa for hvert enkelt.
+  useEffect(() => {
+    if (!forstørret) return;
+    const påTast = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setForstørret(null);
+      const n = Number(e.key);
+      const seeds = kandidater[forstørret] ?? [];
+      if (n >= 1 && n <= seeds.length) velgKandidat(forstørret, seeds[n - 1]);
+    };
+    window.addEventListener('keydown', påTast);
+    return () => window.removeEventListener('keydown', påTast);
+  });
+
+  const velgKandidat = (nøkkel: string, seed: string) => {
+    const neste = { ...valg };
+    // Klikk på det valgte fjerner valget. Uten det kan man ikke ombestemme seg
+    // til «ingen av dem duger» etter først å ha valgt en.
+    if (neste[nøkkel] === seed) delete neste[nøkkel];
+    else neste[nøkkel] = seed;
+    setValg(neste);
+    localStorage.setItem(VALG_KEY, JSON.stringify(neste));
+    setSuccessMsg(neste[nøkkel] ? `${nøkkel}: valgte ${seed}` : `${nøkkel}: valg fjernet`);
+    setTimeout(() => setSuccessMsg(null), 2000);
+  };
   const [exercises] = useState<ExerciseItem[]>(EXERCISE_LIBRARY);
   const [selectedCategory, setSelectedCategory] = useState<string>('alle');
-  const [feedbackMap, setFeedbackMap] = useState<FeedbackMap>({});
+  const [feedbackMap, setFeedbackMap] = useState<FeedbackMap>(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        return { ...INITIAL_CURATION_FEEDBACK, ...JSON.parse(raw) };
+      }
+    } catch {}
+    return INITIAL_CURATION_FEEDBACK;
+  });
   const [reordering, setReordering] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setFeedbackMap(JSON.parse(raw));
+      if (raw) {
+        setFeedbackMap({ ...INITIAL_CURATION_FEEDBACK, ...JSON.parse(raw) });
+      } else {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_CURATION_FEEDBACK));
+      }
     } catch {}
   }, []);
 
@@ -78,6 +151,69 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
       setReordering(null);
       setSuccessMsg(null);
     }, 2000);
+  };
+
+  /**
+   * Eksporterer kureringen som JSON.
+   *
+   * Tilbakemeldingene bodde bare i localStorage, i den nettleseren de ble
+   * skrevet i. Kurerte du på telefonen, ble de liggende på telefonen — og den
+   * som skulle bruke dem til å rette promptene kom aldri til dem.
+   *
+   * Eksporten tar med ØVELSENS NÅVÆRENDE PROMPT og kameravinkel ved siden av
+   * kommentaren. Uten det må mottakeren slå opp hver enkelt for å se hva som
+   * faktisk ble bestilt, og det er nettopp der forskjellen mellom «modellen
+   * bommet» og «vi ba om feil ting» ligger.
+   */
+  const byggEksport = () => {
+    const rader = exercises.flatMap((ex) =>
+      [0, 1].map((fase) => {
+        const post = feedbackMap[`${ex.id}-${fase}`];
+        return {
+          øvelse: ex.id,
+          navn: ex.navn.nb,
+          fase,
+          status: post?.status ?? 'ubehandlet',
+          kommentar: post?.feedback ?? '',
+          vurdertAt: post?.updatedAt ?? null,
+          kameravinkel: ex.bildeVinkel ?? 'side',
+          valgtKandidat: valg[`${ex.id}-${fase}`] ?? null,
+          nåværendePrompt: ex.bildePrompt?.[String(fase)] ?? null,
+        };
+      })
+    );
+    return {
+      eksportertAt: new Date().toISOString(),
+      antall: rader.length,
+      godkjent: rader.filter((r) => r.status === 'godkjent').length,
+      tilRegenerering: rader.filter((r) => r.status === 'regenerer').length,
+      rader,
+    };
+  };
+
+  const handleEksporter = () => {
+    const blob = new Blob([JSON.stringify(byggEksport(), null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `kurering-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setSuccessMsg('Kurering eksportert som JSON.');
+    setTimeout(() => setSuccessMsg(null), 2500);
+  };
+
+  const handleKopier = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(byggEksport(), null, 2));
+      setSuccessMsg('Kurering kopiert til utklippstavlen.');
+    } catch {
+      // Utklippstavlen kan være blokkert. Da er nedlastingsknappen veien.
+      setSuccessMsg('Kunne ikke kopiere — bruk «Last ned» i stedet.');
+    }
+    setTimeout(() => setSuccessMsg(null), 2500);
   };
 
   const categories = ['alle', 'kroppsvekt', 'kettlebell', 'frivekt', 'mobilitet', 'kondisjon'];
@@ -134,6 +270,24 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
               Kuratér, gi tilbakemelding og bestill regenerering fra Kitor
             </p>
           </div>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          {/* Eksport, fordi kureringen ellers bare bor i denne nettleseren. */}
+          <button
+            onClick={handleEksporter}
+            title="Last ned kureringen som JSON, med hver øvelses nåværende prompt ved siden av kommentaren"
+            className="px-2.5 py-1.5 rounded-2xl bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all"
+          >
+            Last ned
+          </button>
+          <button
+            onClick={handleKopier}
+            title="Kopiér kureringen til utklippstavlen"
+            className="px-2.5 py-1.5 rounded-2xl bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all"
+          >
+            Kopiér
+          </button>
         </div>
 
         <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-2xl text-xs">
@@ -231,6 +385,52 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
                       />
                     </div>
 
+                    {/* Kandidater fra dybdebatchen — synlige bare der de finnes */}
+                    {(kandidater[key]?.length ?? 0) > 0 && (
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-zinc-400 flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-sky-400" />
+                          Velg kandidat ({kandidater[key].length} seeds) — klikk for stor visning
+                        </span>
+                        <div
+                          className="grid grid-cols-3 gap-1.5"
+                          role="group"
+                          aria-label={`Kandidatbilder for ${exercise.navn.nb}, fase ${phaseIdx + 1}`}
+                        >
+                          {kandidater[key].map((seed) => {
+                            const valgt = valg[key] === seed;
+                            return (
+                              <button
+                                key={seed}
+                                type="button"
+                                onClick={() => setForstørret(key)}
+                                aria-label={`Vis kandidat ${seed} for ${exercise.navn.nb}, fase ${phaseIdx + 1} i stor visning${valgt ? ' (valgt)' : ''}`}
+                                className={`relative rounded-lg overflow-hidden border-2 transition-all ${
+                                  valgt
+                                    ? 'border-sky-400 ring-2 ring-sky-500/40'
+                                    : 'border-zinc-800 hover:border-zinc-600'
+                                }`}
+                              >
+                                <img
+                                  src={`/images/kandidater/${key}-${seed}.png`}
+                                  alt=""
+                                  loading="lazy"
+                                  className="w-full h-28 object-cover"
+                                />
+                                <span
+                                  className={`absolute bottom-0 inset-x-0 text-[9px] font-bold py-0.5 ${
+                                    valgt ? 'bg-sky-500 text-white' : 'bg-black/70 text-zinc-300'
+                                  }`}
+                                >
+                                  {valgt ? `✓ ${seed}` : seed}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Tilbakemeldingsfelt */}
                     <div className="space-y-1">
                       <label htmlFor={`curator-feedback-${key}`} className="text-[10px] font-bold text-zinc-400 flex items-center gap-1">
@@ -277,6 +477,70 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
           </div>
         ))}
       </div>
+
+      {/* Stor visning: der valget faktisk tas */}
+      {forstørret && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Velg kandidat for ${forstørret}`}
+          className="fixed inset-0 z-50 bg-black/95 flex flex-col p-4"
+          onClick={() => setForstørret(null)}
+        >
+          <div className="flex items-center justify-between mb-3 shrink-0">
+            <div className="text-white">
+              <span className="font-black">{forstørret}</span>
+              <span className="text-xs text-zinc-400 ml-3">
+                Klikk et bilde for å velge · tast 1–3 · Esc lukker
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setForstørret(null)}
+              className="px-3 py-1.5 rounded-2xl bg-zinc-900 border border-zinc-700 text-xs font-bold text-zinc-200 hover:bg-zinc-800"
+            >
+              Lukk
+            </button>
+          </div>
+
+          {/* Kandidatene fyller hele høyden. object-contain, ikke cover:
+              en beskåret positur er nettopp det som ikke kan bedømmes. */}
+          <div
+            className="flex-1 grid gap-3 min-h-0"
+            style={{ gridTemplateColumns: `repeat(${(kandidater[forstørret] ?? []).length}, minmax(0, 1fr))` }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {(kandidater[forstørret] ?? []).map((seed, i) => {
+              const valgt = valg[forstørret] === seed;
+              return (
+                <button
+                  key={seed}
+                  type="button"
+                  onClick={() => velgKandidat(forstørret, seed)}
+                  aria-pressed={valgt}
+                  aria-label={`Velg kandidat ${seed}${valgt ? ' (valgt)' : ''}`}
+                  className={`relative rounded-2xl overflow-hidden border-2 bg-zinc-950 min-h-0 ${
+                    valgt ? 'border-sky-400 ring-4 ring-sky-500/40' : 'border-zinc-800 hover:border-zinc-500'
+                  }`}
+                >
+                  <img
+                    src={`/images/kandidater/${forstørret}-${seed}.png`}
+                    alt=""
+                    className="w-full h-full object-contain"
+                  />
+                  <span
+                    className={`absolute bottom-0 inset-x-0 text-xs font-bold py-1.5 ${
+                      valgt ? 'bg-sky-500 text-white' : 'bg-black/80 text-zinc-200'
+                    }`}
+                  >
+                    {valgt ? `✓ valgt — ${seed}` : `${i + 1}  ·  ${seed}`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

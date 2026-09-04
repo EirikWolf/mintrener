@@ -3,11 +3,21 @@ import {
   exportAllExercisePromptJobs,
   buildAstridFluxWorkflow,
   buildAstridWanVideoWorkflow,
+  seedForExercise,
 } from '../src/services/imagePromptService';
 import * as fs from 'fs';
 import * as path from 'path';
 
-export function exportBatchFiles() {
+/**
+ * Skriver batch-filene.
+ *
+ * `utDir` finnes fordi testen som kaller denne skrev rett inn i `scripts/` i
+ * repoet. Hver eneste testkjøring gjorde tre sporede filer skitne, og etter en
+ * stund committer noen dem sammen med noe helt annet. En test skal ikke endre
+ * arbeidstreet.
+ */
+export function exportBatchFiles(utDir?: string) {
+  const målmappe = utDir ?? path.resolve(process.cwd(), 'scripts');
   console.log(`===========================================================`);
   console.log(`📦 Eksporterer ComfyUI batch-filer for ${EXERCISE_LIBRARY.length} øvelser...`);
   console.log(`===========================================================`);
@@ -15,7 +25,7 @@ export function exportBatchFiles() {
   const jobs = exportAllExercisePromptJobs(EXERCISE_LIBRARY);
   
   // 1. Eksporter prompt-jobber payload (JSON)
-  const payloadPath = path.resolve(process.cwd(), 'scripts', 'comfyui_batch_payload.json');
+  const payloadPath = path.join(målmappe, 'comfyui_batch_payload.json');
   fs.writeFileSync(payloadPath, JSON.stringify(jobs, null, 2), 'utf-8');
   console.log(`✅ Genererte ${jobs.length} prompt-jobber til ${payloadPath}`);
 
@@ -24,9 +34,9 @@ export function exportBatchFiles() {
     exerciseId: job.exerciseId,
     phaseIndex: job.phaseIndex,
     outputFilename: job.outputFilename,
-    workflow: buildAstridFluxWorkflow(job.positivePrompt, 1000 + idx * 777, `${job.exerciseId}_step${job.phaseIndex}`),
+    workflow: buildAstridFluxWorkflow(job.positivePrompt, seedForExercise(job.exerciseId), `${job.exerciseId}_step${job.phaseIndex}`),
   }));
-  const fluxWorkflowsPath = path.resolve(process.cwd(), 'scripts', 'comfyui_flux_workflows.json');
+  const fluxWorkflowsPath = path.join(målmappe, 'comfyui_flux_workflows.json');
   fs.writeFileSync(fluxWorkflowsPath, JSON.stringify(fluxWorkflows, null, 2), 'utf-8');
   console.log(`✅ Genererte ${fluxWorkflows.length} Flux.1 API-workflows til ${fluxWorkflowsPath}`);
 
@@ -42,7 +52,7 @@ export function exportBatchFiles() {
       `${job.exerciseId}_motion_phase${job.phaseIndex}`
     ),
   }));
-  const wanWorkflowsPath = path.resolve(process.cwd(), 'scripts', 'comfyui_wan_workflows.json');
+  const wanWorkflowsPath = path.join(målmappe, 'comfyui_wan_workflows.json');
   fs.writeFileSync(wanWorkflowsPath, JSON.stringify(wanWorkflows, null, 2), 'utf-8');
   console.log(`✅ Genererte ${wanWorkflows.length} Wan2.1 Video API-workflows til ${wanWorkflowsPath}`);
   console.log(`🎉 Eksport fullført for alle 74 øvelser (148 faser)!`);

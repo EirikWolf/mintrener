@@ -2,8 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { EXERCISE_LIBRARY } from '../src/data/exercises';
 import {
-  ASTRID_FLUX_BASE_STYLE,
-  ASTRID_FLUX_OUTFIT_STYLE,
+  buildComfyPromptJob,
+  seedForExercise,
   formatViewAngle,
   buildAstridFluxWorkflow,
   buildAstridWanVideoWorkflow,
@@ -247,11 +247,30 @@ export async function runFullBatch(argv: string[] = process.argv.slice(2)) {
   const exerciseIdx = argv.indexOf('--exercise');
   const targetExerciseId = exerciseIdx !== -1 && argv[exerciseIdx + 1] ? argv[exerciseIdx + 1] : undefined;
 
+  // --exercises tar en kommaliste. Et forsøk er sjelden én øvelse: skal vi måle
+  // om en promptendring virker, trenger vi flere øvelser med samme egenskap.
+  const flereIdx = argv.indexOf('--exercises');
+  const flereIder = flereIdx !== -1 && argv[flereIdx + 1] ? argv[flereIdx + 1].split(',').map((x) => x.trim()) : undefined;
+
+  // --out lar et forsøk skrive et annet sted enn public/images/exercises.
+  // Uten den overskriver enhver prøve bildene som ligger i appen, og da er det
+  // ingen veg tilbake om prøven ble dårligere enn det vi hadde.
+  const outIdx = argv.indexOf('--out');
+  const outArg = outIdx !== -1 && argv[outIdx + 1] ? argv[outIdx + 1] : undefined;
+
   let exercises = EXERCISE_LIBRARY;
   if (targetExerciseId) {
     exercises = exercises.filter((e) => e.id === targetExerciseId);
     if (exercises.length === 0) {
       console.error(`❌ Fant ingen øvelse med id "${targetExerciseId}"`);
+      return;
+    }
+  }
+  if (flereIder) {
+    exercises = exercises.filter((e) => flereIder.includes(e.id));
+    const ukjente = flereIder.filter((id) => !EXERCISE_LIBRARY.some((e) => e.id === id));
+    if (ukjente.length > 0) {
+      console.error(`❌ Ukjente øvelses-id-er: ${ukjente.join(', ')}`);
       return;
     }
   }
@@ -271,16 +290,10 @@ export async function runFullBatch(argv: string[] = process.argv.slice(2)) {
     let validatedCount = 0;
     for (const exercise of exercises) {
       for (const phaseIdx of [0, 1]) {
-        const phaseKey = phaseIdx.toString();
-        const specificAction =
-          exercise.bildePrompt && exercise.bildePrompt[phaseKey]
-            ? exercise.bildePrompt[phaseKey]
-            : `${exercise.navn.en || exercise.navn.nb} step ${phaseIdx + 1}`;
-
         const viewAngleStr = formatViewAngle(exercise.bildeVinkel);
-        const promptText = `${ASTRID_FLUX_BASE_STYLE}, ${specificAction}, ${ASTRID_FLUX_OUTFIT_STYLE}, ${viewAngleStr}`;
+        const promptText = buildComfyPromptJob(exercise, phaseIdx).positivePrompt;
         const filenamePrefix = `${exercise.id}_step${phaseIdx}`;
-        const workflow = buildAstridFluxWorkflow(promptText, 42, filenamePrefix);
+        const workflow = buildAstridFluxWorkflow(promptText, seedForExercise(exercise.id), filenamePrefix);
 
         if (!workflow["5"]?.inputs?.text || !workflow["10"]?.inputs?.filename_prefix) {
           throw new Error(`Ugyldig workflow for ${exercise.id} fase ${phaseIdx}`);
@@ -303,7 +316,9 @@ export async function runFullBatch(argv: string[] = process.argv.slice(2)) {
       if (leaseToken) sendHeartbeat(token, leaseToken);
     }, 3 * 60 * 1000);
 
-    const outputDir = path.resolve(process.cwd(), 'public', 'images', 'exercises');
+    const outputDir = outArg
+      ? path.resolve(process.cwd(), outArg)
+      : path.resolve(process.cwd(), 'public', 'images', 'exercises');
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
     let total = 0;
@@ -318,25 +333,22 @@ export async function runFullBatch(argv: string[] = process.argv.slice(2)) {
           continue;
         }
 
-        const phaseKey = phaseIdx.toString();
-        const specificAction =
-          exercise.bildePrompt && exercise.bildePrompt[phaseKey]
-            ? exercise.bildePrompt[phaseKey]
-            : `${exercise.navn.en || exercise.navn.nb} step ${phaseIdx + 1}`;
-
-        const viewAngleStr = formatViewAngle(exercise.bildeVinkel);
-        const promptText = `${ASTRID_FLUX_BASE_STYLE}, ${specificAction}, ${ASTRID_FLUX_OUTFIT_STYLE}, ${viewAngleStr}`;
-        const seed = 200 + total * 888;
+        const promptText = buildComfyPromptJob(exercise, phaseIdx).positivePrompt;
+        // Seeden hører til ØVELSEN, ikke bildet. `200 + total * 888` ga fase 0 og
+        // fase 1 hver sin seed, og dermed ulik person i ulikt rom for start og
+        // slutt av samme øvelse — den mekaniske grunnen til at parene ikke hang
+        // sammen. seedForExercise er determinisk over øvelses-id-en.
+        const seed = seedForExercise(exercise.id);
         const filenamePrefix = `${exercise.id}_step${phaseIdx}`;
 
-        console.log(`\n▶️ [${total}/${totalJobs}] ${exercise.navn.nb} (Fase ${phaseIdx + 1}, ${viewAngleStr})...`);
+        console.log(`\n▶️ [${total}/${totalJobs}] ${exercise.navn.nb} (Fase ${phaseIdx + 1}, ${formatViewAngle(exercise.bildeVinkel)})...`);
         const workflow = buildAstridFluxWorkflow(promptText, seed, filenamePrefix);
         const promptId = await submitPrompt(token, workflow);
         console.log(`   ComfyUI ID: ${promptId}`);
 
         const imgInfo = await waitForCompletion(token, promptId, 120);
         await downloadImage(token, imgInfo, targetPath);
-        console.log(`   ✨ Lagret bilde til: public/images/exercises/${exercise.id}-${phaseIdx}.png`);
+        console.log(`   ✨ Lagret bilde til: ${path.relative(process.cwd(), targetPath)}`);
       }
     }
 
