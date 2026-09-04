@@ -575,12 +575,12 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
               </button>
             )}
 
-            {/* Storskjerm / TV-visning */}
+            {/* Storskjerm / TV-visning (44x44px touch target) */}
             <button
               onClick={() => setIsTvModeOpen(true)}
               aria-label="Storskjerm- og TV-visning"
               title="Vis på storskjerm / TV"
-              className="p-2 rounded-full border border-blue-800/80 bg-blue-950/80 text-blue-400 hover:text-white hover:bg-blue-900 transition-all active:scale-95 shadow-sm ring-1 ring-blue-500/20"
+              className="min-w-[44px] min-h-[44px] p-2 rounded-full border border-blue-800/80 bg-blue-950/80 text-blue-400 hover:text-white hover:bg-blue-900 transition-all active:scale-95 shadow-sm ring-1 ring-blue-500/20 flex items-center justify-center"
             >
               <Tv className="w-4 h-4" />
             </button>
@@ -591,7 +591,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
               role="switch"
               aria-checked={state.soundEnabled}
               aria-label="Lydvarsler"
-              className={`p-2 rounded-full border transition-all active:scale-95 ${
+              className={`min-w-[44px] min-h-[44px] p-2 rounded-full border transition-all active:scale-95 flex items-center justify-center ${
                 state.soundEnabled
                   ? 'bg-zinc-900 border-zinc-700 text-emerald-400 hover:bg-zinc-800'
                   : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-zinc-300'
@@ -606,7 +606,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
               role="switch"
               aria-checked={state.isLocked}
               aria-label="Skjermlås"
-              className={`p-2 rounded-full border transition-all active:scale-95 ${
+              className={`min-w-[44px] min-h-[44px] p-2 rounded-full border transition-all active:scale-95 flex items-center justify-center ${
                 state.isLocked
                   ? 'bg-rose-950/80 border-rose-800 text-rose-400'
                   : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-white'
@@ -874,16 +874,17 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             </span>
             <button
               onClick={handleShareCurrentWorkout}
+              aria-label="Del denne økten som lenke"
               title="Del denne økten som lenke"
-              className="p-1 rounded-md text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 transition-all shrink-0 active:scale-95 flex items-center gap-0.5"
+              className="min-w-[44px] min-h-[44px] -m-2 p-2 rounded-lg text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800/60 transition-all shrink-0 active:scale-95 flex items-center justify-center gap-1"
             >
               {shareCopied ? (
                 <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-0.5 animate-in fade-in">
-                  <Check className="w-3 h-3" />
+                  <Check className="w-3.5 h-3.5" />
                   Kopiert!
                 </span>
               ) : (
-                <Share2 className="w-3 h-3" />
+                <Share2 className="w-3.5 h-3.5" />
               )}
             </button>
           </div>

@@ -413,3 +413,45 @@ export async function playIntroThenExercise(exerciseId: string): Promise<boolean
   void audioBufferEngine.playSequence([keys.introKey, keys.nameKey]);
   return true;
 }
+
+/**
+ * Moonshot 2: Sjekker om den valgte personaens lydfiler er lastet ned og lagret i Cache API (offline-klar).
+ */
+export async function isPersonaAudioCached(personaId?: CoachPersonaId): Promise<boolean> {
+  const id = personaId || getActiveCoachPersona();
+  if (id === 'standard') return true; // Ingen egne filer
+  if (typeof window === 'undefined' || !('caches' in window)) return false;
+
+  try {
+    const urls = getPersonaBufferUrls(id);
+    if (urls.length === 0) return true;
+
+    // Sjekk både ServiceWorker-cachen 'persona-audio' og vanlige cacher
+    const cache = await caches.open('persona-audio');
+    const matched = await cache.match(urls[0]);
+    return Boolean(matched);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Moonshot 2: Laster ned og forhåndslagrer alle persona-lydklipp i Cache API for 100 % offline bruk.
+ */
+export async function downloadPersonaAudioForOffline(personaId?: CoachPersonaId): Promise<{ success: boolean; count: number }> {
+  const id = personaId || getActiveCoachPersona();
+  if (id === 'standard') return { success: true, count: 0 };
+  if (typeof window === 'undefined' || !('caches' in window)) return { success: false, count: 0 };
+
+  try {
+    const urls = getPersonaBufferUrls(id);
+    if (urls.length === 0) return { success: true, count: 0 };
+
+    const cache = await caches.open('persona-audio');
+    await cache.addAll(urls);
+    return { success: true, count: urls.length };
+  } catch (err) {
+    console.warn('Kunne ikke forhåndslaste persona-lyd til Cache API:', err);
+    return { success: false, count: 0 };
+  }
+}

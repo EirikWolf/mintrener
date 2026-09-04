@@ -40,6 +40,22 @@ export default defineConfig({
             purpose: 'maskable',
           },
         ],
+        shortcuts: [
+          {
+            name: 'Mikroøkt (Kontor)',
+            short_name: 'Mikroøkt',
+            description: 'Start en rask 90-sekunders mikroøkt ved skrivebordet',
+            url: '/?micro=planke-90',
+            icons: [{ src: '/pwa-192x192.svg', sizes: '192x192' }],
+          },
+          {
+            name: 'Tabata 4 min',
+            short_name: 'Tabata',
+            description: 'Start standard Tabata 20/10 intervalløkt',
+            url: '/?tabata=start',
+            icons: [{ src: '/pwa-192x192.svg', sizes: '192x192' }],
+          },
+        ],
       },
       workbox: {
         skipWaiting: true,

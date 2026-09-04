@@ -161,9 +161,9 @@ export const PwaInstallPromptModal: React.FC = () => {
         // navnet (WCAG 2.5.3).
         aria-label="Installer appen på hjemskjerm"
         title="Installer appen på hjemskjerm"
-        className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-800/80 text-[10px] font-bold text-emerald-400 hover:bg-emerald-900 transition-all flex items-center gap-1 shadow-sm active:scale-95"
+        className="min-h-[44px] min-w-[44px] px-2.5 py-1.5 rounded-full bg-emerald-950/80 border border-emerald-800/80 text-[11px] font-bold text-emerald-400 hover:bg-emerald-900 transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
       >
-        <Download className="w-2.5 h-2.5" />
+        <Download className="w-3.5 h-3.5" />
         <span className="hidden xs:inline">Installer</span>
       </button>
 

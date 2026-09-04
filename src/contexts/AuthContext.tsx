@@ -11,6 +11,7 @@ import {
 } from 'firebase/auth';
 import { auth, googleProvider } from '../services/firebase';
 import { syncUserProfile, deleteUserData } from '../services/firestoreService';
+import { clearAllLocalUserData } from '../constants/storageKeys';
 import { UserProfile } from '../types/models';
 
 interface AuthContextType {
@@ -109,12 +110,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      // 2. Slett selve auth-kontoen først eller parallelt
+      // 2. Slett brukerdata fra Firestore og lokal lagring (GDPR Art. 17) MENS brukeren fortsatt er autentisert
+      await deleteUserData(uid);
+
+      // 3. Slett selve auth-kontoen til slutt
       const currentUser = auth.currentUser || user;
       await deleteUser(currentUser);
-
-      // 3. Slett brukerdata fra Firestore og lokal lagring (GDPR Art. 17)
-      await deleteUserData(uid);
+    } catch (err) {
+      // Sikre at lokal lagring uansett er tømt selv om en nettverksfeil oppstod underveis
+      clearAllLocalUserData();
+      throw err;
     } finally {
       setUser(null);
       setProfile(null);

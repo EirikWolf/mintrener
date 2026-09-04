@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Play, Square, Check, Mic } from 'lucide-react';
+import { X, Play, Square, Check, Mic, Download, CheckCircle2 } from 'lucide-react';
 import {
   COACH_PERSONAS,
   CoachPersonaId,
@@ -7,7 +7,9 @@ import {
   setActiveCoachPersona,
   preloadPersonaAudio,
   playPersonaPreview,
-  stopCurrentPersonaAudio
+  stopCurrentPersonaAudio,
+  isPersonaAudioCached,
+  downloadPersonaAudioForOffline,
 } from '../../services/coachPersonaService';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 
@@ -18,9 +20,15 @@ interface CoachPersonaModalProps {
 export const CoachPersonaModal: React.FC<CoachPersonaModalProps> = ({ onClose }) => {
   const [selectedPersona, setSelectedPersona] = useState<CoachPersonaId>(getActiveCoachPersona);
   const [playingId, setPlayingId] = useState<CoachPersonaId | null>(null);
+  const [isCached, setIsCached] = useState<boolean>(true);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const modalRef = useRef<HTMLDivElement>(null);
 
   useFocusTrap(modalRef, { onClose });
+
+  useEffect(() => {
+    isPersonaAudioCached(selectedPersona).then(setIsCached);
+  }, [selectedPersona]);
 
   useEffect(() => {
     return () => {
@@ -31,12 +39,23 @@ export const CoachPersonaModal: React.FC<CoachPersonaModalProps> = ({ onClose })
   const handleSelect = (id: CoachPersonaId) => {
     setSelectedPersona(id);
     setActiveCoachPersona(id);
+    isPersonaAudioCached(id).then(setIsCached);
     // β6 (spec § 5, offline-garantien): varm hele personaens lydsett idet
     // valget tas — nedlastingene lander samtidig i workbox' runtime-cache, så
     // lydbanken er offline-tilgjengelig før første økt. Fire-and-forget:
     // preload feiler aldri kalleren (motoren logger og hopper over), UI
     // blokkeres ikke.
     void preloadPersonaAudio(id);
+  };
+
+  const handleDownloadOffline = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsDownloading(true);
+    const res = await downloadPersonaAudioForOffline(selectedPersona);
+    setIsDownloading(false);
+    if (res.success) {
+      setIsCached(true);
+    }
   };
 
   const handleTogglePreview = async (e: React.MouseEvent, id: CoachPersonaId) => {
@@ -186,6 +205,38 @@ export const CoachPersonaModal: React.FC<CoachPersonaModalProps> = ({ onClose })
             );
           })}
         </div>
+
+        {/* Moonshot 2: Offline stemmestatus */}
+        {selectedPersona !== 'standard' && (
+          <div className="p-3 rounded-2xl bg-zinc-950/80 border border-zinc-800 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              {isCached ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <Download className="w-4 h-4 text-amber-400 shrink-0" />
+              )}
+              <div className="min-w-0 text-[11px]">
+                <p className="font-bold text-white truncate">
+                  {isCached ? 'Klar for trening uten nett (offline)' : 'Ikke fullt lagret offline'}
+                </p>
+                <p className="text-[10px] text-zinc-400 truncate">
+                  {isCached ? 'Stemmeklippene ligger hurtigbufret på enheten.' : 'Laster ned ved første avspilling eller nå.'}
+                </p>
+              </div>
+            </div>
+
+            {!isCached && (
+              <button
+                type="button"
+                onClick={handleDownloadOffline}
+                disabled={isDownloading}
+                className="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-amber-500/30 text-[10px] font-bold shrink-0 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {isDownloading ? 'Laster ned...' : 'Last ned nå (1.8 MB)'}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Bunn-knapp */}
         <div className="pt-2 border-t border-zinc-800">

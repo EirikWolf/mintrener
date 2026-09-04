@@ -14,7 +14,8 @@ export interface ProgressionSuggestion {
  */
 export function checkAdaptiveProgression(
   workout: WorkoutTemplate,
-  history: CompletedWorkoutLog[]
+  history: CompletedWorkoutLog[],
+  options?: { hasActiveInjuryFilters?: boolean }
 ): ProgressionSuggestion | null {
   // Finn de 3 siste gjennomføringene av denne malen
   const matchingLogs = history
@@ -27,14 +28,37 @@ export function checkAdaptiveProgression(
   }
 
   const ratings = matchingLogs.map((l) => l.difficultyRating);
+  const hasInjuryFilters = options?.hasActiveInjuryFilters ?? false;
 
   // 1. Progresjon oppover: 2 "for_lett" på rad
-  // Treningsfysiologisk (Revisjon C § 4.3): Overload-prinsippet skal tas trinnvis.
-  // Hvis hviletid allerede er kort (<= 15s), øker vi arbeidstiden (+5s).
-  // Hvis hviletid er lang (> 20s), reduserer vi heller hviletiden (-2s, gulv 10s) for å øke tetthet.
-  // Vi øker ALDRI arbeidstid og reduserer hviletid i samme steg.
+  // Treningsfysiologisk (Revisjon D, Moonshot 4):
+  // Hvis brukeren har aktive skadeprofiler/unngå-filtre, skal "for lett" ALDRI automatisk
+  // øke arbeidstid (volum/leddbelastning), kun redusere hviletid ned til trygt gulv på 15s.
   if (ratings[0] === 'for_lett' && ratings[1] === 'for_lett') {
     const avgRest = workout.items.reduce((sum, item) => sum + item.restDurationSeconds, 0) / (workout.items.length || 1);
+    
+    // Ved aktive skader: Aldri øk arbeidstid. Hvis pause allerede er <= 15s, gir vi ingen overload.
+    if (hasInjuryFilters) {
+      if (avgRest <= 15) {
+        return null; // Allerede på fysiologisk trygt gulv for skåneregime
+      }
+      const adaptedItems = workout.items.map((item) => ({
+        ...item,
+        restDurationSeconds: Math.max(item.restDurationSeconds - 2, 15),
+      }));
+
+      return {
+        type: 'increase',
+        title: '⚡ Trygg tilpasning (skånemodus)',
+        reason: 'Du opplever økten som lett. Siden du har aktive skadefiltre, øker vi ikke arbeidstiden, men korter ned pausen (gulv 15s).',
+        adaptedWorkout: {
+          ...workout,
+          name: `${workout.name} (Skånsom +1)`,
+          items: adaptedItems,
+        },
+      };
+    }
+
     const shouldCutRest = avgRest > 20;
 
     const adaptedItems = workout.items.map((item) => {

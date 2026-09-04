@@ -13,6 +13,14 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    // Hjelpefunksjon: Sjekk om brukeren er registrert system-administrator
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email in ['eirik.wolfenstein@gmail.com', 'eirik@wolfenstein.no', 'admin@mintrener.no']
+        || exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
     // Brukerprofiler og underkolleksjoner (historikk, egne maler, egne øvelser, styrkelogg)
     match /users/{userId} {
       allow read, write: if isOwner(userId);
@@ -41,7 +49,15 @@ service cloud.firestore {
     // Felles øvelsesbibliotek: Alle kan lese, kun backend/admin kan endre
     match /exercises/{exerciseId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
+    }
+
+    // Organisasjoner og bedriftsavtaler (B2B, Revisjon C)
+    match /organizations/{orgId} {
+      // Autentiserte brukere kan lese organisasjonsdata (f.eks. hente lag/innstillinger ved match på kode/ID)
+      // Kun system-administratorer kan opprette, oppdatere eller slette organisasjonsavtaler
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
     // Grupperom: Sikret tilgangskontroll
@@ -249,8 +265,7 @@ service cloud.firestore {
     // som ikke er med i skrivingen — samme garanti, brøkdelen av kostnaden.
     match /global_stats/engagement {
       function engagementFields() {
-        return ['onboarding_started', 'onboarding_personaChosen_haugesund',
-          'onboarding_personaChosen_romsdal', 'onboarding_personaChosen_hardcore',
+        return ['onboarding_started', 'onboarding_personaChosen_hardcore',
           'onboarding_personaChosen_boyband', 'onboarding_personaChosen_standard',
           'onboarding_goalSet', 'onboarding_firstWorkoutStarted', 'onboarding_skipped',
           'streak_weekCompleted', 'streak_insuranceUsed', 'streak_broken',

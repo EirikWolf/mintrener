@@ -128,9 +128,9 @@ describe('Startskjermen — én inngang per funksjon', () => {
     fireEvent.click(screen.getByRole('button', { name: /Flere verktøy/i }));
 
     // Begge het «AI» med samme Sparkles-ikon og lå ved siden av hverandre.
-    // Navnene må skille dem; ikonene gjør resten.
+    // Navnene må skille dem; ikonene gjør resten. Astrid er coach, Smart øktbygger genererer økt.
     const coach = screen.getByRole('button', { name: /Astrid/i });
-    const generator = screen.getByRole('button', { name: /Lag økt/i });
+    const generator = screen.getByRole('button', { name: /Smart øktbygger/i });
     expect(coach).not.toBe(generator);
   });
 });

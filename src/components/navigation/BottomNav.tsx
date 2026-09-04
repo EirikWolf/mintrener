@@ -25,7 +25,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           onClick={() => onTabChange('timer')}
           aria-label="I dag"
           aria-current={activeTab === 'timer' ? 'page' : undefined}
-          className={`flex flex-col items-center gap-0.5 py-1 px-1.5 rounded-xl transition-all ${
+          className={`flex flex-col items-center justify-center gap-0.5 min-h-[48px] min-w-[48px] py-1.5 px-2 rounded-xl transition-all ${
             activeTab === 'timer'
               ? 'text-emerald-400 font-bold'
               : 'text-zinc-400 hover:text-zinc-300'
@@ -47,7 +47,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           // Byggeren har ingen egen fane lenger; den nås fra Program og hører
           // til der. Uten dette ville ingen fane vært markert mens man bygger.
           aria-current={activeTab === 'programs' || activeTab === 'builder' ? 'page' : undefined}
-          className={`flex flex-col items-center gap-0.5 py-1 px-1.5 rounded-xl transition-all ${
+          className={`flex flex-col items-center justify-center gap-0.5 min-h-[48px] min-w-[48px] py-1.5 px-2 rounded-xl transition-all ${
             activeTab === 'programs' || activeTab === 'builder'
               ? 'text-emerald-400 font-bold'
               : 'text-zinc-400 hover:text-zinc-300'
@@ -62,7 +62,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           onClick={() => onTabChange('exercises')}
           aria-label="Øvelser"
           aria-current={activeTab === 'exercises' ? 'page' : undefined}
-          className={`flex flex-col items-center gap-0.5 py-1 px-1.5 rounded-xl transition-all ${
+          className={`flex flex-col items-center justify-center gap-0.5 min-h-[48px] min-w-[48px] py-1.5 px-2 rounded-xl transition-all ${
             activeTab === 'exercises'
               ? 'text-emerald-400 font-bold'
               : 'text-zinc-400 hover:text-zinc-300'
@@ -77,7 +77,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           onClick={() => onTabChange('history')}
           aria-label="Historikk"
           aria-current={activeTab === 'history' ? 'page' : undefined}
-          className={`flex flex-col items-center gap-0.5 py-1 px-1.5 rounded-xl transition-all ${
+          className={`flex flex-col items-center justify-center gap-0.5 min-h-[48px] min-w-[48px] py-1.5 px-2 rounded-xl transition-all ${
             activeTab === 'history'
               ? 'text-emerald-400 font-bold'
               : 'text-zinc-400 hover:text-zinc-300'
@@ -92,7 +92,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           onClick={() => onTabChange('settings')}
           aria-label="Mer"
           aria-current={activeTab === 'settings' ? 'page' : undefined}
-          className={`flex flex-col items-center gap-0.5 py-1 px-1.5 rounded-xl transition-all ${
+          className={`flex flex-col items-center justify-center gap-0.5 min-h-[48px] min-w-[48px] py-1.5 px-2 rounded-xl transition-all ${
             activeTab === 'settings'
               ? 'text-emerald-400 font-bold'
               : 'text-zinc-400 hover:text-zinc-300'

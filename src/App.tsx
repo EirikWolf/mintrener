@@ -18,6 +18,9 @@ const WorkoutBuilderView = React.lazy(() =>
   import('./components/builder/WorkoutBuilderView').then((m) => ({ default: m.WorkoutBuilderView }))
 );
 import { BottomNav, AppTab } from './components/navigation/BottomNav';
+import { MicroTimerDisplay } from './components/micro/MicroTimerDisplay';
+import { EXERCISE_LIBRARY } from './data/exercises';
+import { ExerciseItem } from './schemas/exerciseSchema';
 import { ErrorToast } from './components/feedback/ErrorToast';
 import { showErrorToast, showSuccessToast } from './services/errorToastService';
 import { registrerFullførtFerdighetsøkt } from './services/skillTreeService';
@@ -81,12 +84,16 @@ export function App() {
     return () => window.removeEventListener('open-welcome-onboarding', openWelcome);
   }, []);
 
-  // 1-klikks onboarding fra URL: ?tester=KODE og ?org=KODE
+  // 1-klikks onboarding og PWA-snarveier fra URL: ?tester=, ?org=, ?micro= og ?tabata= (Moonshot 1)
+  const [directMicroExercise, setDirectMicroExercise] = useState<{ exercise: ExerciseItem; duration: number } | null>(null);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const testerParam = params.get('tester');
     const orgParam = params.get('org');
+    const microParam = params.get('micro');
+    const tabataParam = params.get('tabata');
 
     if (testerParam) {
       const res = verifyAndSetTesterCode(testerParam);
@@ -106,11 +113,24 @@ export function App() {
       }
     }
 
-    if (testerParam || orgParam) {
+    if (microParam) {
+      const ex = EXERCISE_LIBRARY.find((e) => e.id === 'planke') || EXERCISE_LIBRARY[0];
+      if (ex) {
+        setDirectMicroExercise({ exercise: ex, duration: 90 });
+      }
+    }
+
+    if (tabataParam) {
+      handleSelectWorkout(TABATA_WORKOUT);
+    }
+
+    if (testerParam || orgParam || microParam || tabataParam) {
       try {
         const clean = new URL(window.location.href);
         clean.searchParams.delete('tester');
         clean.searchParams.delete('org');
+        clean.searchParams.delete('micro');
+        clean.searchParams.delete('tabata');
         window.history.replaceState({}, document.title, clean.toString());
       } catch {}
     }
@@ -398,6 +418,15 @@ export function App() {
             setUserProfiles(newState);
             setShowOnboarding(false);
           }}
+        />
+      )}
+
+      {/* Moonshot 1: Direkte mikroøkt fra hjemskjerm/snarvei */}
+      {directMicroExercise && (
+        <MicroTimerDisplay
+          exercise={directMicroExercise.exercise}
+          initialDurationSeconds={directMicroExercise.duration}
+          onClose={() => setDirectMicroExercise(null)}
         />
       )}
 

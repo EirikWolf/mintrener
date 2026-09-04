@@ -547,46 +547,13 @@ export function getIndividualLeaderboard(orgId: string, currentUserName?: string
   const currentTeam = org.teams?.find((t) => t.id === currentProfile?.teamId);
   const teamName = currentTeam?.name || 'Avdeling';
 
-  const mockPeers: IndividualScore[] = [
-    {
-      id: 'peer-1',
-      displayName: 'Kari Nordmann',
-      teamName: org.teams?.[0]?.name || 'Oslo',
-      avatarIcon: '🔥',
-      isAnonymous: false,
-      points: 210,
-      minutes: 105,
-      sessions: 8,
-    },
-    {
-      id: 'peer-2',
-      displayName: 'Plankemesteren #14',
-      teamName: org.teams?.[1]?.name || 'Bergen',
-      avatarIcon: '🦁',
-      isAnonymous: true,
-      points: 175,
-      minutes: 85,
-      sessions: 6,
-    },
-    {
-      id: 'peer-3',
-      displayName: 'Morgenfuglen #07',
-      teamName: org.teams?.[0]?.name || 'Oslo',
-      avatarIcon: '☕',
-      isAnonymous: true,
-      points: 140,
-      minutes: 70,
-      sessions: 5,
-    },
-  ];
-
   if (!currentProfile) {
-    return mockPeers.sort((a, b) => b.points - a.points);
+    return [];
   }
 
   // Hvis brukeren har valgt 'skjult', skal de IKKE vises på den individuelle tavlen
   if (currentProfile.privacyMode === 'skjult') {
-    return mockPeers.sort((a, b) => b.points - a.points);
+    return [];
   }
 
   const isAnon = currentProfile.privacyMode === 'anonym';
@@ -605,5 +572,5 @@ export function getIndividualLeaderboard(orgId: string, currentUserName?: string
     sessions: currentProfile.sessions,
   };
 
-  return [myScore, ...mockPeers].sort((a, b) => b.points - a.points);
+  return [myScore];
 }

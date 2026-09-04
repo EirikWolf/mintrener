@@ -26,6 +26,8 @@ import {
   UserCheck,
   Medal,
   Sparkles,
+  Share2,
+  Check,
 } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 
@@ -42,6 +44,7 @@ export const OrganizationPortalModal: React.FC<OrganizationPortalModalProps> = (
   const [inputCode, setInputCode] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [copiedShareLink, setCopiedShareLink] = useState(false);
 
   // Konkurranseprofil for innlogget / aktiv bruker
   const [profile, setProfile] = useState<MemberCompetitionProfile | null>(() =>
@@ -310,44 +313,80 @@ export const OrganizationPortalModal: React.FC<OrganizationPortalModalProps> = (
                     </div>
 
                     <div className="space-y-1.5">
-                      {individualLeaderboard.map((item) => {
-                        const isMe = profile && item.id === profile.userId;
-                        return (
-                          <div
-                            key={item.id}
-                            className={`p-2 rounded-xl flex items-center justify-between border ${
-                              isMe
-                                ? 'bg-emerald-950/30 border-emerald-500/50'
-                                : 'bg-zinc-950/70 border-zinc-850'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs">{item.avatarIcon}</span>
-                              <div>
-                                <div className="flex items-center gap-1">
-                                  <p className="font-bold text-white text-xs">{item.displayName}</p>
-                                  {isMe && (
-                                    <span className="text-[9px] px-1 rounded bg-emerald-500/20 text-emerald-300">
-                                      Deg
-                                    </span>
-                                  )}
-                                  {item.isAnonymous && (
-                                    <span className="text-[8px] text-zinc-400">(anonym)</span>
-                                  )}
+                      {individualLeaderboard.length === 0 ? (
+                        <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-850 text-center space-y-2">
+                          <p className="text-xs text-zinc-300 font-medium">
+                            Ingen har registrert økter denne uken ennå.
+                          </p>
+                          <p className="text-[11px] text-zinc-400">
+                            Gjennomfør en trenings- eller mikroøkt for å ta ledelsen!
+                          </p>
+                        </div>
+                      ) : (
+                        individualLeaderboard.map((item) => {
+                          const isMe = profile && item.id === profile.userId;
+                          return (
+                            <div
+                              key={item.id}
+                              className={`p-2 rounded-xl flex items-center justify-between border ${
+                                isMe
+                                  ? 'bg-emerald-950/30 border-emerald-500/50'
+                                  : 'bg-zinc-950/70 border-zinc-850'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs">{item.avatarIcon}</span>
+                                <div>
+                                  <div className="flex items-center gap-1">
+                                    <p className="font-bold text-white text-xs">{item.displayName}</p>
+                                    {isMe && (
+                                      <span className="text-[9px] px-1 rounded bg-emerald-500/20 text-emerald-300">
+                                        Deg
+                                      </span>
+                                    )}
+                                    {item.isAnonymous && (
+                                      <span className="text-[8px] text-zinc-400">(anonym)</span>
+                                    )}
+                                  </div>
+                                  <p className="text-[9px] text-zinc-400">
+                                    {item.teamName} · {item.minutes} min
+                                  </p>
                                 </div>
-                                <p className="text-[9px] text-zinc-400">
-                                  {item.teamName} · {item.minutes} min
-                                </p>
+                              </div>
+                              <div className="text-right">
+                                <span className="font-bold text-emerald-400 text-xs">
+                                  {item.points} p
+                                </span>
                               </div>
                             </div>
-                            <div className="text-right">
-                              <span className="font-bold text-emerald-400 text-xs">
-                                {item.points} p
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })
+                      )}
+
+                      {individualLeaderboard.length <= 1 && (
+                        <div className="mt-3 p-3 rounded-xl bg-blue-950/20 border border-blue-800/40 text-center space-y-2">
+                          <p className="text-xs text-blue-200 font-bold">
+                            {individualLeaderboard.length === 1 ? 'Du er først ute på laget denne uka! 🏆' : 'Bli den første på ledertavlen!'}
+                          </p>
+                          <p className="text-[11px] text-zinc-400">
+                            Inviter en kollega til å bli med med organisasjonskoden <span className="font-mono text-white font-bold">{org.joinCode}</span>.
+                          </p>
+                          <button
+                            onClick={() => {
+                              const shareUrl = `${window.location.origin}${window.location.pathname}?org=${encodeURIComponent(org.joinCode)}`;
+                              if (navigator.clipboard) {
+                                navigator.clipboard.writeText(shareUrl);
+                                setCopiedShareLink(true);
+                                setTimeout(() => setCopiedShareLink(false), 3000);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all active:scale-95 shadow-sm"
+                          >
+                            {copiedShareLink ? <Check className="w-3.5 h-3.5 text-white" /> : <Share2 className="w-3.5 h-3.5" />}
+                            <span>{copiedShareLink ? 'Invitasjonslenke kopiert!' : 'Del laglenke med kollega'}</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {profile?.privacyMode === 'skjult' && (

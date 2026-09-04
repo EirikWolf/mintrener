@@ -159,4 +159,104 @@ describe('Adaptive Progression Service', () => {
 
     expect(checkAdaptiveProgression(sampleWorkout, history)).toBeNull();
   });
+
+  describe('Moonshot 4: Skadefilter-beskyttelse i progresjonsmotoren', () => {
+    it('øker aldri arbeidstid når brukeren har aktive skadefiltre, men kutter pause til gulv 15s', () => {
+      const history: CompletedWorkoutLog[] = [
+        {
+          id: 'l1',
+          userId: 'u1',
+          workoutId: 'tabata-long-rest',
+          workoutName: 'Tabata Pause',
+          workoutType: 'tabata',
+          completedAt: new Date(Date.now() - 1000).toISOString(),
+          durationSeconds: 240,
+          roundsCompleted: 1,
+          totalRounds: 1,
+          difficultyRating: 'for_lett',
+        },
+        {
+          id: 'l2',
+          userId: 'u1',
+          workoutId: 'tabata-long-rest',
+          workoutName: 'Tabata Pause',
+          workoutType: 'tabata',
+          completedAt: new Date(Date.now() - 200000).toISOString(),
+          durationSeconds: 240,
+          roundsCompleted: 1,
+          totalRounds: 1,
+          difficultyRating: 'for_lett',
+        },
+      ];
+
+      const workoutWithRest: WorkoutTemplate = {
+        ...sampleWorkout,
+        id: 'tabata-long-rest',
+        name: 'Tabata Pause',
+        items: [
+          {
+            id: 'i1',
+            exercise: { id: 'glute-bridge', name: 'Seteløft', category: 'bodyweight' },
+            workDurationSeconds: 20,
+            restDurationSeconds: 25,
+          },
+        ],
+      };
+
+      const suggestion = checkAdaptiveProgression(workoutWithRest, history, { hasActiveInjuryFilters: true });
+      expect(suggestion).not.toBeNull();
+      expect(suggestion?.type).toBe('increase');
+      expect(suggestion?.adaptedWorkout.name).toContain('Skånsom +1');
+      // Arbeidstid skal IKKE røres ved skaderegime!
+      expect(suggestion?.adaptedWorkout.items[0].workDurationSeconds).toBe(20);
+      // Hviletid kuttes med 2 sekunder
+      expect(suggestion?.adaptedWorkout.items[0].restDurationSeconds).toBe(23);
+    });
+
+    it('gir null og overbelaster ikke hvis hviletid allerede er på gulvet 15s under skadefilter', () => {
+      const history: CompletedWorkoutLog[] = [
+        {
+          id: 'l1',
+          userId: 'u1',
+          workoutId: 'tabata-floor',
+          workoutName: 'Tabata Gulv',
+          workoutType: 'tabata',
+          completedAt: new Date(Date.now() - 1000).toISOString(),
+          durationSeconds: 240,
+          roundsCompleted: 1,
+          totalRounds: 1,
+          difficultyRating: 'for_lett',
+        },
+        {
+          id: 'l2',
+          userId: 'u1',
+          workoutId: 'tabata-floor',
+          workoutName: 'Tabata Gulv',
+          workoutType: 'tabata',
+          completedAt: new Date(Date.now() - 200000).toISOString(),
+          durationSeconds: 240,
+          roundsCompleted: 1,
+          totalRounds: 1,
+          difficultyRating: 'for_lett',
+        },
+      ];
+
+      const workoutAtFloor: WorkoutTemplate = {
+        ...sampleWorkout,
+        id: 'tabata-floor',
+        name: 'Tabata Gulv',
+        items: [
+          {
+            id: 'i1',
+            exercise: { id: 'glute-bridge', name: 'Seteløft', category: 'bodyweight' },
+            workDurationSeconds: 20,
+            restDurationSeconds: 15,
+          },
+        ],
+      };
+
+      // Ved skadefilter og allerede 15s hvile skal ingenting presses videre
+      expect(checkAdaptiveProgression(workoutAtFloor, history, { hasActiveInjuryFilters: true })).toBeNull();
+    });
+  });
 });
