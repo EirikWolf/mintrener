@@ -52,11 +52,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Organisasjoner og bedriftsavtaler (B2B, Revisjon C)
+    // Organisasjoner og bedriftsavtaler (B2B, Revisjon C & D)
     match /organizations/{orgId} {
-      // Autentiserte brukere kan lese organisasjonsdata (f.eks. hente lag/innstillinger ved match på kode/ID)
-      // Kun system-administratorer kan opprette, oppdatere eller slette organisasjonsavtaler
-      allow read: if isAuthenticated();
+      // Kun administratorer kan liste ut samtlige organisasjonsavtaler (hindrer skraping av B2B-data/faktura/kontaktinfo).
+      // Vanlige autentiserte brukere kan kun hente enkeltavtaler direkte (get) dersom avtalen er aktiv.
+      allow list: if isAdmin();
+      allow get: if isAdmin() || (isAuthenticated() && resource.data.isActive == true);
       allow write: if isAdmin();
     }
 

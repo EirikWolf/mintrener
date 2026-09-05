@@ -11,7 +11,7 @@
  * overskriving (`allow write: if true`) og at rooms-join manglet auth.
  * Testene her låser inn herdingen og fungerer som regresjonsvern.
  */
-import { describe, it, beforeAll, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
@@ -447,8 +447,9 @@ describe('clock_sync (regresjonsvern for q1-herdingen)', () => {
   });
 });
 
-describe('organizations (Fase 2 sikkerhet & B2B-regler)', () => {
+describe('organizations (Fase 2 sikkerhet & B2B-regler, Revisjon D herding)', () => {
   const ORG_ID = 'org-test-bedrift';
+  const INACTIVE_ORG_ID = 'org-inaktiv-bedrift';
 
   beforeEach(async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
@@ -458,6 +459,13 @@ describe('organizations (Fase 2 sikkerhet & B2B-regler)', () => {
         name: 'Test Bedrift AS',
         joinCode: 'BEDRIFT26',
         isActive: true,
+        billing: { invoiceEmail: 'faktura@bedrift.no', accountNumber: '1234.56.78901' },
+      });
+      await setDoc(doc(db, 'organizations', INACTIVE_ORG_ID), {
+        id: INACTIVE_ORG_ID,
+        name: 'Inaktiv Bedrift AS',
+        joinCode: 'GAMMEL25',
+        isActive: false,
       });
     });
   });
@@ -467,9 +475,29 @@ describe('organizations (Fase 2 sikkerhet & B2B-regler)', () => {
     await assertFails(getDoc(doc(db, 'organizations', ORG_ID)));
   });
 
-  it('POSITIV: autentisert bruker KAN lese organisasjoner', async () => {
+  it('NEGATIV: vanlig autentisert bruker kan IKKE liste samtlige organisasjoner (hindrer B2B-skraping)', async () => {
+    const db = testEnv.authenticatedContext('vanlig-bruker-uid').firestore();
+    await assertFails(getDocs(collection(db, 'organizations')));
+  });
+
+  it('POSITIV: administrator KAN liste samtlige organisasjoner', async () => {
+    const db = testEnv.authenticatedContext('admin-uid', { email: 'admin@mintrener.no' }).firestore();
+    await assertSucceeds(getDocs(collection(db, 'organizations')));
+  });
+
+  it('POSITIV: autentisert bruker KAN hente (get) en aktiv organisasjon direkte', async () => {
     const db = testEnv.authenticatedContext('vanlig-bruker-uid').firestore();
     await assertSucceeds(getDoc(doc(db, 'organizations', ORG_ID)));
+  });
+
+  it('NEGATIV: autentisert bruker kan IKKE hente (get) en deaktivert organisasjon', async () => {
+    const db = testEnv.authenticatedContext('vanlig-bruker-uid').firestore();
+    await assertFails(getDoc(doc(db, 'organizations', INACTIVE_ORG_ID)));
+  });
+
+  it('POSITIV: administrator KAN hente en deaktivert organisasjon', async () => {
+    const db = testEnv.authenticatedContext('admin-uid', { email: 'admin@mintrener.no' }).firestore();
+    await assertSucceeds(getDoc(doc(db, 'organizations', INACTIVE_ORG_ID)));
   });
 
   it('NEGATIV: vanlig bruker kan IKKE opprette eller endre en organisasjon', async () => {
@@ -493,6 +521,100 @@ describe('organizations (Fase 2 sikkerhet & B2B-regler)', () => {
         isActive: true,
       })
     );
+  });
+});
+
+describe('users og GDPR Art. 17 sletting (Revisjon D bevis)', () => {
+  const USER_ID = 'test-bruker-123';
+  const OTHER_USER_ID = 'annen-bruker-456';
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      // Opprett profil
+      await setDoc(doc(db, 'users', USER_ID), {
+        uid: USER_ID,
+        email: 'bruker@test.no',
+        displayName: 'Test Bruker',
+      });
+      // Opprett 5 underkolleksjoner
+      await setDoc(doc(db, 'users', USER_ID, 'history', 'hist-1'), {
+        id: 'hist-1',
+        workoutName: 'Tabata',
+      });
+      await setDoc(doc(db, 'users', USER_ID, 'workouts', 'custom-1'), {
+        id: 'custom-1',
+        name: 'Min Egendefinerte Økt',
+      });
+      await setDoc(doc(db, 'users', USER_ID, 'custom_exercises', 'ex-1'), {
+        id: 'ex-1',
+        name: 'Kaffepause-strekk',
+      });
+      await setDoc(doc(db, 'users', USER_ID, 'strength_logs', 'log-1'), {
+        id: 'log-1',
+        exerciseId: 'push-ups',
+        weight: 0,
+      });
+      await setDoc(doc(db, 'users', USER_ID, 'personal_records', 'pr-1'), {
+        id: 'pr-1',
+        exerciseId: 'planke',
+        bestHoldSeconds: 120,
+      });
+    });
+  });
+
+  it('POSITIV: autentisert eier KAN lese og slette alle sine 5 underkolleksjoner og brukerprofil', async () => {
+    const db = testEnv.authenticatedContext(USER_ID).firestore();
+
+    // 1. Verifiser at data kan leses av eier
+    const historySnap = await getDocs(collection(db, 'users', USER_ID, 'history'));
+    expect(historySnap.docs.length).toBe(1);
+
+    // 2. Slett alle underdokumenter (nøyaktig slik deleteUserData gjør)
+    await assertSucceeds(deleteDoc(doc(db, 'users', USER_ID, 'history', 'hist-1')));
+    await assertSucceeds(deleteDoc(doc(db, 'users', USER_ID, 'workouts', 'custom-1')));
+    await assertSucceeds(deleteDoc(doc(db, 'users', USER_ID, 'custom_exercises', 'ex-1')));
+    await assertSucceeds(deleteDoc(doc(db, 'users', USER_ID, 'strength_logs', 'log-1')));
+    await assertSucceeds(deleteDoc(doc(db, 'users', USER_ID, 'personal_records', 'pr-1')));
+
+    // 3. Slett brukerprofil-dokumentet
+    await assertSucceeds(deleteDoc(doc(db, 'users', USER_ID)));
+
+    // 4. BEVIS: Verifiser direkte mot databasen at alle dokumenter faktisk er borte
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const adminDb = ctx.firestore();
+      const profileSnap = await getDoc(doc(adminDb, 'users', USER_ID));
+      expect(profileSnap.exists()).toBe(false);
+
+      const hSnap = await getDocs(collection(adminDb, 'users', USER_ID, 'history'));
+      expect(hSnap.empty).toBe(true);
+
+      const wSnap = await getDocs(collection(adminDb, 'users', USER_ID, 'workouts'));
+      expect(wSnap.empty).toBe(true);
+
+      const cSnap = await getDocs(collection(adminDb, 'users', USER_ID, 'custom_exercises'));
+      expect(cSnap.empty).toBe(true);
+
+      const sSnap = await getDocs(collection(adminDb, 'users', USER_ID, 'strength_logs'));
+      expect(sSnap.empty).toBe(true);
+
+      const prSnap = await getDocs(collection(adminDb, 'users', USER_ID, 'personal_records'));
+      expect(prSnap.empty).toBe(true);
+    });
+  });
+
+  it('NEGATIV: annen bruker kan IKKE slette en fremmed brukers data', async () => {
+    const db = testEnv.authenticatedContext(OTHER_USER_ID).firestore();
+
+    await assertFails(deleteDoc(doc(db, 'users', USER_ID, 'history', 'hist-1')));
+    await assertFails(deleteDoc(doc(db, 'users', USER_ID)));
+  });
+
+  it('NEGATIV: uautentisert klient kan IKKE slette brukerdata (beviser hvorfor deleteUserData må kalles før deleteUser)', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+
+    await assertFails(deleteDoc(doc(db, 'users', USER_ID, 'history', 'hist-1')));
+    await assertFails(deleteDoc(doc(db, 'users', USER_ID)));
   });
 });
 

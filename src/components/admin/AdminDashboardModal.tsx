@@ -21,6 +21,7 @@ import {
 } from '../../services/testerService';
 import {
   getAllAvailableOrganizations,
+  syncOrganizationsFromFirestore,
   createAdminOrganization,
   updateAdminOrganization,
   deleteAdminOrganization,
@@ -127,6 +128,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ onClos
     const handleOrgs = () => {
       setOrganizations(getAllAvailableOrganizations());
     };
+
+    // Synkroniser organisasjoner fra Firestore for admin ved åpning
+    syncOrganizationsFromFirestore().catch(() => {});
 
     window.addEventListener('exercise-contributions-changed', handleContribs);
     window.addEventListener('approved-images-changed', handleContribs);
