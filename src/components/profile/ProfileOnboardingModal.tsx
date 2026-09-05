@@ -180,7 +180,7 @@ export const ProfileOnboardingModal: React.FC<ProfileOnboardingModalProps> = ({
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-medium truncate">{p.name.nb}</div>
-                    <span className="text-[9px] text-zinc-600 font-bold uppercase">Kommer</span>
+                    <span className="text-[9px] text-zinc-400 font-bold uppercase">Kommer</span>
                   </div>
                 </div>
               ))}

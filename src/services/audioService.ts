@@ -49,6 +49,29 @@ class AudioService {
   }
 
   /**
+   * Sjekker om AudioContext er i suspended-tilstand (f.eks. på iOS før gesture)
+   */
+  public isContextSuspended(): boolean {
+    try {
+      return this.ctx?.state === 'suspended';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Sjekker om gjeldende enhet er iOS / iPadOS
+   */
+  public isIosDevice(): boolean {
+    if (typeof window === 'undefined') return false;
+    const ua = window.navigator.userAgent.toLowerCase();
+    return (
+      /iphone|ipad|ipod/.test(ua) ||
+      (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1)
+    );
+  }
+
+  /**
    * Spiller en enkel ren tone med volumkurve (attack/decay) for å unngå "klikkelyder".
    */
   private playTone(freq: number, duration: number, type: OscillatorType = 'sine', volume = 0.5, startTimeOffset = 0) {

@@ -65,6 +65,7 @@ import {
   COACH_PERSONAS,
   getActiveCoachPersona,
   CoachPersonaId,
+  isPersonaAudioCached,
 } from '../../services/coachPersonaService';
 import { getWeeklyGoal, setWeeklyGoal } from '../../services/weeklyGoalService';
 import { getUserBirthYear, setUserBirthYear, getUserMaxHeartRate } from '../../services/heartRateZoneService';
@@ -192,6 +193,11 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
   const testerAccess = isTesterRoleActive();
 
   const currentPersona = COACH_PERSONAS.find(p => p.id === currentPersonaId) || COACH_PERSONAS[0];
+  const [isPersonaCached, setIsPersonaCached] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    isPersonaAudioCached(currentPersona.id).then(setIsPersonaCached);
+  }, [currentPersona.id, isCoachPersonaModalOpen]);
 
   React.useEffect(() => {
     const handleProfileChange = () => {
@@ -362,9 +368,27 @@ export const SettingsMoreView: React.FC<SettingsMoreViewProps> = ({
               <Mic className="w-4 h-4 text-amber-400" />
               <div>
                 <p className="text-xs font-bold text-white">Trenerstemme & Dialekt</p>
-                <p className="text-[10px] text-zinc-400">
-                  {currentPersona.icon} {currentPersona.name} ({currentPersona.badge})
-                </p>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="text-[10px] text-zinc-400">
+                    {currentPersona.icon} {currentPersona.name} ({currentPersona.badge})
+                  </p>
+                  <span aria-hidden="true" className="text-zinc-500 text-[10px]">·</span>
+                  {currentPersona.id === 'standard' ? (
+                    <span className="text-[9px] text-zinc-400 font-medium">
+                      Syntetisk (alltid klar)
+                    </span>
+                  ) : isPersonaCached ? (
+                    <span className="text-[9px] text-emerald-400 font-bold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                      Klar offline
+                    </span>
+                  ) : (
+                    <span className="text-[9px] text-amber-400/90 font-medium flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400/80 inline-block" />
+                      Lastes ved avspilling
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
             <button

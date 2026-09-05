@@ -332,7 +332,7 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
                   onClick={() => handleDayClick(dayData.day)}
                   className={`p-2.5 rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all active:scale-95 text-center ${
                     isSkipped
-                      ? 'bg-zinc-950/40 border-zinc-900 text-zinc-600 opacity-60 hover:opacity-100 hover:border-zinc-750'
+                      ? 'bg-zinc-950/40 border-zinc-900 text-zinc-400 opacity-70 hover:opacity-100 hover:border-zinc-750'
                       : isCompleted
                       ? 'bg-emerald-950/80 border-emerald-500 text-emerald-400 shadow-sm'
                       : isCurrent
@@ -342,13 +342,13 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
                       : 'bg-zinc-900/80 border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-800'
                   }`}
                 >
-                  <span className={`text-[10px] font-black ${isCurrent ? 'text-zinc-950' : isSkipped ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                  <span className={`text-[10px] font-black ${isCurrent ? 'text-zinc-950' : isSkipped ? 'text-zinc-400' : 'text-zinc-400'}`}>
                     Dag {dayData.day}
                   </span>
 
                   {isSkipped ? (
-                    <span className="text-[10px] font-bold text-zinc-500 flex items-center gap-0.5" title="Hoppet over (startet på høyere nivå)">
-                      <FastForward className="w-3.5 h-3.5 text-zinc-600" />
+                    <span className="text-[10px] font-bold text-zinc-400 flex items-center gap-0.5" title="Hoppet over (startet på høyere nivå)">
+                      <FastForward className="w-3.5 h-3.5 text-zinc-400" />
                     </span>
                   ) : isCompleted ? (
                     <Check className="w-4 h-4 stroke-[3]" />

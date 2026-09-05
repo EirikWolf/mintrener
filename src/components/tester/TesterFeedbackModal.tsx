@@ -563,7 +563,7 @@ export const TesterFeedbackModal: React.FC<TesterFeedbackModalProps> = ({ onClos
                         className={`w-4 h-4 ${
                           star <= rating
                             ? 'text-amber-400 fill-amber-400'
-                            : 'text-zinc-600'
+                            : 'text-zinc-500'
                         }`}
                       />
                     </button>

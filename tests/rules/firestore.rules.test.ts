@@ -93,7 +93,7 @@ beforeEach(async () => {
     });
     await setDoc(doc(db, 'global_stats', 'engagement'), {
       onboarding_started: 7,
-      onboarding_personaChosen_haugesund: 3,
+      onboarding_personaChosen_hardcore: 3,
       streak_weekCompleted: 12,
       streak_milestone_w2: 2,
       accountPrompt_first_workout_shown: 5,

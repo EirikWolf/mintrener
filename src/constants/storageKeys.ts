@@ -93,6 +93,8 @@ export const STORAGE_KEYS = {
   CURATOR_FEEDBACK: 'mintrener_image_curator_feedback',
   /** Valgt kandidatbilde per øvelsesfase. Samme klasse som CURATOR_FEEDBACK. */
   CURATOR_VALG: 'mintrener_image_curator_valg',
+  /** Flagg for lukket iOS Safari lydadvarsel */
+  IOS_AUDIO_TIP_DISMISSED: 'mintrener_ios_audio_tip_dismissed',
 } as const;
 
 /**

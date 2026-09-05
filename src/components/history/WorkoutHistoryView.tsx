@@ -182,7 +182,7 @@ export const WorkoutHistoryView: React.FC<WorkoutHistoryViewProps> = ({
           </div>
         ) : history.length === 0 ? (
           <div className="text-center py-8 space-y-1.5 text-zinc-400">
-            <History className="w-6 h-6 mx-auto text-zinc-600" />
+            <History className="w-6 h-6 mx-auto text-zinc-500" />
             <p className="text-xs">Ingen fullførte økter registrert ennå.</p>
             <p className="text-[10px] text-zinc-400">Fullfør en økt i timeren for å starte loggen!</p>
           </div>

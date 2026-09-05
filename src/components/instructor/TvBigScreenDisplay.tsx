@@ -131,7 +131,7 @@ export const TvBigScreenDisplay: React.FC<TvBigScreenDisplayProps> = ({
               aria-label={state.soundEnabled ? 'Slå av lyd' : 'Slå på lyd'}
               className="p-3 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 transition-colors"
             >
-              {state.soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5 text-zinc-600" />}
+              {state.soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5 text-zinc-500" />}
             </button>
           )}
           <button

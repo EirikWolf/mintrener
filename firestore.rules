@@ -291,8 +291,6 @@ service cloud.firestore {
       allow create: if request.resource.data.keys().hasOnly(engagementFields())
         && request.resource.data.lastUpdated == request.time
         && initOkIfPresent('onboarding_started')
-        && initOkIfPresent('onboarding_personaChosen_haugesund')
-        && initOkIfPresent('onboarding_personaChosen_romsdal')
         && initOkIfPresent('onboarding_personaChosen_hardcore')
         && initOkIfPresent('onboarding_personaChosen_boyband')
         && initOkIfPresent('onboarding_personaChosen_standard')
@@ -319,8 +317,6 @@ service cloud.firestore {
           .hasOnly(engagementFields())
         && request.resource.data.lastUpdated == request.time
         && deltaOkIfAffected('onboarding_started')
-        && deltaOkIfAffected('onboarding_personaChosen_haugesund')
-        && deltaOkIfAffected('onboarding_personaChosen_romsdal')
         && deltaOkIfAffected('onboarding_personaChosen_hardcore')
         && deltaOkIfAffected('onboarding_personaChosen_boyband')
         && deltaOkIfAffected('onboarding_personaChosen_standard')

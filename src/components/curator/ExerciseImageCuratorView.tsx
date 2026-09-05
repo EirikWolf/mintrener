@@ -463,7 +463,7 @@ export const ExerciseImageCuratorView: React.FC<ExerciseImageCuratorViewProps> =
                         value={cur?.feedback || ''}
                         onChange={(e) => saveFeedback(key, e.target.value, cur?.status || 'mangler')}
                         placeholder="f.eks. Vis hele kroppen inkludert føtter i profil, dypere knebøy..."
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-2 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500 resize-none"
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-2 text-xs text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500 resize-none"
                       />
                     </div>
 

@@ -169,7 +169,7 @@ export const ExerciseLibraryView: React.FC<ExerciseLibraryViewProps> = ({
       <div className="flex-1 overflow-y-auto space-y-2 pr-0.5 mt-1 pb-4">
         {filtered.length === 0 ? (
           <div className="text-center py-12 space-y-2 text-zinc-400">
-            <SearchX className="w-8 h-8 mx-auto text-zinc-600" />
+            <SearchX className="w-8 h-8 mx-auto text-zinc-500" />
             <p className="text-sm font-semibold">Ingen øvelser matcher søket.</p>
           </div>
         ) : (

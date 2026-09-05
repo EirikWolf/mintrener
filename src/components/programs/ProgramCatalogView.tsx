@@ -377,7 +377,7 @@ export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({
                       selectedProfileId === profile.id
                         ? 'bg-emerald-500 text-zinc-950 shadow-sm'
                         : isPlanned
-                        ? 'bg-zinc-950/60 border border-zinc-900 text-zinc-600 opacity-50 cursor-not-allowed'
+                        ? 'bg-zinc-950/60 border border-zinc-900 text-zinc-400 opacity-60 cursor-not-allowed'
                         : 'bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white'
                     }`}
                   >
@@ -474,7 +474,7 @@ export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({
           <div className="flex-1 overflow-y-auto space-y-2.5 pr-0.5 mt-1 pb-4">
             {filteredPrograms.length === 0 ? (
               <div className="text-center py-12 space-y-2 text-zinc-400">
-                <SearchX className="w-8 h-8 mx-auto text-zinc-600" />
+                <SearchX className="w-8 h-8 mx-auto text-zinc-500" />
                 <p className="text-sm font-semibold">Ingen programmer matcher valgt filter.</p>
                 <button
                   onClick={() => {

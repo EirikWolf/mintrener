@@ -37,6 +37,7 @@ const UTENFOR_EKSPORT: Partial<Record<keyof typeof STORAGE_KEYS, string>> = {
   CURATOR_FEEDBACK: 'Internt QA-verktøy, ikke brukerdata.',
   CURATOR_VALG: 'Internt QA-verktøy: valgt kandidatbilde, ikke brukerdata.',
   INTERRUPTED_SESSION: 'Flyktig UI-tilstand, ikke treningsdata.',
+  IOS_AUDIO_TIP_DISMISSED: 'Flyktig UI-bannerflagg, ikke brukerdata.',
   ONBOARDING: 'Flagg for om onboarding er vist. Ingen informasjonsverdi for bruker.',
   ACCOUNT_PROMPT: 'Flagg for om kontoprompt er avvist.',
   STREAK_REPORTED: 'Intern de-duplisering av telemetri.',

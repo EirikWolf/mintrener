@@ -113,7 +113,7 @@ export const SensorStatusModal: React.FC<SensorStatusModalProps> = ({ onClose })
                         ) : isWarning ? (
                           <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
                         ) : (
-                          <XCircle className="w-4 h-4 text-zinc-600 shrink-0" />
+                          <XCircle className="w-4 h-4 text-zinc-500 shrink-0" />
                         )}
                         <h4 className="text-xs font-bold text-white">{sensor.name}</h4>
                       </div>

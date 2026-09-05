@@ -333,7 +333,7 @@ export const StrengthLoggerModal: React.FC<StrengthLoggerModalProps> = ({
                       <button
                         onClick={() => handleRemoveSet(idx)}
                         aria-label={`Slett sett ${s.setNumber}`}
-                        className="p-1 rounded-lg text-zinc-600 hover:text-rose-400"
+                        className="p-1 rounded-lg text-zinc-400 hover:text-rose-400"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>

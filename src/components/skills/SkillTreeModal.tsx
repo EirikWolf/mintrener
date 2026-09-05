@@ -192,7 +192,7 @@ export const SkillTreeModal: React.FC<SkillTreeModalProps> = ({
                       ? 'bg-emerald-950/80 border-emerald-500 text-emerald-400'
                       : isUnlocked
                       ? 'bg-zinc-900/80 border-zinc-800 text-zinc-300'
-                      : 'bg-zinc-950/40 border-zinc-900 text-zinc-600 opacity-60'
+                      : 'bg-zinc-950/40 border-zinc-900 text-zinc-400 opacity-70'
                   }`}
                 >
                   <span className={`text-[10px] font-black ${isCurrent ? 'text-zinc-950' : 'text-zinc-400'}`}>

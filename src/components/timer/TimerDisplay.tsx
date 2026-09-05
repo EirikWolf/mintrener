@@ -22,6 +22,8 @@ import { TvBigScreenDisplay } from '../instructor/TvBigScreenDisplay';
 import { AiWorkoutGeneratorModal } from '../ai/AiWorkoutGeneratorModal';
 import { PainFilterModal } from './PainFilterModal';
 import { hasActiveInjuryFilters } from '../../services/injuryAlternativeService';
+import { audioService } from '../../services/audioService';
+import { STORAGE_KEYS } from '../../constants/storageKeys';
 import { voiceCommandService, TimerVoiceCommand } from '../../services/voiceCommandService';
 import { STARTER_CHALLENGES } from '../../data/challenges';
 import {
@@ -337,6 +339,22 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
     gps: () => setIsGpsModalOpen(true),
   };
   const [isVoiceControlActive, setIsVoiceControlActive] = useState<boolean>(() => voiceCommandService.getIsListening());
+
+  // iOS Safari lydveileder (Revisjon E Horisont 1)
+  const [showIosAudioTip, setShowIosAudioTip] = useState(false);
+
+  const handleStartWithAudioCheck = () => {
+    if (audioService.isIosDevice() && state.soundEnabled) {
+      void audioService.unlockAudio();
+      try {
+        const dismissed = sessionStorage.getItem(STORAGE_KEYS.IOS_AUDIO_TIP_DISMISSED);
+        if (!dismissed) {
+          setShowIosAudioTip(true);
+        }
+      } catch {}
+    }
+    onStart();
+  };
   const [activeMicroExercise, setActiveMicroExercise] = useState<ExerciseItem | null>(null);
   const [activeChallengeId, setActiveChallengeIdState] = useState<string | null>(() => getActiveChallengeId());
   const [currentHeartRate, setCurrentHeartRate] = useState<number | null>(null);
@@ -625,6 +643,33 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
         </div>
         )}
 
+        {/* iOS Safari Lydveileder ved start av økt */}
+        {showIosAudioTip && (
+          <div
+            role="status"
+            className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-amber-950/80 border border-amber-800/80 text-amber-200 text-xs shadow-lg animate-in fade-in"
+          >
+            <div className="flex items-center gap-2">
+              <Volume2 className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                <strong>Lyd på iPhone?</strong> Sjekk at ringelydbryteren (mute) på siden av telefonen er av.
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                setShowIosAudioTip(false);
+                try {
+                  sessionStorage.setItem(STORAGE_KEYS.IOS_AUDIO_TIP_DISMISSED, '1');
+                } catch {}
+              }}
+              aria-label="Lukk lydtips"
+              className="p-1 rounded-lg hover:bg-amber-900/60 text-amber-300 font-bold transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* 2. FAVORITT-PROGRAMMER (2 rader grid på fremsiden når timeren er i hvilemodus) */}
         {state.status === 'idle' && (() => {
           const favoriteIds = getFavoriteProgramIds();
@@ -732,7 +777,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                         >
                           🔥 {weekStreak.currentWeeks} {weekStreak.currentWeeks === 1 ? 'uke' : 'uker'}
                         </span>
-                        <span aria-hidden="true" className="text-zinc-600">·</span>
+                        <span aria-hidden="true" className="text-zinc-400">·</span>
                       </>
                     )}
                     <span className="text-[11px] font-bold text-zinc-300">
@@ -934,7 +979,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             )}
             {isFocusMode && state.totalRemainingSeconds !== undefined && (
               <>
-                <span aria-hidden="true" className="text-zinc-600">·</span>
+                <span aria-hidden="true" className="text-zinc-400">·</span>
                 <span className="font-mono text-zinc-300 font-semibold tracking-normal lowercase text-xs sm:text-sm bg-zinc-900/60 px-2 py-0.5 rounded-md border border-zinc-800/80">
                   totalt {formatTime(state.totalRemainingSeconds)}
                 </span>
@@ -1066,7 +1111,7 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
             </button>
           ) : state.status === 'idle' ? (
             <button
-              onClick={onStart}
+              onClick={handleStartWithAudioCheck}
               disabled={state.isLocked}
               className="flex-[2.5] py-4 px-6 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 active:scale-95 text-zinc-950 font-black text-lg rounded-2xl shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2.5 transition-all border border-emerald-400/40"
             >

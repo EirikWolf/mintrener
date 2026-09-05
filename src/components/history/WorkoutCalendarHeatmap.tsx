@@ -127,7 +127,7 @@ export const WorkoutCalendarHeatmap: React.FC<WorkoutCalendarHeatmapProps> = ({
                     ? d.count > 1
                       ? 'bg-emerald-500 text-zinc-950 shadow-sm shadow-emerald-500/30'
                       : 'bg-emerald-600/90 text-white'
-                    : 'bg-zinc-950/80 text-zinc-600 border border-zinc-800/60'
+                    : 'bg-zinc-950/80 text-zinc-500 border border-zinc-800/60'
                 } ${d.isToday ? 'ring-2 ring-emerald-400 ring-offset-1 ring-offset-zinc-900' : ''}`}
               >
                 <span>{d.dayNumber}</span>

@@ -57,7 +57,10 @@ import {
   Mail,
   Receipt,
   FileText,
+  Gauge,
 } from 'lucide-react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../services/firebase';
 
 interface AdminDashboardModalProps {
   onClose: () => void;
@@ -111,6 +114,48 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ onClos
 
   const [copiedOrgId, setCopiedOrgId] = useState<string | null>(null);
   const [copiedTesterUrl, setCopiedTesterUrl] = useState(false);
+
+  // 5. Ytelsestelemetri fra Firestore (Revisjon E Horisont 1)
+  const [perfStats, setPerfStats] = useState<{
+    sessions?: number;
+    longTasks?: number;
+    longTaskSessions?: number;
+    activeMinutes?: number;
+    audioDeviationSamples?: number;
+    deviationUnder10Ms?: number;
+    deviation10to20Ms?: number;
+    deviation20to50Ms?: number;
+    deviationOver50Ms?: number;
+    lastUpdated?: any;
+  } | null>(null);
+  const [overviewStats, setOverviewStats] = useState<{
+    totalWorkouts?: number;
+    totalSecondsTrained?: number;
+    shareLinkOpens?: number;
+    lastUpdated?: any;
+  } | null>(null);
+  const [isLoadingTelemetry, setIsLoadingTelemetry] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'telemetri' && db) {
+      setIsLoadingTelemetry(true);
+      Promise.all([
+        getDoc(doc(db, 'global_stats', 'perf')).catch(() => null),
+        getDoc(doc(db, 'global_stats', 'overview')).catch(() => null),
+      ])
+        .then(([perfSnap, overviewSnap]) => {
+          if (perfSnap && perfSnap.exists()) {
+            setPerfStats(perfSnap.data());
+          }
+          if (overviewSnap && overviewSnap.exists()) {
+            setOverviewStats(overviewSnap.data());
+          }
+        })
+        .finally(() => {
+          setIsLoadingTelemetry(false);
+        });
+    }
+  }, [activeTab]);
 
   const modalRef = useRef<HTMLDivElement>(null);
   useFocusTrap(modalRef, { onClose });
@@ -1267,7 +1312,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ onClos
                           )}
                           {org.notes && (
                             <div className="flex items-center gap-1.5 sm:col-span-3 text-zinc-500 italic">
-                              <FileText className="w-3 h-3 text-zinc-600 shrink-0" />
+                              <FileText className="w-3 h-3 text-zinc-500 shrink-0" />
                               <span>Notat: {org.notes}</span>
                             </div>
                           )}
@@ -1314,6 +1359,69 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ onClos
                     <span className="text-[8px] text-zinc-400 block">Logget</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Ekte ytelsestelemetri fra Firestore (Revisjon E Horisont 1) */}
+              <div className="p-3.5 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                    <Gauge className="w-3.5 h-3.5" />
+                    Ytelse & Lydstabilitet (Feltmålinger)
+                  </span>
+                  {isLoadingTelemetry && (
+                    <span className="text-[10px] text-zinc-400 animate-pulse">Henter skydata...</span>
+                  )}
+                </div>
+
+                {perfStats ? (
+                  <div className="space-y-2.5">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="p-2.5 bg-zinc-900 rounded-xl text-center">
+                        <span className="text-[9px] uppercase text-zinc-400 font-bold block">Målte økter</span>
+                        <strong className="text-base text-white font-black">{perfStats.sessions || 0}</strong>
+                        <span className="text-[8px] text-zinc-400 block">Med telemetri</span>
+                      </div>
+                      <div className="p-2.5 bg-zinc-900 rounded-xl text-center">
+                        <span className="text-[9px] uppercase text-zinc-400 font-bold block">Long tasks / min</span>
+                        <strong className="text-base text-emerald-400 font-black">
+                          {perfStats.activeMinutes && perfStats.activeMinutes > 0
+                            ? ((perfStats.longTasks || 0) / perfStats.activeMinutes).toFixed(2)
+                            : '0.00'}
+                        </strong>
+                        <span className="text-[8px] text-zinc-400 block">Mål: &lt; 1.0</span>
+                      </div>
+                      <div className="p-2.5 bg-zinc-900 rounded-xl text-center">
+                        <span className="text-[9px] uppercase text-zinc-400 font-bold block">Lydstabilitet</span>
+                        <strong className="text-base text-teal-400 font-black">
+                          {perfStats.audioDeviationSamples && perfStats.audioDeviationSamples > 0
+                            ? `${Math.round((((perfStats.deviationUnder10Ms || 0) + (perfStats.deviation10to20Ms || 0)) / perfStats.audioDeviationSamples) * 100)} %`
+                            : '100 %'}
+                        </strong>
+                        <span className="text-[8px] text-zinc-400 block">&lt; 20 ms avvik</span>
+                      </div>
+                      <div className="p-2.5 bg-zinc-900 rounded-xl text-center">
+                        <span className="text-[9px] uppercase text-zinc-400 font-bold block">Aktive minutter</span>
+                        <strong className="text-base text-indigo-400 font-black">{perfStats.activeMinutes || 0} m</strong>
+                        <span className="text-[8px] text-zinc-400 block">Overvåket tid</span>
+                      </div>
+                    </div>
+
+                    {overviewStats && (
+                      <div className="p-2 bg-zinc-900/60 rounded-xl flex items-center justify-between text-[11px] border border-zinc-850">
+                        <span className="text-zinc-300">
+                          Totalt fullførte økter: <strong className="text-emerald-400 font-black">{overviewStats.totalWorkouts || 0}</strong>
+                        </span>
+                        <span className="text-zinc-400">
+                          Tid trent: <strong className="text-white font-mono">{Math.round((overviewStats.totalSecondsTrained || 0) / 60)} min</strong>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-zinc-400 italic">
+                    {isLoadingTelemetry ? 'Laster telemetridata fra Firestore...' : 'Ingen globale ytelsesdata registrert i Firestore ennå (eller offline).'}
+                  </p>
+                )}
               </div>
 
               {/* Topp 5 øvelser fra standardkatalogen */}
