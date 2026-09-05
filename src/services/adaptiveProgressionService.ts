@@ -1,5 +1,6 @@
 import { CompletedWorkoutLog } from '../types/models';
 import { WorkoutTemplate } from '../types/workout';
+import { hasActiveInjuryFilters as getStoredInjuryFilters } from './injuryAlternativeService';
 
 export interface ProgressionSuggestion {
   type: 'increase' | 'decrease' | 'deload';
@@ -28,7 +29,7 @@ export function checkAdaptiveProgression(
   }
 
   const ratings = matchingLogs.map((l) => l.difficultyRating);
-  const hasInjuryFilters = options?.hasActiveInjuryFilters ?? false;
+  const hasInjuryFilters = options?.hasActiveInjuryFilters ?? getStoredInjuryFilters();
 
   // 1. Progresjon oppover: 2 "for_lett" på rad
   // Treningsfysiologisk (Revisjon D, Moonshot 4):

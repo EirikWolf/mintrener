@@ -5,7 +5,11 @@ import { CONTEXT_PROFILES, TrainingMode } from '../../data/contextProfiles';
 import { WorkoutTemplate } from '../../types/workout';
 import { ChallengeCategory, ChallengeItem } from '../../schemas/challengeSchema';
 import { ChallengeDetailModal } from '../challenges/ChallengeDetailModal';
-import { getChallengeProgress, getActiveChallengeId } from '../../services/challengeService';
+import {
+  getChallengeProgress,
+  getActiveChallengeId,
+  challengeProgressFraction,
+} from '../../services/challengeService';
 import { getFavoriteProgramIds, toggleFavoriteProgramId } from '../../services/favoritesService';
 import { applyProgramOverrides } from '../../services/programOverrideService';
 import { fetchCustomWorkouts, calculateWorkoutDuration } from '../../services/customWorkoutsService';
@@ -611,8 +615,9 @@ export const ProgramCatalogView: React.FC<ProgramCatalogViewProps> = ({
             {filteredChallenges.map((ch) => {
               const prog = getChallengeProgress(ch.id);
               const isActive = ch.id === activeChallengeId;
-              const completedCount = prog.completedDays.length;
-              const percent = Math.round((completedCount / ch.durationDays) * 100);
+              const fraction = challengeProgressFraction(prog, ch);
+              const completedCount = fraction.completedCount;
+              const percent = fraction.percent;
 
               return (
                 <div

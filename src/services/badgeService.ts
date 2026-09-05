@@ -1,5 +1,5 @@
 import { STARTER_CHALLENGES } from '../data/challenges';
-import { getChallengeProgress } from './challengeService';
+import { getChallengeProgress, challengeProgressFraction } from './challengeService';
 import { computeWeekStreak, WeekStreakResult } from './streakService';
 import { makeGoalForWeek } from './weeklyGoalService';
 import { CompletedWorkoutLog } from '../types/models';
@@ -261,21 +261,26 @@ export function getAllUserBadges(history?: CompletedWorkoutLog[]): BadgeItem[] {
   const badges: BadgeItem[] = [];
 
   // 1. Utfordringsmerker (12 stk fra STARTER_CHALLENGES)
+  // BEGRUNNELSE: Utfordringsmerker krever at utøveren fullfører hele løpet fra sitt valgte
+  // inngangsgulv (startDay) til mål (isCompleted). Inngangsgulvet (Revisjon C § 7 Horisont 3.1 & Pilar 4.4)
+  // er en fysiologisk tilpasning for erfarne utøvere som allerede mestrer grunnnivået (f.eks. klarer 90s planke).
+  // De skal ikke tvinges gjennom trivielle dager, men må fullføre 100 % av sitt aktive løp
+  // for å oppnå merket. Fremdriftsvisningen viser hvor mange dager av det aktive løpet som er gjennomført.
   for (const challenge of STARTER_CHALLENGES) {
     const prog = getChallengeProgress(challenge.id);
-    const completedCount = prog.completedDays.length;
-    const isUnlocked = completedCount >= challenge.durationDays;
+    const fraction = challengeProgressFraction(prog, challenge);
+    const isUnlocked = fraction.isCompleted;
 
     badges.push({
       id: challenge.badgeReward.id,
       title: challenge.badgeReward.name,
-      description: `Fullfør alle ${challenge.durationDays} dagene i utfordringen «${challenge.title}».`,
+      description: `Fullfør utfordringen «${challenge.title}» (fra start til mål).`,
       icon: challenge.badgeReward.icon,
       category: 'challenge',
       isUnlocked,
-      progress: completedCount,
-      maxProgress: challenge.durationDays,
-      progressLabel: `${completedCount}/${challenge.durationDays} dager`,
+      progress: fraction.completedCount,
+      maxProgress: fraction.totalCount,
+      progressLabel: `${fraction.completedCount}/${fraction.totalCount} dager`,
       unlockedAt: isUnlocked && prog.completedAt ? prog.completedAt : undefined,
     });
   }

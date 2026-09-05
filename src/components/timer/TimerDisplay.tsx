@@ -21,9 +21,14 @@ import { SkillTreeModal } from '../skills/SkillTreeModal';
 import { TvBigScreenDisplay } from '../instructor/TvBigScreenDisplay';
 import { AiWorkoutGeneratorModal } from '../ai/AiWorkoutGeneratorModal';
 import { PainFilterModal } from './PainFilterModal';
+import { hasActiveInjuryFilters } from '../../services/injuryAlternativeService';
 import { voiceCommandService, TimerVoiceCommand } from '../../services/voiceCommandService';
 import { STARTER_CHALLENGES } from '../../data/challenges';
-import { getActiveChallengeId, getChallengeProgress } from '../../services/challengeService';
+import {
+  getActiveChallengeId,
+  getChallengeProgress,
+  challengeProgressFraction,
+} from '../../services/challengeService';
 import { getFavoriteProgramIds } from '../../services/favoritesService';
 import { TRAINING_PROGRAMS } from '../../data/programs';
 import { getInterruptedSession, clearInterruptedSession, InterruptedSession } from '../../services/sessionRecoveryService';
@@ -367,7 +372,9 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
     try {
       const raw = localStorage.getItem(WORKOUT_HISTORY_KEY);
       const hist = raw ? JSON.parse(raw) : [];
-      const sug = checkAdaptiveProgression(workout, hist);
+      const sug = checkAdaptiveProgression(workout, hist, {
+        hasActiveInjuryFilters: hasActiveInjuryFilters(),
+      });
       setAdaptiveSuggestion(sug);
       setWeeklyProgress(calculateWeeklyProgress(hist));
       // Kjent spenning (N4): pillen viser calculateWeeklyProgress mot GJELDENDE
@@ -758,7 +765,8 @@ export const TimerDisplay: React.FC<TimerDisplayProps> = ({
                 if (!challenge) return null;
                 const prog = getChallengeProgress(challenge.id);
                 const currentDayData = challenge.dailyWorkouts.find((d) => d.day === prog.currentDay);
-                const percent = Math.round((prog.completedDays.length / challenge.durationDays) * 100);
+                const fraction = challengeProgressFraction(prog, challenge);
+                const percent = fraction.percent;
 
                 return (
                   <div className="bg-amber-950/80 border border-amber-500/70 rounded-2xl p-2.5 space-y-2 shadow-lg animate-in fade-in">

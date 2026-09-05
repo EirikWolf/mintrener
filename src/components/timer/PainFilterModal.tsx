@@ -4,6 +4,8 @@ import {
   PAIN_POINTS,
   PainPointId,
   adaptWorkoutForPain,
+  getInjuryProfile,
+  saveInjuryProfile,
 } from '../../services/injuryAlternativeService';
 import {
   convertToDeloadWorkout,
@@ -24,7 +26,9 @@ export const PainFilterModal: React.FC<PainFilterModalProps> = ({
   onClose,
   onApplyWorkout,
 }) => {
-  const [selectedPainPoints, setSelectedPainPoints] = useState<PainPointId[]>([]);
+  const [selectedPainPoints, setSelectedPainPoints] = useState<PainPointId[]>(
+    () => getInjuryProfile().painPoints
+  );
   const fatigueAssessment = assessFatigueAndDeload(getCompletedWorkoutLogs());
   const [isDeloadActive, setIsDeloadActive] = useState<boolean>(
     () => fatigueAssessment.needsDeload
@@ -49,6 +53,7 @@ export const PainFilterModal: React.FC<PainFilterModalProps> = ({
     : adaptedWorkout;
 
   const handleConfirm = () => {
+    saveInjuryProfile({ painPoints: selectedPainPoints });
     onApplyWorkout(finalWorkout);
     onClose();
   };

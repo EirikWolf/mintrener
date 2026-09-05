@@ -7,6 +7,7 @@ import {
   startChallengeAtDay,
   getActiveChallengeId,
   setActiveChallengeId,
+  challengeProgressFraction,
 } from '../../services/challengeService';
 import { CalendarExportModal } from '../calendar/CalendarExportModal';
 import { calculateWorkoutDuration } from '../../services/customWorkoutsService';
@@ -23,6 +24,7 @@ import {
   Share2,
   Clock,
   ArrowLeft,
+  FastForward,
 } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 
@@ -158,8 +160,9 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
       : `${formatVarighet(Math.min(...varigheter))}–${formatVarighet(Math.max(...varigheter))}`
     : null;
 
-  const completedCount = progress.completedDays.length;
-  const progressPercent = Math.round((completedCount / challenge.durationDays) * 100);
+  const fraction = challengeProgressFraction(progress, challenge);
+  const completedCount = fraction.completedCount;
+  const progressPercent = fraction.percent;
 
   // WCAG: Lukk ved trykk på Escape-tast
   useEffect(() => {
@@ -315,20 +318,22 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
           </span>
           <div data-testid="dagsrutenett" className="grid grid-cols-5 sm:grid-cols-6 gap-2 pt-1">
             {challenge.dailyWorkouts.map((dayData) => {
+              const startDay = progress.startDay || 1;
+              const isSkipped = dayData.day < startDay;
               const isCompleted = progress.completedDays.includes(dayData.day);
-              const isCurrent = progress.currentDay === dayData.day && !isCompleted;
+              const isCurrent = progress.currentDay === dayData.day && !isCompleted && !isSkipped;
               const isRest = dayData.isRestDay;
 
               return (
                 <button
                   key={dayData.day}
                   type="button"
-                  // Eksplisitt navn: uten det leste skjermleseren opp
-                  // «Dag 12 Kontorøkt Dag 12» og sa ingenting om hva trykket gjør.
-                  aria-label={`Dag ${dayData.day} — ${isRest ? 'hviledag' : 'vis øvelsene'}`}
+                  aria-label={`Dag ${dayData.day} — ${isSkipped ? 'hoppet over (inngangsgulv)' : isRest ? 'hviledag' : 'vis øvelsene'}`}
                   onClick={() => handleDayClick(dayData.day)}
                   className={`p-2.5 rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all active:scale-95 text-center ${
-                    isCompleted
+                    isSkipped
+                      ? 'bg-zinc-950/40 border-zinc-900 text-zinc-600 opacity-60 hover:opacity-100 hover:border-zinc-750'
+                      : isCompleted
                       ? 'bg-emerald-950/80 border-emerald-500 text-emerald-400 shadow-sm'
                       : isCurrent
                       ? 'bg-emerald-500 text-zinc-950 font-black border-white shadow-lg ring-2 ring-emerald-400/50'
@@ -337,11 +342,15 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
                       : 'bg-zinc-900/80 border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-800'
                   }`}
                 >
-                  <span className={`text-[10px] font-black ${isCurrent ? 'text-zinc-950' : 'text-zinc-400'}`}>
+                  <span className={`text-[10px] font-black ${isCurrent ? 'text-zinc-950' : isSkipped ? 'text-zinc-600' : 'text-zinc-400'}`}>
                     Dag {dayData.day}
                   </span>
 
-                  {isCompleted ? (
+                  {isSkipped ? (
+                    <span className="text-[10px] font-bold text-zinc-500 flex items-center gap-0.5" title="Hoppet over (startet på høyere nivå)">
+                      <FastForward className="w-3.5 h-3.5 text-zinc-600" />
+                    </span>
+                  ) : isCompleted ? (
                     <Check className="w-4 h-4 stroke-[3]" />
                   ) : isRest ? (
                     <Coffee className="w-4 h-4 text-amber-400" />
@@ -385,7 +394,11 @@ export const ChallengeDetailModal: React.FC<ChallengeDetailModalProps> = ({
                   <Coffee className="w-4 h-4 shrink-0" aria-hidden="true" />
                   Hviledag — ingen øvelser i dag.
                 </p>
-                {!progress.completedDays.includes(valgtDagData.day) && (
+                {valgtDagData.day < (progress.startDay || 1) ? (
+                  <p className="text-[11px] text-zinc-500 italic">
+                    Denne dagen ble hoppet over fordi utfordringen ble startet på et høyere inngangsnivå.
+                  </p>
+                ) : !progress.completedDays.includes(valgtDagData.day) && (
                   <button
                     type="button"
                     onClick={() => fullførHviledag(valgtDagData.day)}

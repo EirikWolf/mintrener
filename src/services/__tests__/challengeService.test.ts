@@ -6,6 +6,7 @@ import {
   completeChallengeDay,
   startChallengeAtDay,
   resetChallengeProgress,
+  challengeProgressFraction,
 } from '../challengeService';
 
 describe('challengeService', () => {
@@ -40,14 +41,25 @@ describe('challengeService', () => {
     expect(prog.completedAt).toBeDefined();
   });
 
-  it('lar erfarne utøvere starte på et høyere nivå / inngangsgulv', () => {
-    // Start på dag 15
-    const prog = startChallengeAtDay('planke-30-dager', 15);
-    expect(prog.currentDay).toBe(15);
-    expect(prog.completedDays.length).toBe(14); // Dag 1 til 14 er autoutfylt
-    expect(prog.completedDays).toContain(1);
-    expect(prog.completedDays).toContain(14);
-    expect(prog.completedDays).not.toContain(15);
+  it('lar erfarne utøvere starte på et høyere nivå / inngangsgulv uten å forfalske historikk', () => {
+    // Start på dag 10 i en 30-dagers utfordring
+    const prog = startChallengeAtDay('planke-30-dager', 10);
+    expect(prog.startDay).toBe(10);
+    expect(prog.currentDay).toBe(10);
+    expect(prog.completedDays).toEqual([]); // Skal IKKE autoutfylle tidligere dager
+
+    const fraction = challengeProgressFraction(prog, 30);
+    expect(fraction.completedCount).toBe(0);
+    expect(fraction.totalCount).toBe(21); // 30 - 10 + 1 = 21 dager
+    expect(fraction.percent).toBe(0);
+
+    // Fullfør dag 10
+    completeChallengeDay('planke-30-dager', 10);
+    const updated = getChallengeProgress('planke-30-dager');
+    const updatedFraction = challengeProgressFraction(updated, 30);
+    expect(updatedFraction.completedCount).toBe(1);
+    expect(updatedFraction.totalCount).toBe(21);
+    expect(updatedFraction.percent).toBe(5); // 1 / 21 * 100 = 4.76 -> 5%
   });
 
   it('nullstiller utfordring', () => {

@@ -1,12 +1,99 @@
 import { WorkoutTemplate, IntervalItem } from '../types/workout';
+import { STORAGE_KEYS } from '../constants/storageKeys';
+import {
+  InjuryProfile,
+  InjuryProfileSchema,
+  PainPointId,
+} from '../schemas/injuryProfileSchema';
 
-export type PainPointId = 'korsrygg' | 'skulder' | 'kne' | 'handledd' | 'nakke';
+export type { PainPointId, InjuryProfile };
 
 export interface PainPointOption {
   id: PainPointId;
   label: string;
   description: string;
   icon: string;
+}
+
+/**
+ * Henter brukerens lagrede skadeprofil fra localStorage.
+ */
+export function getInjuryProfile(): InjuryProfile {
+  if (typeof window === 'undefined') {
+    return { painPoints: [], updatedAt: new Date().toISOString() };
+  }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.INJURY_PROFILE);
+    if (!raw) {
+      return { painPoints: [], updatedAt: new Date().toISOString() };
+    }
+    const parsed = JSON.parse(raw);
+    const result = InjuryProfileSchema.safeParse(parsed);
+    if (result.success) {
+      return result.data;
+    }
+    return { painPoints: [], updatedAt: new Date().toISOString() };
+  } catch {
+    return { painPoints: [], updatedAt: new Date().toISOString() };
+  }
+}
+
+/**
+ * Lagrer eller oppdaterer brukerens skadeprofil i localStorage.
+ */
+export function saveInjuryProfile(profile: Partial<InjuryProfile>): InjuryProfile {
+  const current = getInjuryProfile();
+  const updated: InjuryProfile = {
+    painPoints: profile.painPoints ?? current.painPoints,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEYS.INJURY_PROFILE, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('injury-profile-changed', { detail: updated }));
+  }
+
+  return updated;
+}
+
+/**
+ * Sjekker om brukeren har aktive skadefiltre/smertepunkter lagret.
+ */
+export function hasActiveInjuryFilters(): boolean {
+  return getInjuryProfile().painPoints.length > 0;
+}
+
+/**
+ * Harmoniserer de to ordforrådene:
+ * Oversetter typede PainPointId ('korsrygg' | 'skulder' | 'kne' | 'handledd' | 'nakke')
+ * til AI-generatorens unngå-liste ('knær', 'hopp', 'skuldre', 'håndledd', 'korsrygg')
+ * slik at generatoren aldri bommer på en lagret skadeprofil.
+ */
+export function translatePainPointsToAvoidList(painPoints: PainPointId[]): string[] {
+  const avoidSet = new Set<string>();
+
+  for (const point of painPoints) {
+    switch (point) {
+      case 'kne':
+        avoidSet.add('knær');
+        avoidSet.add('hopp');
+        break;
+      case 'skulder':
+        avoidSet.add('skuldre');
+        break;
+      case 'handledd':
+        avoidSet.add('håndledd');
+        break;
+      case 'korsrygg':
+        avoidSet.add('korsrygg');
+        break;
+      case 'nakke':
+        avoidSet.add('skuldre'); // Nakkeskånsomhet unngår tung overhead og nakkebelastning
+        break;
+    }
+  }
+
+  return Array.from(avoidSet);
 }
 
 export const PAIN_POINTS: PainPointOption[] = [

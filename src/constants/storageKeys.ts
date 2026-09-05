@@ -42,6 +42,8 @@ export const STORAGE_KEYS = {
   USER_PROFILE: 'mintrener_user_profile',
   USER_PROFILES: 'mintrener_user_profiles_v1',
   USER_SETTINGS: 'mintrener_user_settings',
+  /** Skadeprofil og smertepunkter. Helseopplysning (GDPR art. 9). */
+  INJURY_PROFILE: 'mintrener_injury_profile_v1',
   /**
    * Om brukeren har valgt lydnivå SELV. Profilen foreslår bare et nivå, og
    * forslaget skal ikke overkjøre et bevisst valg neste gang profilen endres.

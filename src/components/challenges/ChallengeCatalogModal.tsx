@@ -2,7 +2,11 @@ import React, { useState, useRef } from 'react';
 import { STARTER_CHALLENGES } from '../../data/challenges';
 import { ChallengeCategory, ChallengeItem } from '../../schemas/challengeSchema';
 import { ChallengeDetailModal } from './ChallengeDetailModal';
-import { getActiveChallengeId, getChallengeProgress } from '../../services/challengeService';
+import {
+  getActiveChallengeId,
+  getChallengeProgress,
+  challengeProgressFraction,
+} from '../../services/challengeService';
 import { WorkoutTemplate } from '../../types/workout';
 import { Trophy, X, ChevronRight } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
@@ -94,8 +98,9 @@ export const ChallengeCatalogModal: React.FC<ChallengeCatalogModalProps> = ({
           {filtered.map((ch) => {
             const prog = getChallengeProgress(ch.id);
             const isActive = ch.id === activeChallengeId;
-            const completedCount = prog.completedDays.length;
-            const percent = Math.round((completedCount / ch.durationDays) * 100);
+            const fraction = challengeProgressFraction(prog, ch);
+            const completedCount = fraction.completedCount;
+            const percent = fraction.percent;
 
             return (
               <button

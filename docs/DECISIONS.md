@@ -629,5 +629,25 @@ Full målehistorikk: `docs/kitor-tilrettelegging-2026-09-02.md` og
   2. **Kognitiv Avlastning og Start-dominans:**
      - Primærknappen i hviletilstand (`TimerDisplay.tsx`) er forsterket til en fremtredende "START ØKT" med myk gradient og forhøyet kontrast, slik at blikket naturlig ledes mot å starte dagens bevegelse.
 
+---
 
-
+## [2026-09-05] Beslutning 61: Revisjon D Oppfølging – Skadeprofil, Utfordringsgulv uten Historikkforfalskning, og B2B-restrisiko
+* **Kontekst:** Lukking av gjenstående funn fra Revisjon D:
+  1. Progresjonsmotoren kjente ikke skadefilteret fordi det manglet en felles persistert skadeprofil.
+  2. `startChallengeAtDay` forhåndsutfylte uutførte dager som fullførte i `completedDays`, som forfalsket treningshistorikk og ga ufortjente utfordringsmerker.
+  3. `firestore.rules` hadde en ubrukt `/admins/{uid}`-gren sammen med en hardkodet admin e-postliste. `allow get` på aktive organisasjoner eksponerer metadata for den som kjenner organisasjonens ID.
+* **Valg:**
+  1. **Persistert Skadeprofil & Helsedata-eksport:**
+     - `INJURY_PROFILE` lagret under `mintrener_injury_profile_v1` med `InjuryProfileSchema` (kategorisert som GDPR helsedata).
+     - Inkludert i `exportDataService.ts` for full Art. 20-portabilitet, verifisert av `exportDataService.dekning.test.ts`.
+     - Harmonisert vokabular (`translatePainPointsToAvoidList`) slik at AI-generatoren og smertefilteret bruker samme grunnlag.
+     - `TimerDisplay` og `adaptiveProgressionService` forhindrer automatisk volumøkning på arbeidstid hvis brukeren har aktive skadefiltre.
+  2. **Utfordringsgulv (`startDay`) og Brøkberegning:**
+     - `ChallengeUserProgress` har fått `startDay: number` (default 1).
+     - `startChallengeAtDay` setter `startDay` og `currentDay`, men forfalsker **ikke** `completedDays` (som forblir en tom liste til dager faktisk gjennomføres).
+     - Innført `challengeProgressFraction(prog, challenge)` som beregner fremdrift fra gulvet: fullførte dager ≥ `startDay` delt på `(durationDays - startDay + 1)`. Brukes konsekvent på alle 6 visningssteder.
+     - Dager før inngangsgulvet markeres som hoppet over med grånet styling og `FastForward`-ikon i rutenettet, og kan ikke merkes som fullført hviledag.
+     - **Merker:** Utfordringsmerker tildeles når utøveren fullfører 100 % av dagene fra sitt valgte inngangsgulv til mål, da inngangsgulvet er en fysiologisk tilpasning for viderekomne.
+  3. **Renset `isAdmin()` og Vurdert Restrisiko for `/organizations`:**
+     - Fjernet ubenyttet `/admins/{uid}`-sjekk fra `firestore.rules`; beholdt den eksplisitte autoriserte admin-listen.
+     - **Restrisiko for `allow get`:** For `/organizations/{orgId}` eksponerer `allow get` for innloggede brukere på aktive organisasjoner metadata (inkludert `contactPerson` og `billing`). Dette er en **akseptert restrisiko** i nåværende fase fordi organisasjons-ID-er er ugjettbare interne nøkler som aldri lekker i klient-URL-er eller offentlige lenker (verifisert ved inspeksjon av kodens delingsmekanismer).

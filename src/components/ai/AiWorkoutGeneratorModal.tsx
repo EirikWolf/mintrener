@@ -4,6 +4,10 @@ import {
   AiWorkoutPrompt,
   WorkoutPacingRatio,
 } from '../../services/aiWorkoutGeneratorService';
+import {
+  getInjuryProfile,
+  translatePainPointsToAvoidList,
+} from '../../services/injuryAlternativeService';
 import { WorkoutTemplate } from '../../types/workout';
 import {
   Bot,
@@ -32,7 +36,9 @@ export const AiWorkoutGeneratorModal: React.FC<AiWorkoutGeneratorModalProps> = (
   const [focus, setFocus] = useState<AiWorkoutPrompt['focus']>('helkropp');
   const [energy, setEnergy] = useState<'lav' | 'middels' | 'høy'>('middels');
   const [pacing, setPacing] = useState<WorkoutPacingRatio>('standard_2_1');
-  const [avoidList, setAvoidList] = useState<string[]>([]);
+  const [avoidList, setAvoidList] = useState<string[]>(() =>
+    translatePainPointsToAvoidList(getInjuryProfile().painPoints)
+  );
   const [generatedWorkout, setGeneratedWorkout] = useState<WorkoutTemplate | null>(null);
 
   const modalRef = useRef<HTMLDivElement>(null);

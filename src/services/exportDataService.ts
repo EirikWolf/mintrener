@@ -29,6 +29,7 @@ export interface FullExportPayload {
   skillTreeProgress?: any;
   programOverrides?: any;
   activeChallengeId?: any;
+  injuryProfile?: any;
 }
 
 /**
@@ -91,6 +92,7 @@ export async function exportFullUserDataset(userId?: string | null): Promise<voi
   let skillTreeProgress: any = null;
   let programOverrides: any = null;
   let activeChallengeId: any = null;
+  let injuryProfile: any = null;
 
   /** Leser og parser en JSON-nøkkel; null hvis den mangler eller er korrupt. */
   const lesJson = (nøkkel: string): any => {
@@ -145,6 +147,7 @@ export async function exportFullUserDataset(userId?: string | null): Promise<voi
     strengthExerciseLogs = lesJson(STORAGE_KEYS.STRENGTH_EXERCISE_LOGS);
     skillTreeProgress = lesJson(STORAGE_KEYS.SKILL_TREE_PROGRESS);
     programOverrides = lesJson(STORAGE_KEYS.PROGRAM_OVERRIDES);
+    injuryProfile = lesJson(STORAGE_KEYS.INJURY_PROFILE);
   } catch (e) {
     console.warn('Feil ved lesing av data for eksport:', e);
   }
@@ -165,6 +168,7 @@ export async function exportFullUserDataset(userId?: string | null): Promise<voi
     skillTreeProgress,
     programOverrides,
     activeChallengeId,
+    injuryProfile,
   });
 }
 
